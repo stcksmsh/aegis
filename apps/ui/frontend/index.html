@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aegis</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-grid"></div>
+
+    <div id="app">
+      <header class="top-bar" id="top-bar">
+        <div class="brand">
+          <div class="logo">A</div>
+          <div class="brand-text">
+            <span class="brand-name">Aegis</span>
+            <span class="brand-tag">Secure USB Backup</span>
+          </div>
+        </div>
+        <nav class="nav" id="top-nav">
+          <button class="nav-btn" data-view="dashboard">Dashboard</button>
+          <button class="nav-btn" data-view="restore">Restore</button>
+          <button class="nav-btn" data-view="settings">Settings</button>
+          <button class="nav-btn" data-view="advanced">Advanced</button>
+        </nav>
+      </header>
+
+      <div id="status-banner" class="status-banner hidden"></div>
+
+      <main>
+        <section id="wizard" class="view hidden">
+          <div class="panel">
+            <h1>Welcome to Aegis</h1>
+            <p class="lead">
+              Aegis protects your files from offline drive theft by encrypting every backup.
+              It does not protect against a compromised computer, malware, or coercion.
+            </p>
+            <div class="wizard-progress" id="wizard-progress">Step 1 of 4</div>
+            <div class="step-grid">
+              <div class="step-card wizard-step" data-step="0">
+                <div class="step-label">Step 1</div>
+                <h2>Select what to protect</h2>
+                <div class="toggle-list">
+                  <label><input type="checkbox" id="src-docs" checked /> Documents</label>
+                  <label><input type="checkbox" id="src-pics" checked /> Pictures</label>
+                  <label><input type="checkbox" id="src-desktop" checked /> Desktop</label>
+                </div>
+                <div class="field-row">
+                  <input id="custom-label" type="text" placeholder="Custom folder label" />
+                  <input id="custom-path" type="text" placeholder="/path/to/folder" />
+                  <button class="btn ghost" id="browse-folder" type="button">Browse…</button>
+                  <button class="btn secondary" id="add-custom" type="button">Add</button>
+                </div>
+                <ul id="custom-list" class="chip-list"></ul>
+              </div>
+
+              <div class="step-card wizard-step hidden" data-step="1">
+                <div class="step-label">Step 2</div>
+                <h2>Security setup</h2>
+                <p class="muted">Your passphrase unlocks the backup. Aegis never stores it on the USB drive.</p>
+                <div class="field">
+                  <label>Passphrase</label>
+                  <input id="passphrase" type="password" placeholder="Create a strong passphrase" />
+                </div>
+                <div class="field">
+                  <label>Confirm</label>
+                  <input id="passphrase-confirm" type="password" placeholder="Re-enter passphrase" />
+                </div>
+                <label class="checkbox">
+                  <input id="remember-passphrase" type="checkbox" checked /> Remember on this PC (OS keychain)
+                </label>
+                <label class="checkbox">
+                  <input id="paranoid-mode" type="checkbox" /> Paranoid Mode (ask every time)
+                </label>
+              </div>
+
+              <div class="step-card wizard-step hidden" data-step="2">
+                <div class="step-label">Step 3</div>
+                <h2>Connect your USB drive</h2>
+                <p class="muted">Select a drive below. You can mount it or erase &amp; set it up for Aegis.</p>
+                <div class="drive-detect" id="drive-detect">Waiting for drive…</div>
+                <div class="device-panel">
+                  <div class="device-panel-header">
+                    <div class="device-panel-title">Available drives</div>
+                    <div class="device-panel-subtitle" id="device-help">
+                      Select a removable drive or insert a new one.
+                    </div>
+                    <div class="device-panel-subtitle" id="device-updated">Last updated: —</div>
+                    <div class="device-panel-subtitle" id="device-status"></div>
+                  </div>
+                  <div class="preflight" id="preflight">
+                    <div class="preflight-item" id="preflight-restic">Restic: checking…</div>
+                    <div class="preflight-item" id="preflight-udisks">Disk tools: checking…</div>
+                    <div class="preflight-item" id="preflight-exfat">exFAT formatter: checking…</div>
+                  </div>
+                  <div id="device-empty" class="muted hidden">No removable drives detected.</div>
+                  <div id="device-list" class="device-list"></div>
+                </div>
+                <div class="field">
+                  <label>Drive label (optional)</label>
+                  <input id="drive-label" type="text" placeholder="Work Backup" />
+                </div>
+                <div class="device-actions">
+                  <button class="btn secondary" id="mount-drive" type="button">Mount</button>
+                  <button class="btn primary" id="setup-drive" type="button">Use this drive</button>
+                </div>
+                <div class="device-danger">
+                  <label class="checkbox">
+                    <input id="erase-option" type="checkbox" /> Erase &amp; format as exFAT (destructive)
+                  </label>
+                  <label class="field hidden" id="erase-phrase-field">
+                    <span>Type ERASE to confirm formatting</span>
+                    <input id="erase-phrase" type="text" placeholder="ERASE" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="step-card wizard-step hidden" data-step="3">
+                <div class="step-label">Step 4</div>
+                <h2>Summary</h2>
+                <ul class="summary" id="wizard-summary"></ul>
+              </div>
+            </div>
+            <div class="wizard-actions">
+              <div class="wizard-actions-left">
+                <button class="btn ghost" id="wizard-back">Back</button>
+                <button class="btn ghost" id="wizard-skip">Skip for now</button>
+              </div>
+              <div class="wizard-actions-right">
+                <button class="btn secondary" id="wizard-next">Next</button>
+                <button class="btn primary hidden" id="run-first-backup">Run first backup now</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="dashboard" class="view">
+          <div class="panel">
+            <div class="status-grid">
+              <div class="status-card">
+                <div class="status-title">Drive</div>
+                <div class="status-value" id="drive-status">Not connected</div>
+                <div class="status-meta" id="drive-meta">Insert your trusted USB drive</div>
+              </div>
+              <div class="status-card">
+                <div class="status-title">Last backup</div>
+                <div class="status-value" id="last-backup">Never</div>
+                <div class="status-meta" id="last-result">—</div>
+              </div>
+              <div class="status-card">
+                <div class="status-title">Protection</div>
+                <div class="status-value">Encrypted</div>
+                <div class="status-meta" id="verify-status">Quick verify enabled</div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="btn primary" id="backup-now">Back up now</button>
+              <button class="btn secondary" id="restore-btn">Restore…</button>
+              <button class="btn ghost" id="eject-btn">Eject drive</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="restore" class="view hidden">
+          <div class="panel">
+            <h1>Restore</h1>
+            <p class="lead">Choose a snapshot and restore to a new folder. Aegis never overwrites without confirmation.</p>
+            <div class="field-row">
+              <button class="btn secondary" id="load-snapshots">Load snapshots</button>
+              <span class="muted" id="snapshot-info">Snapshots are encrypted. Passphrase required.</span>
+            </div>
+            <div class="snapshot-list" id="snapshot-list"></div>
+            <div class="muted" id="snapshot-summary"></div>
+            <div class="field">
+              <label>Restore to folder</label>
+              <input id="restore-target" type="text" placeholder="/path/to/restore" />
+            </div>
+            <button class="btn primary" id="restore-run">Restore selected</button>
+          </div>
+        </section>
+
+        <section id="settings" class="view hidden">
+          <div class="panel">
+            <h1>Settings</h1>
+            <div class="field">
+              <label>Exclude patterns</label>
+              <input id="exclude-patterns" type="text" placeholder=".cache, node_modules" />
+            </div>
+            <label class="checkbox">
+              <input id="quick-verify" type="checkbox" checked /> Quick verify after backup
+            </label>
+            <label class="checkbox">
+              <input id="auto-backup" type="checkbox" checked /> Run backup when trusted drive is inserted
+            </label>
+            <button class="btn primary" id="save-settings">Save settings</button>
+          </div>
+        </section>
+
+        <section id="advanced" class="view hidden">
+          <div class="panel">
+            <h1>Advanced</h1>
+            <div class="field-row">
+              <label class="checkbox">
+                <input id="deep-verify" type="checkbox" /> Deep verification (slower)
+              </label>
+            </div>
+            <div class="field">
+              <label>Include patterns (advanced)</label>
+              <input id="include-patterns" type="text" placeholder="Photos/**, *.docx" />
+            </div>
+            <div class="field">
+              <label>Retention policy</label>
+              <div class="field-row">
+                <input id="keep-last" type="number" min="0" placeholder="Keep last" />
+                <input id="keep-daily" type="number" min="0" placeholder="Keep daily" />
+                <input id="keep-weekly" type="number" min="0" placeholder="Keep weekly" />
+                <input id="keep-monthly" type="number" min="0" placeholder="Keep monthly" />
+                <input id="keep-yearly" type="number" min="0" placeholder="Keep yearly" />
+              </div>
+              <label class="checkbox">
+                <input id="retention-enabled" type="checkbox" /> Enable retention pruning
+              </label>
+            </div>
+            <button class="btn primary" id="save-advanced">Save advanced</button>
+            <div class="field">
+              <label>Recovery kit</label>
+              <input id="recovery-destination" type="text" placeholder="/path/to/folder" />
+              <button class="btn secondary" id="export-recovery">Export recovery kit</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div id="modal-overlay" class="modal hidden">
+        <div class="modal-card">
+          <h2 id="modal-title">Secure prompt</h2>
+          <p id="modal-body" class="muted"></p>
+          <div class="field" id="modal-field">
+            <label>Passphrase</label>
+            <input id="modal-passphrase" type="password" placeholder="Enter passphrase" />
+          </div>
+          <div id="modal-error" class="muted"></div>
+          <div class="actions">
+            <button class="btn secondary" id="modal-cancel">Cancel</button>
+            <button class="btn primary" id="modal-confirm">Continue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="devtools-toggle hidden" id="devtools-toggle" type="button">Devtools</button>
+    <script src="app.js"></script>
+  </body>
+</html>

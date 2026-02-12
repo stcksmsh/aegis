@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "Main window permissions for Aegis",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default"]
+}

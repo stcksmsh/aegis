@@ -1,0 +1,28 @@
+{
+  "build": {
+    "frontendDist": "../frontend"
+  },
+  "productName": "Aegis",
+  "version": "0.1.0",
+  "identifier": "com.aegis.app",
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; connect-src http://127.0.0.1:7878 ipc://localhost tauri://localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self';"
+    },
+    "windows": [
+      {
+        "title": "Aegis",
+        "width": 1280,
+        "height": 900,
+        "devtools": true,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}

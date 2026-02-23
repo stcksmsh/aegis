@@ -30,11 +30,11 @@ impl UsbWatcher {
 pub fn build_watcher() -> anyhow::Result<UsbWatcher> {
     #[cfg(target_os = "linux")]
     {
-        return Ok(UsbWatcher::Linux(LinuxWatcher::new()?));
+        Ok(UsbWatcher::Linux(LinuxWatcher::new()?))
     }
     #[cfg(not(target_os = "linux"))]
     {
-        return Ok(UsbWatcher::Stub(StubWatcher));
+        Ok(UsbWatcher::Stub(StubWatcher))
     }
 }
 
@@ -92,9 +92,15 @@ fn monitor_usb(sender: mpsc::Sender<UsbEvent>) -> anyhow::Result<()> {
     for event in monitor.iter() {
         let event_type = event.event_type();
         let device = event.device();
-        let devtype = device.property_value("DEVTYPE").and_then(|v| v.to_str()).unwrap_or("");
+        let devtype = device
+            .property_value("DEVTYPE")
+            .and_then(|v| v.to_str())
+            .unwrap_or("");
         let devnode = device.devnode().map(PathBuf::from);
-        let id_bus = device.property_value("ID_BUS").and_then(|v| v.to_str()).unwrap_or("");
+        let id_bus = device
+            .property_value("ID_BUS")
+            .and_then(|v| v.to_str())
+            .unwrap_or("");
         let fs_usage = device
             .property_value("ID_FS_USAGE")
             .and_then(|v| v.to_str())
@@ -186,7 +192,10 @@ async fn scan_existing_devices(state: &SharedState) {
             }
         };
         for device in devices {
-            let devtype = device.property_value("DEVTYPE").and_then(|v| v.to_str()).unwrap_or("");
+            let devtype = device
+                .property_value("DEVTYPE")
+                .and_then(|v| v.to_str())
+                .unwrap_or("");
             if devtype != "partition" && devtype != "disk" {
                 continue;
             }
@@ -263,9 +272,7 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
         }
 
         if trusted {
-            crate::notifications::notify_trusted_device(
-                marker.label.as_deref().unwrap_or("drive"),
-            );
+            crate::notifications::notify_trusted_device(marker.label.as_deref().unwrap_or("drive"));
             attempt_auto_backup(state, &marker.drive_id, &mount_path).await;
         }
     } else {
@@ -293,7 +300,10 @@ async fn handle_removed(state: &SharedState, devnode: &Path) -> anyhow::Result<(
         if let Some(mount_path) = &guard.drive_status.mount_path {
             if let Some(device) = resolve_device_for_mount(Path::new(mount_path)) {
                 if device != devnode {
-                    debug!("USB handle_removed: devnode={} not current drive, ignoring", devnode.display());
+                    debug!(
+                        "USB handle_removed: devnode={} not current drive, ignoring",
+                        devnode.display()
+                    );
                     return Ok(());
                 }
             }
@@ -442,7 +452,10 @@ fn mount_table() -> Vec<(PathBuf, PathBuf)> {
             if parts.len() < 2 {
                 return None;
             }
-            Some((PathBuf::from(parts[0]), PathBuf::from(unescape_mount(parts[1]))))
+            Some((
+                PathBuf::from(parts[0]),
+                PathBuf::from(unescape_mount(parts[1])),
+            ))
         })
         .collect()
 }

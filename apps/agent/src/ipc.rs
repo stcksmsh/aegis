@@ -1,7 +1,7 @@
 use crate::backup::run_backup;
+use crate::config::sanitize_label;
 use crate::config::{AgentConfig, BackupSource, TrustedDrive};
 use crate::devices;
-use crate::config::sanitize_label;
 use crate::drive::{read_marker, write_marker, DriveMarker};
 use crate::keychain;
 use crate::logging::Redact;
@@ -14,11 +14,11 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Stdio;
-use rand::distributions::Alphanumeric;
-use rand::Rng;
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, error};
@@ -233,7 +233,10 @@ struct FormatResponse {
 }
 
 pub async fn serve(state: SharedState) -> anyhow::Result<()> {
-    let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
     let app = Router::new()
         .route("/v1/status", get(get_status))
         .route("/v1/devices", get(list_devices))
@@ -242,10 +245,10 @@ pub async fn serve(state: SharedState) -> anyhow::Result<()> {
         .route("/v1/drives/setup", post(setup_drive))
         .route("/v1/drives/mount", post(mount_drive))
         .route("/v1/drives/format", post(format_drive))
-    .route("/v1/backup/run", post(start_backup))
-    .route("/v1/snapshots", post(list_snapshots))
-    .route("/v1/snapshots/stats", post(snapshot_stats))
-    .route("/v1/restore", post(restore_snapshot))
+        .route("/v1/backup/run", post(start_backup))
+        .route("/v1/snapshots", post(list_snapshots))
+        .route("/v1/snapshots/stats", post(snapshot_stats))
+        .route("/v1/restore", post(restore_snapshot))
         .route("/v1/recovery-kit", post(export_recovery))
         .route("/v1/drives/eject", post(eject_drive))
         .route("/v1/drives/discontinue", post(discontinue_drive))
@@ -258,7 +261,9 @@ pub async fn serve(state: SharedState) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn list_devices(State(_state): State<SharedState>) -> Result<Json<DevicesResponse>, (StatusCode, String)> {
+async fn list_devices(
+    State(_state): State<SharedState>,
+) -> Result<Json<DevicesResponse>, (StatusCode, String)> {
     debug!("list_devices: request");
     let devices = devices::list_removable_devices().map_err(|e| {
         tracing::error!("list_devices: scan failed error={}", e);
@@ -294,7 +299,11 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
     let config = &guard.config;
     let restic_available = Restic::resolve(config.restic_path.as_deref()).is_ok();
     let summary = ConfigSummary {
-        backup_sources: config.backup_sources.iter().map(|s| s.label.clone()).collect(),
+        backup_sources: config
+            .backup_sources
+            .iter()
+            .map(|s| s.label.clone())
+            .collect(),
         include_patterns: config.include_patterns.clone(),
         exclude_patterns: config.exclude_patterns.clone(),
         retention_enabled: config.retention.enabled,
@@ -309,10 +318,9 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
         .trusted_drives
         .iter()
         .map(|(id, d)| {
-            let label = d
-                .label
-                .clone()
-                .unwrap_or_else(|| format!("drive-{}", d.drive_id.chars().take(8).collect::<String>()));
+            let label = d.label.clone().unwrap_or_else(|| {
+                format!("drive-{}", d.drive_id.chars().take(8).collect::<String>())
+            });
             let is_connected = current_drive_id == Some(id) && guard.drive_status.connected;
             let sources = config.backup_sources_for_drive(id);
             let backup_source_labels = sources.iter().map(|s| s.label.clone()).collect();
@@ -370,10 +378,12 @@ async fn update_config(
     }
 
     // Avoid returning raw errors to the UI to prevent leaking paths.
-    guard
-        .config
-        .save()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "config save failed".to_string()))?;
+    guard.config.save().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "config save failed".to_string(),
+        )
+    })?;
     drop(guard);
     Ok(get_status(State(state)).await)
 }
@@ -390,12 +400,21 @@ async fn setup_drive(
     );
     let mount_path = PathBuf::from(&req.mount_path);
     if !mount_path.exists() {
-        tracing::warn!("setup drive: mount path does not exist path={}", req.mount_path);
+        tracing::warn!(
+            "setup drive: mount path does not exist path={}",
+            req.mount_path
+        );
         return Err((StatusCode::BAD_REQUEST, "mount path not found".to_string()));
     }
     if resolve_device_for_mount(&mount_path).is_none() {
-        tracing::warn!("setup drive: mount path is not a mounted drive path={}", req.mount_path);
-        return Err((StatusCode::BAD_REQUEST, "mount path is not a mounted drive".to_string()));
+        tracing::warn!(
+            "setup drive: mount path is not a mounted drive path={}",
+            req.mount_path
+        );
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "mount path is not a mounted drive".to_string(),
+        ));
     }
     if req.passphrase.trim().is_empty() {
         tracing::warn!("setup drive: empty passphrase");
@@ -443,25 +462,46 @@ async fn setup_drive(
 
     let restic = {
         let guard = state.read().await;
-        Restic::resolve(guard.config.restic_path.as_deref())
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "restic not available".to_string()))?
+        Restic::resolve(guard.config.restic_path.as_deref()).map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "restic not available".to_string(),
+            )
+        })?
     };
 
     debug!("setup drive: reading/writing marker at mount_path");
     let mut marker = read_marker(&mount_path).map_err(|e| {
-        tracing::error!("setup drive: marker read failed path={} error={}", req.mount_path, e);
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("marker read failed: {}", e))
+        tracing::error!(
+            "setup drive: marker read failed path={} error={}",
+            req.mount_path,
+            e
+        );
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("marker read failed: {}", e),
+        )
     })?;
     let marker = match marker.take() {
         Some(marker) => {
-            debug!("setup drive: found existing marker drive_id={}", marker.drive_id);
+            debug!(
+                "setup drive: found existing marker drive_id={}",
+                marker.drive_id
+            );
             marker
         }
         None => {
             let marker = DriveMarker::new(Some(final_label.clone()));
             write_marker(&mount_path, &marker).map_err(|e| {
-                tracing::error!("setup drive: marker write failed path={} error={}", req.mount_path, e);
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("marker write failed: {}", e))
+                tracing::error!(
+                    "setup drive: marker write failed path={} error={}",
+                    req.mount_path,
+                    e
+                );
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("marker write failed: {}", e),
+                )
             })?;
             debug!("setup drive: wrote new marker drive_id={}", marker.drive_id);
             marker
@@ -470,24 +510,49 @@ async fn setup_drive(
 
     let repo_rel = ".aegis/repo".to_string();
     let repo_path = mount_path.join(&repo_rel);
-    debug!("setup drive: creating repo dir path={}", repo_path.display());
+    debug!(
+        "setup drive: creating repo dir path={}",
+        repo_path.display()
+    );
     std::fs::create_dir_all(&repo_path).map_err(|e| {
-        tracing::error!("setup drive: repo create_dir_all failed path={} error={}", repo_path.display(), e);
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("repo create failed: {}", e))
+        tracing::error!(
+            "setup drive: repo create_dir_all failed path={} error={}",
+            repo_path.display(),
+            e
+        );
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("repo create failed: {}", e),
+        )
     })?;
 
     let repo_id = if repo_path.join("config").exists() {
         debug!("setup drive: existing repo config found, checking passphrase");
-        restic.repository_id(&repo_path, &req.passphrase).await.map_err(|e| {
-            tracing::error!("setup drive: repository_id failed error={}", e);
-            (StatusCode::BAD_REQUEST, "invalid passphrase or repo".to_string())
-        })?
+        restic
+            .repository_id(&repo_path, &req.passphrase)
+            .await
+            .map_err(|e| {
+                tracing::error!("setup drive: repository_id failed error={}", e);
+                (
+                    StatusCode::BAD_REQUEST,
+                    "invalid passphrase or repo".to_string(),
+                )
+            })?
     } else {
-        debug!("setup drive: initializing new restic repo path={}", repo_path.display());
-        restic.init_repo(&repo_path, &req.passphrase).await.map_err(|e| {
-            tracing::error!("setup drive: init_repo failed error={}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("failed to init repo: {}", e))
-        })?
+        debug!(
+            "setup drive: initializing new restic repo path={}",
+            repo_path.display()
+        );
+        restic
+            .init_repo(&repo_path, &req.passphrase)
+            .await
+            .map_err(|e| {
+                tracing::error!("setup drive: init_repo failed error={}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("failed to init repo: {}", e),
+                )
+            })?
     };
 
     let mut updated_marker = marker.clone();
@@ -509,11 +574,16 @@ async fn setup_drive(
         last_backup_snapshot_id: None,
         backup_sources,
     };
-    guard.config.trusted_drives.insert(marker.drive_id.clone(), trusted);
     guard
         .config
-        .save()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "config save failed".to_string()))?;
+        .trusted_drives
+        .insert(marker.drive_id.clone(), trusted);
+    guard.config.save().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "config save failed".to_string(),
+        )
+    })?;
 
     // Mark the drive we just set up as connected and trusted so the dashboard shows it immediately.
     let mount_str = mount_path.to_string_lossy().to_string();
@@ -538,7 +608,10 @@ async fn setup_drive(
         marker.drive_id,
         repo_id
     );
-    Ok(Json(SetupDriveResponse { drive_id: marker.drive_id, repository_id: repo_id }))
+    Ok(Json(SetupDriveResponse {
+        drive_id: marker.drive_id,
+        repository_id: repo_id,
+    }))
 }
 
 async fn discontinue_drive(
@@ -547,8 +620,7 @@ async fn discontinue_drive(
 ) -> Result<Json<StatusResponse>, (StatusCode, String)> {
     debug!(
         "discontinue drive: request drive_id={} wipe={}",
-        req.drive_id,
-        req.wipe
+        req.drive_id, req.wipe
     );
     let mut guard = state.write().await;
     let drive = guard
@@ -556,13 +628,13 @@ async fn discontinue_drive(
         .trusted_drives
         .get(&req.drive_id)
         .ok_or_else(|| {
-            tracing::warn!("discontinue drive: drive not found drive_id={}", req.drive_id);
+            tracing::warn!(
+                "discontinue drive: drive not found drive_id={}",
+                req.drive_id
+            );
             (StatusCode::NOT_FOUND, "Drive not found.".to_string())
         })?;
-    let expected = drive
-        .label
-        .as_deref()
-        .unwrap_or("");
+    let expected = drive.label.as_deref().unwrap_or("");
     if expected.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -578,7 +650,9 @@ async fn discontinue_drive(
     }
     let drive_id = req.drive_id.clone();
     let devnode_to_wipe: Option<String> = if req.wipe {
-        if guard.drive_status.drive_id.as_deref() != Some(&drive_id) || guard.drive_status.devnode.is_none() {
+        if guard.drive_status.drive_id.as_deref() != Some(&drive_id)
+            || guard.drive_status.devnode.is_none()
+        {
             return Err((
                 StatusCode::BAD_REQUEST,
                 "Drive must be connected to wipe. Plug in the drive and try again.".to_string(),
@@ -589,10 +663,12 @@ async fn discontinue_drive(
         None
     };
     guard.config.trusted_drives.remove(&drive_id);
-    guard
-        .config
-        .save()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "config save failed".to_string()))?;
+    guard.config.save().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "config save failed".to_string(),
+        )
+    })?;
     drop(guard);
     let _ = keychain::delete_passphrase(&drive_id);
     if let Some(devnode) = devnode_to_wipe {
@@ -629,18 +705,18 @@ async fn update_drive(
     let mut guard = state.write().await;
     if !guard.config.trusted_drives.contains_key(&req.drive_id) {
         drop(guard);
-        return Err((
-            StatusCode::NOT_FOUND,
-            "Drive not found.".to_string(),
-        ));
+        return Err((StatusCode::NOT_FOUND, "Drive not found.".to_string()));
     }
 
     if let Some(raw_label) = &req.label {
         let new_label = sanitize_label(raw_label)
-            .or_else(|| sanitize_label(&raw_label.trim().to_string()))
+            .or_else(|| sanitize_label(raw_label.trim()))
             .filter(|s| !s.is_empty())
             .ok_or_else(|| {
-                (StatusCode::BAD_REQUEST, "Label is empty or invalid after sanitization.".to_string())
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Label is empty or invalid after sanitization.".to_string(),
+                )
             })?;
         if guard.config.label_exists(&new_label, Some(&req.drive_id)) {
             return Err((
@@ -678,10 +754,12 @@ async fn update_drive(
         }
     }
 
-    guard
-        .config
-        .save()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "config save failed".to_string()))?;
+    guard.config.save().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "config save failed".to_string(),
+        )
+    })?;
     drop(guard);
     Ok(get_status(State(state)).await)
 }
@@ -701,7 +779,11 @@ async fn mount_drive(
         }
         (StatusCode::INTERNAL_SERVER_ERROR, msg)
     })?;
-    tracing::info!("mount drive: success devnode={} mount_path={}", req.devnode, mount_path);
+    tracing::info!(
+        "mount drive: success devnode={} mount_path={}",
+        req.devnode,
+        mount_path
+    );
     Ok(Json(MountResponse { mount_path }))
 }
 
@@ -721,7 +803,9 @@ async fn format_drive(
         (StatusCode::INTERNAL_SERVER_ERROR, msg)
     })?;
     tracing::info!("format drive: success devnode={}", req.devnode);
-    Ok(Json(FormatResponse { status: "ok".to_string() }))
+    Ok(Json(FormatResponse {
+        status: "ok".to_string(),
+    }))
 }
 
 async fn start_backup(
@@ -732,7 +816,10 @@ async fn start_backup(
     {
         let guard = state.read().await;
         if guard.running_drive_ids.contains(&req.drive_id) {
-            return Err((StatusCode::CONFLICT, "backup already running for this drive".to_string()));
+            return Err((
+                StatusCode::CONFLICT,
+                "backup already running for this drive".to_string(),
+            ));
         }
     }
     let Some(drive) = config.trusted_drives.get(&req.drive_id) else {
@@ -761,7 +848,9 @@ async fn start_backup(
         }
     });
 
-    Ok(Json(BackupStartResponse { status: "started".to_string() }))
+    Ok(Json(BackupStartResponse {
+        status: "started".to_string(),
+    }))
 }
 
 async fn list_snapshots(
@@ -778,13 +867,22 @@ async fn list_snapshots(
     let mount_path = ensure_mounted_drive(&state, &req.drive_id).await?;
     let passphrase = resolve_passphrase(&config, &req.drive_id, req.passphrase)?;
 
-    let restic = Restic::resolve(config.restic_path.as_deref())
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "restic not available".to_string()))?;
+    let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "restic not available".to_string(),
+        )
+    })?;
     let repo_path = PathBuf::from(mount_path).join(&drive.repository_path);
     let snapshots = restic
         .snapshots(&repo_path, &passphrase)
         .await
-        .map_err(|_| (StatusCode::BAD_REQUEST, "unable to list snapshots".to_string()))?;
+        .map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                "unable to list snapshots".to_string(),
+            )
+        })?;
 
     Ok(Json(SnapshotsResponse { snapshots }))
 }
@@ -803,15 +901,27 @@ async fn snapshot_stats(
     let mount_path = ensure_mounted_drive(&state, &req.drive_id).await?;
     let passphrase = resolve_passphrase(&config, &req.drive_id, req.passphrase)?;
 
-    let restic = Restic::resolve(config.restic_path.as_deref())
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "restic not available".to_string()))?;
+    let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "restic not available".to_string(),
+        )
+    })?;
     let repo_path = PathBuf::from(mount_path).join(&drive.repository_path);
     let stats = restic
         .snapshot_stats(&repo_path, &passphrase, &req.snapshot_id)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "stats failed".to_string()))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "stats failed".to_string(),
+            )
+        })?;
 
-    Ok(Json(SnapshotStatsResponse { total_size: stats.total_size, total_file_count: stats.total_file_count }))
+    Ok(Json(SnapshotStatsResponse {
+        total_size: stats.total_size,
+        total_file_count: stats.total_file_count,
+    }))
 }
 
 async fn restore_snapshot(
@@ -832,8 +942,12 @@ async fn restore_snapshot(
     let mount_path = ensure_mounted_drive(&state, &req.drive_id).await?;
     let passphrase = resolve_passphrase(&config, &req.drive_id, req.passphrase)?;
 
-    let restic = Restic::resolve(config.restic_path.as_deref())
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "restic not available".to_string()))?;
+    let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "restic not available".to_string(),
+        )
+    })?;
 
     let repo_path = PathBuf::from(mount_path.clone()).join(&drive.repository_path);
     let cancel = CancellationToken::new();
@@ -852,14 +966,21 @@ async fn restore_snapshot(
             cancel,
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("restore failed: {}", e)));
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("restore failed: {}", e),
+            )
+        });
     {
         let mut guard = state.write().await;
         guard.restore_drive_id = None;
         guard.restore_cancel_token = None;
     }
     result?;
-    Ok(Json(RestoreResponse { status: "completed".to_string() }))
+    Ok(Json(RestoreResponse {
+        status: "completed".to_string(),
+    }))
 }
 
 async fn export_recovery(
@@ -872,10 +993,16 @@ async fn export_recovery(
         .get(&req.drive_id)
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "unknown drive".to_string()))?;
 
-    export_recovery_kit(drive, FsPath::new(&req.destination_dir))
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "recovery export failed".to_string()))?;
+    export_recovery_kit(drive, FsPath::new(&req.destination_dir)).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "recovery export failed".to_string(),
+        )
+    })?;
 
-    Ok(Json(RecoveryKitResponse { status: "created".to_string() }))
+    Ok(Json(RecoveryKitResponse {
+        status: "created".to_string(),
+    }))
 }
 
 async fn eject_drive(
@@ -896,10 +1023,18 @@ async fn eject_drive(
         .status()
         .await
         .context("unmount")
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "eject failed".to_string()))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "eject failed".to_string(),
+            )
+        })?;
 
     if !status.success() {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "eject failed".to_string()));
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "eject failed".to_string(),
+        ));
     }
 
     let status = tokio::process::Command::new("udisksctl")
@@ -911,19 +1046,35 @@ async fn eject_drive(
         .status()
         .await
         .context("power off")
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "eject failed".to_string()))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "eject failed".to_string(),
+            )
+        })?;
 
     if !status.success() {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "eject failed".to_string()));
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "eject failed".to_string(),
+        ));
     }
 
-    Ok(Json(BackupStartResponse { status: "ejected".to_string() }))
+    Ok(Json(BackupStartResponse {
+        status: "ejected".to_string(),
+    }))
 }
 
-async fn ensure_mounted_drive(state: &SharedState, drive_id: &str) -> Result<String, (StatusCode, String)> {
+async fn ensure_mounted_drive(
+    state: &SharedState,
+    drive_id: &str,
+) -> Result<String, (StatusCode, String)> {
     let guard = state.read().await;
     if !guard.drive_status.connected || !guard.drive_status.trusted {
-        return Err((StatusCode::BAD_REQUEST, "trusted drive not connected".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "trusted drive not connected".to_string(),
+        ));
     }
     if guard.drive_status.drive_id.as_deref() != Some(drive_id) {
         return Err((StatusCode::BAD_REQUEST, "drive mismatch".to_string()));
@@ -948,7 +1099,12 @@ fn resolve_passphrase(
     }
     if config.remember_passphrase && !config.paranoid_mode {
         return keychain::get_passphrase(drive_id)
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "keychain error".to_string()))?
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "keychain error".to_string(),
+                )
+            })?
             .ok_or_else(|| (StatusCode::BAD_REQUEST, "passphrase required".to_string()));
     }
     Err((StatusCode::BAD_REQUEST, "passphrase required".to_string()))

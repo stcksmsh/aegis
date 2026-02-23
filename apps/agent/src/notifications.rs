@@ -23,16 +23,31 @@ pub fn notify(title: &str, body: &str) {
 }
 
 pub fn notify_backup_started(drive_label: &str) {
-    notify("Backup started", &format!("Backing up to \"{}\"…", drive_label));
+    notify(
+        "Backup started",
+        &format!("Backing up to \"{}\"…", drive_label),
+    );
 }
 
 pub fn notify_backup_finished(drive_label: &str, success: bool, interrupted: bool) {
     let (title, body) = if interrupted {
-        ("Backup interrupted", format!("Backup to \"{}\" was interrupted (drive disconnected).", drive_label))
+        (
+            "Backup interrupted",
+            format!(
+                "Backup to \"{}\" was interrupted (drive disconnected).",
+                drive_label
+            ),
+        )
     } else if success {
-        ("Backup completed", format!("Backup to \"{}\" completed successfully.", drive_label))
+        (
+            "Backup completed",
+            format!("Backup to \"{}\" completed successfully.", drive_label),
+        )
     } else {
-        ("Backup failed", format!("Backup to \"{}\" failed.", drive_label))
+        (
+            "Backup failed",
+            format!("Backup to \"{}\" failed.", drive_label),
+        )
     };
     notify(title, &body);
 }

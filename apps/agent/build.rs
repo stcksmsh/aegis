@@ -12,10 +12,18 @@ fn main() {
 
     let source = env::var("RESTIC_BUNDLE_PATH")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| workspace_root.join("resources").join("restic").join("restic"));
+        .unwrap_or_else(|_| {
+            workspace_root
+                .join("resources")
+                .join("restic")
+                .join("restic")
+        });
 
     if !source.exists() {
-        println!("cargo:warning=restic bundle not found at {}", source.display());
+        println!(
+            "cargo:warning=restic bundle not found at {}",
+            source.display()
+        );
         return;
     }
 
@@ -25,7 +33,10 @@ fn main() {
 
     let dest_dir = target_dir.join("resources").join("restic");
     if let Err(err) = fs::create_dir_all(&dest_dir) {
-        println!("cargo:warning=failed to create restic resources dir: {}", err);
+        println!(
+            "cargo:warning=failed to create restic resources dir: {}",
+            err
+        );
         return;
     }
 

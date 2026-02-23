@@ -74,9 +74,18 @@ impl Default for AgentConfig {
         Self {
             trusted_drives: HashMap::new(),
             backup_sources: vec![
-                BackupSource { label: "Documents".to_string(), path: "~/Documents".to_string() },
-                BackupSource { label: "Pictures".to_string(), path: "~/Pictures".to_string() },
-                BackupSource { label: "Desktop".to_string(), path: "~/Desktop".to_string() },
+                BackupSource {
+                    label: "Documents".to_string(),
+                    path: "~/Documents".to_string(),
+                },
+                BackupSource {
+                    label: "Pictures".to_string(),
+                    path: "~/Pictures".to_string(),
+                },
+                BackupSource {
+                    label: "Desktop".to_string(),
+                    path: "~/Desktop".to_string(),
+                },
             ],
             include_patterns: Vec::new(),
             exclude_patterns: Vec::new(),
@@ -195,6 +204,74 @@ fn now_epoch() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn sanitize_label_empty_and_whitespace() {
+        assert_eq!(sanitize_label(""), None);
+        assert_eq!(sanitize_label("   "), None);
+        assert_eq!(sanitize_label("\t\n"), None);
+    }
+
+    #[test]
+    fn sanitize_label_trim() {
+        assert_eq!(sanitize_label("  my drive  "), Some("my drive".to_string()));
+    }
+
+    #[test]
+    fn sanitize_label_strips_control_chars() {
+        assert_eq!(sanitize_label("a\u{00}b\u{1f}c"), Some("abc".to_string()));
+        assert_eq!(sanitize_label("ok\u{0c}"), Some("ok".to_string()));
+    }
+
+    #[test]
+    fn sanitize_label_caps_length() {
+        let long = "a".repeat(LABEL_MAX_LEN + 100);
+        let out = sanitize_label(&long).unwrap();
+        assert_eq!(out.len(), LABEL_MAX_LEN);
+        assert!(out.chars().all(|c| c == 'a'));
+    }
+
+    #[test]
+    fn sanitize_label_unicode_ok() {
+        assert_eq!(sanitize_label("ドライブ"), Some("ドライブ".to_string()));
+    }
+
+    #[test]
+    fn repository_path_for_unknown_drive() {
+        let config = AgentConfig::default();
+        assert_eq!(
+            config.repository_path_for("unknown", Path::new("/media/drive")),
+            None
+        );
+    }
+
+    #[test]
+    fn repository_path_for_known_drive() {
+        let mut config = AgentConfig::default();
+        config.trusted_drives.insert(
+            "drive-1".to_string(),
+            TrustedDrive {
+                drive_id: "drive-1".to_string(),
+                label: Some("USB".to_string()),
+                repository_path: "backup".to_string(),
+                repository_id: None,
+                last_seen_epoch: None,
+                last_backup_epoch: None,
+                last_backup_snapshot_id: None,
+                backup_sources: None,
+            },
+        );
+        let path = config
+            .repository_path_for("drive-1", Path::new("/media/usb"))
+            .expect("should be some");
+        assert_eq!(path, Path::new("/media/usb/backup"));
+    }
 }
 
 pub fn ensure_marker_dir(root: &Path) -> anyhow::Result<PathBuf> {

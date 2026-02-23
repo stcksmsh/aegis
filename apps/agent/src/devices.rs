@@ -73,8 +73,8 @@ pub fn list_removable_devices() -> anyhow::Result<Vec<DeviceInfo>> {
         );
         return Err(anyhow::anyhow!("lsblk failed"));
     }
-    let parsed: LsblkOutput = serde_json::from_slice(&output.stdout)
-        .context("parse lsblk output")?;
+    let parsed: LsblkOutput =
+        serde_json::from_slice(&output.stdout).context("parse lsblk output")?;
     debug!(
         "device scan: parsed {} block device(s)",
         parsed.blockdevices.len()
@@ -140,7 +140,10 @@ fn log_devices_if_changed(devices: &[DeviceInfo]) {
     *guard = snapshot;
     info!("device scan: {} removable disks", devices.len());
     for device in devices {
-        let model = device.model.clone().unwrap_or_else(|| "unknown".to_string());
+        let model = device
+            .model
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
         debug!(
             "device: path={} size={} model={}",
             device.path, device.size, model
@@ -151,7 +154,10 @@ fn log_devices_if_changed(devices: &[DeviceInfo]) {
             } else {
                 part.mountpoints.join(", ")
             };
-            debug!("device:  partition={} size={} mounts={}", part.path, part.size, mounts);
+            debug!(
+                "device:  partition={} size={} mounts={}",
+                part.path, part.size, mounts
+            );
         }
     }
 }
@@ -233,7 +239,7 @@ fn find_mount_in_device(device: &LsblkDevice, devnode: &str) -> Option<Option<St
 fn normalize_mountpoints(raw: Option<Vec<Option<String>>>) -> Vec<String> {
     raw.unwrap_or_default()
         .into_iter()
-        .filter_map(|v| v)
+        .flatten()
         .filter(|v| !v.is_empty())
         .collect()
 }
@@ -276,7 +282,10 @@ pub fn mount_partition(devnode: &str) -> anyhow::Result<String> {
 /// Format partition as exFAT with a fixed Aegis volume label (aegis-xxxxxxxx). In-app name is stored only in the marker file on the drive.
 pub fn format_partition_exfat(devnode: &str) -> anyhow::Result<()> {
     let disk_label = generate_aegis_disk_name();
-    debug!("format: request devnode={} disk_label={}", devnode, disk_label);
+    debug!(
+        "format: request devnode={} disk_label={}",
+        devnode, disk_label
+    );
     for attempt in 1..=3 {
         let mountpoint = match find_mountpoint(devnode)? {
             None => break,
@@ -288,7 +297,10 @@ pub fn format_partition_exfat(devnode: &str) -> anyhow::Result<()> {
         );
         if let Err(e) = unmount_partition(devnode) {
             if attempt < 3 {
-                warn!("format: unmount failed (attempt {}), retrying: {}", attempt, e);
+                warn!(
+                    "format: unmount failed (attempt {}), retrying: {}",
+                    attempt, e
+                );
                 std::thread::sleep(std::time::Duration::from_millis(800));
             } else {
                 error!("format: unmount failed after {} attempts: {}", attempt, e);
@@ -296,12 +308,23 @@ pub fn format_partition_exfat(devnode: &str) -> anyhow::Result<()> {
             }
         }
     }
-    debug!("format: devnode={} is unmounted (or was not mounted), proceeding", devnode);
+    debug!(
+        "format: devnode={} is unmounted (or was not mounted), proceeding",
+        devnode
+    );
     if udisksctl_supports_format() {
         ensure_udisksctl()?;
         debug!("format: using udisksctl format (devnode={})", devnode);
         let mut cmd = Command::new("udisksctl");
-        cmd.args(["format", "-b", devnode, "--type", "exfat", "--label", &disk_label]);
+        cmd.args([
+            "format",
+            "-b",
+            devnode,
+            "--type",
+            "exfat",
+            "--label",
+            &disk_label,
+        ]);
         let output = cmd.output().context("run udisksctl format")?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -321,7 +344,10 @@ pub fn format_partition_exfat(devnode: &str) -> anyhow::Result<()> {
 
     // Fallback to mkfs.exfat via pkexec.
     let formatter = find_exfat_formatter().context("mkfs.exfat not found")?;
-    debug!("format: udisksctl format not available, using mkfs formatter={}", formatter);
+    debug!(
+        "format: udisksctl format not available, using mkfs formatter={}",
+        formatter
+    );
     run_mkfs_exfat(&formatter, devnode, &disk_label)?;
     info!("format: success for devnode={} (mkfs)", devnode);
     Ok(())
@@ -407,7 +433,11 @@ fn find_exfat_formatter() -> Option<String> {
 
 fn run_mkfs_exfat(formatter: &str, devnode: &str, disk_label: &str) -> anyhow::Result<()> {
     let use_pkexec = which::which("pkexec").is_ok();
-    let args: Vec<String> = vec!["-n".to_string(), disk_label.to_string(), devnode.to_string()];
+    let args: Vec<String> = vec![
+        "-n".to_string(),
+        disk_label.to_string(),
+        devnode.to_string(),
+    ];
     debug!(
         "format: run_mkfs_exfat formatter={} use_pkexec={} args={:?}",
         formatter, use_pkexec, args
@@ -445,7 +475,11 @@ fn run_mkfs_exfat(formatter: &str, devnode: &str, disk_label: &str) -> anyhow::R
     // Retry with -L if -n is not supported.
     if stderr.contains("invalid option") || stderr.contains("unknown option") {
         debug!("format: retrying mkfs with -L (label) instead of -n");
-        let args_alt: Vec<String> = vec!["-L".to_string(), disk_label.to_string(), devnode.to_string()];
+        let args_alt: Vec<String> = vec![
+            "-L".to_string(),
+            disk_label.to_string(),
+            devnode.to_string(),
+        ];
         let output_alt = if use_pkexec {
             Command::new("pkexec")
                 .arg(formatter)
@@ -467,7 +501,9 @@ fn run_mkfs_exfat(formatter: &str, devnode: &str, disk_label: &str) -> anyhow::R
         let stdout_alt = String::from_utf8_lossy(&output_alt.stdout).to_string();
         error!(
             "format: mkfs.exfat (alt) failed devnode={} stdout={} stderr={}",
-            devnode, stdout_alt.trim(), stderr_alt.trim()
+            devnode,
+            stdout_alt.trim(),
+            stderr_alt.trim()
         );
         return Err(anyhow::anyhow!("format failed: {}", stderr_alt.trim()));
     }

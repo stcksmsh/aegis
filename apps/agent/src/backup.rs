@@ -51,7 +51,9 @@ pub async fn run_backup(
     let cancel = CancellationToken::new();
     {
         let mut guard = state.write().await;
-        guard.running_cancel_tokens.insert(drive_id.clone(), cancel.clone());
+        guard
+            .running_cancel_tokens
+            .insert(drive_id.clone(), cancel.clone());
     }
 
     let outcome: anyhow::Result<RunResult> = async {
@@ -65,7 +67,10 @@ pub async fn run_backup(
 
         let mut repo_initialized = repo_path.join("config").exists();
         if !repo_initialized {
-            debug!("backup: initializing restic repository at {}", repo_path.display());
+            debug!(
+                "backup: initializing restic repository at {}",
+                repo_path.display()
+            );
             let repo_id = restic.init_repo(&repo_path, &passphrase).await?;
             repo_initialized = true;
             update_repo_id(&state, &drive_id, &repo_id).await?;
@@ -81,9 +86,18 @@ pub async fn run_backup(
 
         let sources = expand_sources(&config, &drive_id)?;
         if sources.is_empty() {
-            return Err(anyhow::anyhow!("no backup sources configured for this drive"));
+            return Err(anyhow::anyhow!(
+                "no backup sources configured for this drive"
+            ));
         }
-        debug!("backup: sources count={} paths={:?}", sources.len(), sources.iter().map(|p| p.display().to_string()).collect::<Vec<_>>());
+        debug!(
+            "backup: sources count={} paths={:?}",
+            sources.len(),
+            sources
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+        );
 
         let (progress_tx, mut progress_rx) = mpsc::channel(64);
         let restic_clone = restic.clone();
@@ -114,14 +128,19 @@ pub async fn run_backup(
                 let pct = (report.percent_done * 100.0) as u32;
                 let progress = BackupProgress {
                     percent_done: report.percent_done,
-                    message: format!("Backing up: {}% ({} / {} files)", pct, report.files_done, report.total_files),
+                    message: format!(
+                        "Backing up: {}% ({} / {} files)",
+                        pct, report.files_done, report.total_files
+                    ),
                     files_done: report.files_done,
                     total_files: report.total_files,
                     bytes_done: report.bytes_done,
                     total_bytes: report.total_bytes,
                 };
                 let mut guard = state_progress.write().await;
-                guard.backup_progress.insert(drive_id_progress.clone(), progress.clone());
+                guard
+                    .backup_progress
+                    .insert(drive_id_progress.clone(), progress.clone());
                 if let Some(ref mut last_run) = guard.last_run {
                     last_run.message = progress.message;
                 }
@@ -129,7 +148,10 @@ pub async fn run_backup(
         });
 
         let summary = backup_handle.await.context("backup task join")??;
-        debug!("backup: restic backup completed snapshot_id={:?}", summary.snapshot_id);
+        debug!(
+            "backup: restic backup completed snapshot_id={:?}",
+            summary.snapshot_id
+        );
 
         let mut interrupted = false;
         let mut status = RunStatus::Success;
@@ -182,7 +204,9 @@ pub async fn run_backup(
                 false,
             )
             .await;
-            if let Err(err) = apply_retention(&restic, &repo_path, &passphrase, &config.retention).await {
+            if let Err(err) =
+                apply_retention(&restic, &repo_path, &passphrase, &config.retention).await
+            {
                 error!("Retention failed: {}", Redact::new(err));
                 status = RunStatus::Partial;
                 message = "Backup completed, but retention failed".to_string();
@@ -191,7 +215,8 @@ pub async fn run_backup(
 
         let drive_connected = {
             let guard = state.read().await;
-            guard.drive_status.connected && guard.drive_status.drive_id.as_deref() == Some(&drive_id)
+            guard.drive_status.connected
+                && guard.drive_status.drive_id.as_deref() == Some(&drive_id)
         };
         if !drive_connected {
             interrupted = true;
@@ -234,14 +259,17 @@ pub async fn run_backup(
             guard.last_run = Some(result.clone());
             guard.config.update_last_seen(&drive_id);
             let epoch = result.finished_epoch.unwrap_or_else(now_epoch);
-            guard.config.update_last_backup(&drive_id, epoch, result.snapshot_id.clone());
+            guard
+                .config
+                .update_last_backup(&drive_id, epoch, result.snapshot_id.clone());
             let _ = guard.config.save();
             Ok(result)
         }
         Err(err) => {
             let drive_connected = {
                 let guard = state.read().await;
-                guard.drive_status.connected && guard.drive_status.drive_id.as_deref() == Some(&drive_id)
+                guard.drive_status.connected
+                    && guard.drive_status.drive_id.as_deref() == Some(&drive_id)
             };
             let interrupted = !drive_connected;
             let message = if interrupted {

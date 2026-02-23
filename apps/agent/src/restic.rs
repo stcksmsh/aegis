@@ -36,7 +36,7 @@ pub struct SnapshotStats {
 }
 
 #[derive(Debug, Deserialize)]
-struct ResticSummaryLine {
+pub(crate) struct ResticSummaryLine {
     message_type: Option<String>,
     snapshot_id: Option<String>,
     data_added: Option<u64>,
@@ -56,7 +56,7 @@ pub struct BackupProgressReport {
 }
 
 #[derive(Debug, Deserialize)]
-struct ResticStatusLine {
+pub(crate) struct ResticStatusLine {
     message_type: Option<String>,
     #[serde(default)]
     percent_done: Option<f64>,
@@ -72,14 +72,16 @@ struct ResticStatusLine {
 }
 
 #[derive(Debug, Deserialize)]
-struct ResticConfig {
+pub(crate) struct ResticConfig {
     id: String,
 }
 
 impl Restic {
     pub fn resolve(override_path: Option<&str>) -> anyhow::Result<Self> {
         if let Some(path) = override_path {
-            return Ok(Self { binary: PathBuf::from(path) });
+            return Ok(Self {
+                binary: PathBuf::from(path),
+            });
         }
 
         if let Ok(exe) = std::env::current_exe() {
@@ -100,7 +102,8 @@ impl Restic {
 
     pub async fn init_repo(&self, repo: &Path, passphrase: &str) -> anyhow::Result<String> {
         debug!("restic: init_repo repo={}", repo.display());
-        self.run_capture(repo, passphrase, &["init".to_string()]).await?;
+        self.run_capture(repo, passphrase, &["init".to_string()])
+            .await?;
         self.repository_id(repo, passphrase).await
     }
 
@@ -109,7 +112,8 @@ impl Restic {
         let output = self
             .run_capture(repo, passphrase, &["cat".to_string(), "config".to_string()])
             .await?;
-        let config: ResticConfig = serde_json::from_slice(&output.stdout).context("parse restic config")?;
+        let config: ResticConfig =
+            serde_json::from_slice(&output.stdout).context("parse restic config")?;
         Ok(config.id)
     }
 
@@ -141,7 +145,11 @@ impl Restic {
         }
         let output = self.run_capture(repo, passphrase, &args).await?;
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut summary = BackupSummary { snapshot_id: None, data_added: None, files_processed: None };
+        let mut summary = BackupSummary {
+            snapshot_id: None,
+            data_added: None,
+            files_processed: None,
+        };
         for line in stdout.lines() {
             if let Ok(parsed) = serde_json::from_str::<ResticSummaryLine>(line) {
                 if parsed.message_type.as_deref() == Some("summary") {
@@ -155,6 +163,7 @@ impl Restic {
     }
 
     /// Run backup while streaming progress to `progress_tx`. If `cancel` is triggered (e.g. drive unplugged), the restic process is killed and an error is returned.
+    #[allow(clippy::too_many_arguments)]
     pub async fn backup_with_progress(
         &self,
         repo: &Path,
@@ -198,7 +207,11 @@ impl Restic {
             v
         });
 
-        let mut summary = BackupSummary { snapshot_id: None, data_added: None, files_processed: None };
+        let mut summary = BackupSummary {
+            snapshot_id: None,
+            data_added: None,
+            files_processed: None,
+        };
         let mut last_log_percent: f64 = -1.0;
         let mut reader = BufReader::new(stdout);
         let mut line = String::new();
@@ -238,7 +251,9 @@ impl Restic {
                         current_file: parsed.current_file,
                     };
                     let _ = progress_tx.send(report.clone()).await;
-                    if (percent - last_log_percent >= 0.05) || (percent >= 1.0 && last_log_percent < 1.0) {
+                    if (percent - last_log_percent >= 0.05)
+                        || (percent >= 1.0 && last_log_percent < 1.0)
+                    {
                         last_log_percent = percent;
                         let pct = (percent * 100.0) as u32;
                         let mb_done = bytes_done / 1_000_000;
@@ -263,16 +278,28 @@ impl Restic {
         let status = child.wait().await?;
         let _stderr = stderr_handle.await?;
         if !status.success() {
-            return Err(anyhow!("restic backup failed with exit code {:?}", status.code()));
+            return Err(anyhow!(
+                "restic backup failed with exit code {:?}",
+                status.code()
+            ));
         }
         Ok(summary)
     }
 
-    pub async fn snapshots(&self, repo: &Path, passphrase: &str) -> anyhow::Result<Vec<SnapshotInfo>> {
+    pub async fn snapshots(
+        &self,
+        repo: &Path,
+        passphrase: &str,
+    ) -> anyhow::Result<Vec<SnapshotInfo>> {
         let output = self
-            .run_capture(repo, passphrase, &["snapshots".to_string(), "--json".to_string()])
+            .run_capture(
+                repo,
+                passphrase,
+                &["snapshots".to_string(), "--json".to_string()],
+            )
             .await?;
-        let snapshots: Vec<SnapshotInfo> = serde_json::from_slice(&output.stdout).context("parse snapshots")?;
+        let snapshots: Vec<SnapshotInfo> =
+            serde_json::from_slice(&output.stdout).context("parse snapshots")?;
         Ok(snapshots)
     }
 
@@ -302,18 +329,19 @@ impl Restic {
         self.run_capture(
             repo,
             passphrase,
-            &[
-                "check".to_string(),
-                "--read-data-subset=1/20".to_string(),
-            ],
+            &["check".to_string(), "--read-data-subset=1/20".to_string()],
         )
         .await?;
         Ok(())
     }
 
     pub async fn check_deep(&self, repo: &Path, passphrase: &str) -> anyhow::Result<()> {
-        self.run_capture(repo, passphrase, &["check".to_string(), "--read-data".to_string()])
-            .await?;
+        self.run_capture(
+            repo,
+            passphrase,
+            &["check".to_string(), "--read-data".to_string()],
+        )
+        .await?;
         Ok(())
     }
 
@@ -465,5 +493,48 @@ impl Restic {
                 Err(anyhow!("restic cancelled"))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_restic_status_line() {
+        let json = r#"{"message_type":"status","percent_done":0.5,"total_files":100,"files_done":50,"total_bytes":1000,"bytes_done":500,"current_file":"/some/file"}"#;
+        let parsed: ResticStatusLine = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.message_type.as_deref(), Some("status"));
+        assert_eq!(parsed.percent_done, Some(0.5));
+        assert_eq!(parsed.total_files, Some(100));
+        assert_eq!(parsed.files_done, Some(50));
+        assert_eq!(parsed.bytes_done, Some(500));
+        assert_eq!(parsed.total_bytes, Some(1000));
+        assert_eq!(parsed.current_file.as_deref(), Some("/some/file"));
+    }
+
+    #[test]
+    fn parse_restic_summary_line() {
+        let json = r#"{"message_type":"summary","snapshot_id":"abc123","data_added":1024,"total_files_processed":42}"#;
+        let parsed: ResticSummaryLine = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.message_type.as_deref(), Some("summary"));
+        assert_eq!(parsed.snapshot_id.as_deref(), Some("abc123"));
+        assert_eq!(parsed.data_added, Some(1024));
+        assert_eq!(parsed.total_files_processed, Some(42));
+    }
+
+    #[test]
+    fn parse_restic_config() {
+        let json = r#"{"id":"abc123def456"}"#;
+        let parsed: ResticConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.id, "abc123def456");
+    }
+
+    #[test]
+    fn parse_status_line_minimal() {
+        let json = r#"{"message_type":"status"}"#;
+        let parsed: ResticStatusLine = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.percent_done, None);
+        assert_eq!(parsed.files_done, None);
     }
 }

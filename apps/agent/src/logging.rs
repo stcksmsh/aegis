@@ -5,10 +5,17 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 
 pub fn init_logging() -> Option<WorkerGuard> {
     // Debug builds: default to "debug" so all logs are visible. Release: default "info". RUST_LOG overrides.
-    let default_level = if cfg!(debug_assertions) { "debug" } else { "info" };
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level));
+    let default_level = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "info"
+    };
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level));
     let stdout_layer = fmt::layer().with_target(false).with_level(true);
-    let registry = tracing_subscriber::registry().with(filter).with(stdout_layer);
+    let registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(stdout_layer);
 
     if let Some(log_dir) = log_dir() {
         let file_appender = tracing_appender::rolling::daily(log_dir, "agent.log");

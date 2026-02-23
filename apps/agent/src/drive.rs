@@ -19,7 +19,7 @@ impl DriveMarker {
     pub fn new(label: Option<String>) -> Self {
         let mut random = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut random);
-        let drive_id = hex::encode(Sha256::digest(&random));
+        let drive_id = hex::encode(Sha256::digest(random));
         Self {
             drive_id,
             created_epoch: now_epoch(),
@@ -41,10 +41,7 @@ pub fn read_marker(root: &Path) -> anyhow::Result<Option<DriveMarker>> {
     let content = fs::read_to_string(&path).context("read marker")?;
     let mut marker: DriveMarker = serde_json::from_str(&content).context("parse marker")?;
     // Sanitize label from disk (untrusted removable media).
-    marker.label = marker
-        .label
-        .as_ref()
-        .and_then(|s| sanitize_label(s));
+    marker.label = marker.label.as_ref().and_then(|s| sanitize_label(s));
     Ok(Some(marker))
 }
 
@@ -61,4 +58,16 @@ fn now_epoch() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn marker_path_joins_under_aegis() {
+        let p = marker_path(Path::new("/media/usb"));
+        assert_eq!(p, Path::new("/media/usb/.aegis/drive.json"));
+    }
 }

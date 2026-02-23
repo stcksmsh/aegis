@@ -72,7 +72,12 @@ fn toggle_devtools(app: AppHandle) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![select_folder, open_path, is_dev_build, toggle_devtools])
+        .invoke_handler(tauri::generate_handler![
+            select_folder,
+            open_path,
+            is_dev_build,
+            toggle_devtools
+        ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
         .expect("error while running Aegis UI");

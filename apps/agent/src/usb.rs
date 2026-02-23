@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 pub enum UsbWatcher {
     #[cfg(target_os = "linux")]
@@ -87,7 +87,7 @@ impl LinuxWatcher {
 #[cfg(target_os = "linux")]
 fn monitor_usb(sender: mpsc::Sender<UsbEvent>) -> anyhow::Result<()> {
     use udev::{EventType, MonitorBuilder};
-    info!("Starting udev monitor for block devices");
+    debug!("Starting udev monitor for block devices");
     let monitor = MonitorBuilder::new()?.match_subsystem("block")?.listen()?;
     for event in monitor.iter() {
         let event_type = event.event_type();
@@ -104,7 +104,7 @@ fn monitor_usb(sender: mpsc::Sender<UsbEvent>) -> anyhow::Result<()> {
             .attribute_value("removable")
             .and_then(|v| v.to_str())
             .unwrap_or("");
-        info!(
+        debug!(
             "udev event: action={:?} devtype={} devnode={} usb={} removable={} id_bus={} fs_usage={}",
             event_type,
             devtype,
@@ -123,11 +123,11 @@ fn monitor_usb(sender: mpsc::Sender<UsbEvent>) -> anyhow::Result<()> {
         if let Some(devnode) = devnode {
             match event_type {
                 EventType::Add => {
-                    info!("USB partition detected: {}", devnode.display());
+                    debug!("USB partition detected: {}", devnode.display());
                     let _ = sender.blocking_send(UsbEvent::Added(devnode));
                 }
                 EventType::Remove => {
-                    info!("USB partition removed: {}", devnode.display());
+                    debug!("USB partition removed: {}", devnode.display());
                     let _ = sender.blocking_send(UsbEvent::Removed(devnode));
                 }
                 _ => {}
@@ -148,14 +148,14 @@ impl StubWatcher {
 }
 
 async fn scan_existing_mounts(state: &SharedState) {
-    info!("Scanning existing mounts for USB drives");
+    debug!("Scanning existing mounts for USB drives");
     let mounts = mount_table();
     for (dev, _mount) in mounts {
         #[cfg(target_os = "linux")]
         if !is_usb_devnode(&dev) {
             continue;
         }
-        info!("Existing USB mount detected for {}", dev.display());
+        debug!("Existing USB mount detected for {}", dev.display());
         if let Err(err) = handle_added(state, &dev).await {
             error!("Initial mount scan failed: {}", Redact::new(err));
         }
@@ -164,7 +164,7 @@ async fn scan_existing_mounts(state: &SharedState) {
 
 #[cfg(target_os = "linux")]
 async fn scan_existing_devices(state: &SharedState) {
-    info!("Scanning existing USB block devices");
+    debug!("Scanning existing USB block devices");
     let devnodes: Vec<(PathBuf, String)> = {
         let mut collected: Vec<(PathBuf, String)> = Vec::new();
         let mut enumerator = match udev::Enumerator::new() {
@@ -205,7 +205,7 @@ async fn scan_existing_devices(state: &SharedState) {
     };
 
     for (devnode, removable) in devnodes {
-        info!(
+        debug!(
             "Existing USB block device detected: {} removable={}",
             devnode.display(),
             removable
@@ -220,7 +220,7 @@ async fn scan_existing_devices(state: &SharedState) {
 async fn scan_existing_devices(_state: &SharedState) {}
 
 async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()> {
-    info!("Handling USB add for {}", devnode.display());
+    debug!("Handling USB add for {}", devnode.display());
     let mount_path = wait_for_mount(devnode).await;
     let Some(mount_path) = mount_path else {
         info!("USB device present but not mounted: {}", devnode.display());
@@ -233,7 +233,7 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
         guard.drive_status.devnode = Some(devnode.to_string_lossy().to_string());
         return Ok(());
     };
-    info!("USB device mounted.");
+    debug!("USB device mounted at {}", mount_path.display());
 
     let marker = read_marker(&mount_path)?;
     if let Some(marker) = marker {
@@ -241,6 +241,12 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
             let guard = state.read().await;
             guard.config.trusted_drives.contains_key(&marker.drive_id)
         };
+        debug!(
+            "USB handle_added: devnode={} drive_id={} trusted={}",
+            devnode.display(),
+            marker.drive_id,
+            trusted
+        );
 
         {
             let mut guard = state.write().await;
@@ -257,9 +263,17 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
         }
 
         if trusted {
+            crate::notifications::notify_trusted_device(
+                marker.label.as_deref().unwrap_or("drive"),
+            );
             attempt_auto_backup(state, &marker.drive_id, &mount_path).await;
         }
     } else {
+        debug!(
+            "USB handle_added: devnode={} mount_path={} no marker (unknown drive)",
+            devnode.display(),
+            mount_path.display()
+        );
         let mut guard = state.write().await;
         guard.drive_status.connected = true;
         guard.drive_status.trusted = false;
@@ -273,17 +287,24 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
 }
 
 async fn handle_removed(state: &SharedState, devnode: &Path) -> anyhow::Result<()> {
-    info!("Handling USB remove for {}", devnode.display());
-    {
+    let was_drive_id = {
         let guard = state.read().await;
+        let id = guard.drive_status.drive_id.clone();
         if let Some(mount_path) = &guard.drive_status.mount_path {
             if let Some(device) = resolve_device_for_mount(Path::new(mount_path)) {
                 if device != devnode {
+                    debug!("USB handle_removed: devnode={} not current drive, ignoring", devnode.display());
                     return Ok(());
                 }
             }
         }
-    }
+        id
+    };
+    debug!(
+        "USB handle_removed: devnode={} drive_id={:?} clearing drive_status",
+        devnode.display(),
+        was_drive_id
+    );
 
     let mut guard = state.write().await;
     guard.drive_status.connected = false;
@@ -293,29 +314,42 @@ async fn handle_removed(state: &SharedState, devnode: &Path) -> anyhow::Result<(
     guard.drive_status.mount_path = None;
     guard.drive_status.devnode = None;
 
-    if guard.running {
-        guard.last_run = Some(RunResult {
-            status: RunStatus::Failed,
-            phase: RunPhase::Completed,
-            started_epoch: now_epoch(),
-            finished_epoch: Some(now_epoch()),
-            message: "Interrupted (drive disconnected)".to_string(),
-            interrupted: true,
-            snapshot_id: None,
-            repository_id: None,
-            data_added: None,
-            files_processed: None,
-        });
-        guard.running = false;
+    if let Some(ref id) = was_drive_id {
+        if let Some(cancel) = guard.running_cancel_tokens.remove(id) {
+            cancel.cancel();
+        }
+        if guard.restore_drive_id.as_deref() == Some(id.as_str()) {
+            guard.restore_drive_id = None;
+            if let Some(cancel) = guard.restore_cancel_token.take() {
+                cancel.cancel();
+            }
+        }
+        if guard.running_drive_ids.remove(id) {
+            guard.backup_progress.remove(id);
+            guard.last_run = Some(RunResult {
+                status: RunStatus::Failed,
+                phase: RunPhase::Completed,
+                started_epoch: now_epoch(),
+                finished_epoch: Some(now_epoch()),
+                message: "Interrupted (drive disconnected)".to_string(),
+                interrupted: true,
+                snapshot_id: None,
+                repository_id: None,
+                data_added: None,
+                files_processed: None,
+            });
+        }
     }
     Ok(())
 }
 
 async fn attempt_auto_backup(state: &SharedState, drive_id: &str, mount_path: &Path) {
     let config = { state.read().await.config.clone() };
-    let running = { state.read().await.running };
-    if running {
-        return;
+    {
+        let guard = state.read().await;
+        if guard.running_drive_ids.contains(drive_id) {
+            return;
+        }
     }
     if !config.auto_backup_on_insert {
         return;
@@ -339,28 +373,39 @@ async fn attempt_auto_backup(state: &SharedState, drive_id: &str, mount_path: &P
     };
 
     let Some(passphrase) = passphrase else {
-        info!("No stored passphrase; waiting for manual backup");
+        debug!("No stored passphrase; waiting for manual backup");
         return;
     };
 
+    {
+        let mut guard = state.write().await;
+        guard.running_drive_ids.insert(drive_id.to_string());
+    }
     let state_clone = state.clone();
     let drive_id = drive_id.to_string();
     let mount = mount_path.to_path_buf();
     tokio::spawn(async move {
-        if let Err(err) = run_backup(state_clone, drive_id, mount, passphrase).await {
+        let result = run_backup(state_clone.clone(), drive_id.clone(), mount, passphrase).await;
+        {
+            let mut guard = state_clone.write().await;
+            guard.running_drive_ids.remove(&drive_id);
+            guard.backup_progress.remove(&drive_id);
+            guard.running_cancel_tokens.remove(&drive_id);
+        }
+        if let Err(err) = result {
             error!("Auto backup failed: {}", Redact::new(err));
         }
     });
 }
 
 async fn wait_for_mount(devnode: &Path) -> Option<PathBuf> {
-    for _ in 0..10 {
+    for _ in 0..25 {
         if let Some(mount) = find_mount_for_device(devnode) {
             return Some(mount);
         }
-        sleep(Duration::from_millis(300)).await;
+        sleep(Duration::from_millis(400)).await;
     }
-    info!(
+    debug!(
         "No mount found for {} after waiting; marking drive as connected (unmounted).",
         devnode.display()
     );
@@ -368,9 +413,10 @@ async fn wait_for_mount(devnode: &Path) -> Option<PathBuf> {
 }
 
 pub fn find_mount_for_device(devnode: &Path) -> Option<PathBuf> {
+    let devnode_canon = std::fs::canonicalize(devnode).ok()?;
     let mounts = mount_table();
     for (device, mount) in mounts {
-        if device == devnode {
+        if std::fs::canonicalize(&device).ok().as_ref() == Some(&devnode_canon) {
             return Some(mount);
         }
     }

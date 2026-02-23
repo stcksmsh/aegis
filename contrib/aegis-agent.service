@@ -1,0 +1,15 @@
+[Unit]
+Description=Aegis backup agent (USB backup daemon)
+Documentation=https://github.com/YOUR_ORG/Aegis
+After=network.target
+
+[Service]
+Type=simple
+# Use the path where you installed aegis-agent (e.g. /usr/local/bin/aegis-agent)
+ExecStart=/usr/local/bin/aegis-agent
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=default.target

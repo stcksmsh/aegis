@@ -10,11 +10,14 @@ Status: early scaffolding. The agent builds and exposes an IPC API, but the UI i
 - Tauri v2 Linux deps (WebKitGTK 4.1 + JavaScriptCoreGtk 4.1 dev packages)
 
 ## Running the Agent
+
 From the repo root:
 
 ```
 cargo run -p aegis-agent
 ```
+
+To run the agent as a long-lived service (e.g. so it detects USB drives and can auto-backup when you plug in), see [docs/AGENT_SERVICE.md](docs/AGENT_SERVICE.md).
 
 ## restic Resolution Order
 The agent looks for restic in this order:

@@ -6,6 +6,7 @@ mod errors;
 mod ipc;
 mod keychain;
 mod logging;
+mod notifications;
 mod recovery;
 mod restic;
 mod retention;
@@ -20,7 +21,7 @@ use crate::state::{AgentRuntimeState, SharedState};
 use anyhow::Context;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -29,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
 
     let config = AgentConfig::load().context("load config")?;
     if Restic::resolve(config.restic_path.as_deref()).is_err() {
-        error!("Restic not available; backups will fail until restic is installed or bundled.");
+        warn!("Restic not available; backups will fail until restic is installed or bundled.");
     }
     let shared_state: SharedState = Arc::new(RwLock::new(AgentRuntimeState::new(config)));
 

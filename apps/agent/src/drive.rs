@@ -1,4 +1,4 @@
-use crate::config::ensure_marker_dir;
+use crate::config::{ensure_marker_dir, sanitize_label};
 use anyhow::Context;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,12 @@ pub fn read_marker(root: &Path) -> anyhow::Result<Option<DriveMarker>> {
         return Ok(None);
     }
     let content = fs::read_to_string(&path).context("read marker")?;
-    let marker: DriveMarker = serde_json::from_str(&content).context("parse marker")?;
+    let mut marker: DriveMarker = serde_json::from_str(&content).context("parse marker")?;
+    // Sanitize label from disk (untrusted removable media).
+    marker.label = marker
+        .label
+        .as_ref()
+        .and_then(|s| sanitize_label(s));
     Ok(Some(marker))
 }
 

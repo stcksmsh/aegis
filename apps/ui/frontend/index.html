@@ -22,6 +22,7 @@
         </div>
         <nav class="nav" id="top-nav">
           <button class="nav-btn" data-view="dashboard">Dashboard</button>
+          <button class="nav-btn" data-view="setup-drive">Add drive</button>
           <button class="nav-btn" data-view="restore">Restore</button>
           <button class="nav-btn" data-view="settings">Settings</button>
           <button class="nav-btn" data-view="advanced">Advanced</button>
@@ -44,9 +45,9 @@
                 <div class="step-label">Step 1</div>
                 <h2>Select what to protect</h2>
                 <div class="toggle-list">
-                  <label><input type="checkbox" id="src-docs" checked /> Documents</label>
-                  <label><input type="checkbox" id="src-pics" checked /> Pictures</label>
-                  <label><input type="checkbox" id="src-desktop" checked /> Desktop</label>
+                  <label><input type="checkbox" id="src-docs" checked /> Documents <span class="muted">(~/Documents)</span></label>
+                  <label><input type="checkbox" id="src-pics" checked /> Pictures <span class="muted">(~/Pictures)</span></label>
+                  <label><input type="checkbox" id="src-desktop" checked /> Desktop <span class="muted">(~/Desktop)</span></label>
                 </div>
                 <div class="field-row">
                   <input id="custom-label" type="text" placeholder="Custom folder label" />
@@ -81,7 +82,7 @@
                 <div class="step-label">Step 3</div>
                 <h2>Connect your USB drive</h2>
                 <p class="muted">Select a drive below. You can mount it or erase &amp; set it up for Aegis.</p>
-                <div class="drive-detect" id="drive-detect">Waiting for drive…</div>
+                <div class="drive-detect drive-detect-message">Waiting for drive…</div>
                 <div class="device-panel">
                   <div class="device-panel-header">
                     <div class="device-panel-title">Available drives</div>
@@ -137,28 +138,102 @@
           </div>
         </section>
 
+        <section id="setup-drive" class="view hidden">
+          <div class="panel">
+            <h1>Set up a new drive</h1>
+            <p class="lead">
+              Add another USB drive as a trusted backup target. Select a partition, mount or format it, then set a passphrase.
+            </p>
+            <div class="device-panel">
+              <div class="device-panel-header">
+                <div class="device-panel-title">Available drives</div>
+                <div class="device-panel-subtitle" id="setup-drive-help">Select a removable drive or insert a new one.</div>
+                <div class="device-panel-subtitle" id="setup-drive-updated">Last updated: —</div>
+                <div class="device-panel-subtitle" id="setup-drive-status"></div>
+              </div>
+              <div class="preflight" id="setup-drive-preflight">
+                <div class="preflight-item" id="setup-drive-preflight-restic">Restic: checking…</div>
+                <div class="preflight-item" id="setup-drive-preflight-udisks">Disk tools: checking…</div>
+                <div class="preflight-item" id="setup-drive-preflight-exfat">exFAT formatter: checking…</div>
+              </div>
+              <div id="setup-drive-device-empty" class="muted hidden">No removable drives detected.</div>
+              <div id="setup-drive-device-list" class="device-list"></div>
+            </div>
+            <div class="field">
+              <label>Drive label (optional)</label>
+              <input id="setup-drive-label" type="text" placeholder="Leave empty for auto name (e.g. backup-abc123)" />
+            </div>
+            <h2 class="step-label" style="margin-top: 20px;">What to back up to this drive</h2>
+            <p class="muted">Choose which folders to back up when this drive is connected. Different drives can have different backup sets.</p>
+            <div class="toggle-list">
+              <label><input type="checkbox" id="setup-drive-src-docs" checked /> Documents <span class="muted">(~/Documents)</span></label>
+              <label><input type="checkbox" id="setup-drive-src-pics" checked /> Pictures <span class="muted">(~/Pictures)</span></label>
+              <label><input type="checkbox" id="setup-drive-src-desktop" checked /> Desktop <span class="muted">(~/Desktop)</span></label>
+            </div>
+            <div class="field-row">
+              <input id="setup-drive-custom-label" type="text" placeholder="Custom folder label" />
+              <input id="setup-drive-custom-path" type="text" placeholder="/path/to/folder" />
+              <button class="btn ghost" id="setup-drive-browse" type="button">Browse…</button>
+              <button class="btn secondary" id="setup-drive-add-custom" type="button">Add</button>
+            </div>
+            <ul id="setup-drive-custom-list" class="chip-list"></ul>
+            <div class="device-actions">
+              <button class="btn secondary" id="setup-drive-mount" type="button">Mount</button>
+              <button class="btn primary" id="setup-drive-setup-btn" type="button">Set up this drive</button>
+            </div>
+            <div class="device-danger">
+              <label class="checkbox">
+                <input id="setup-drive-erase-option" type="checkbox" /> Erase &amp; format as exFAT (destructive)
+              </label>
+              <label class="field hidden" id="setup-drive-erase-phrase-field">
+                <span>Type ERASE to confirm formatting</span>
+                <input id="setup-drive-erase-phrase" type="text" placeholder="ERASE" />
+              </label>
+            </div>
+            <h2 class="step-label" style="margin-top: 24px;">Passphrase for this drive</h2>
+            <p class="muted">Your passphrase encrypts the backup. Aegis never stores it on the USB drive.</p>
+            <div class="field">
+              <label>Passphrase</label>
+              <input id="setup-drive-passphrase" type="password" placeholder="Create a strong passphrase" />
+            </div>
+            <div class="field">
+              <label>Confirm</label>
+              <input id="setup-drive-passphrase-confirm" type="password" placeholder="Re-enter passphrase" />
+            </div>
+            <label class="checkbox">
+              <input id="setup-drive-remember" type="checkbox" checked /> Remember on this PC (OS keychain)
+            </label>
+            <label class="checkbox">
+              <input id="setup-drive-paranoid" type="checkbox" /> Paranoid Mode (ask every time)
+            </label>
+          </div>
+        </section>
+
         <section id="dashboard" class="view">
           <div class="panel">
-            <div class="status-grid">
-              <div class="status-card">
-                <div class="status-title">Drive</div>
-                <div class="status-value" id="drive-status">Not connected</div>
-                <div class="status-meta" id="drive-meta">Insert your trusted USB drive</div>
+            <div class="dashboard-summary" id="dashboard-summary">
+              <span id="dashboard-summary-text">No drives set up</span>
+              <span class="muted" id="dashboard-summary-verify"></span>
+            </div>
+            <div class="backup-progress-wrap hidden" id="backup-progress-wrap">
+              <div class="backup-progress-track">
+                <div class="backup-progress-bar" id="backup-progress-bar"></div>
               </div>
-              <div class="status-card">
-                <div class="status-title">Last backup</div>
-                <div class="status-value" id="last-backup">Never</div>
-                <div class="status-meta" id="last-result">—</div>
-              </div>
-              <div class="status-card">
-                <div class="status-title">Protection</div>
-                <div class="status-value">Encrypted</div>
-                <div class="status-meta" id="verify-status">Quick verify enabled</div>
-              </div>
+              <p class="backup-progress-text muted" id="backup-progress-text"></p>
+            </div>
+            <p class="muted drive-detect-message">Waiting for drive…</p>
+
+            <div class="backup-targets" id="backup-targets-section">
+              <h2 class="step-label">Backup targets</h2>
+              <p class="muted">What is backed up and to which drive.</p>
+              <div id="backup-targets-list" class="backup-targets-list"></div>
+              <div id="backup-targets-empty" class="muted">No drives set up yet. Add a drive to get started.</div>
             </div>
 
+            <p class="muted dashboard-cta-hint hidden" id="dashboard-cta-hint" aria-live="polite"></p>
             <div class="actions">
               <button class="btn primary" id="backup-now">Back up now</button>
+              <button class="btn secondary hidden" id="setup-this-drive-btn" type="button">Set up this drive</button>
               <button class="btn secondary" id="restore-btn">Restore…</button>
               <button class="btn ghost" id="eject-btn">Eject drive</button>
             </div>
@@ -243,12 +318,60 @@
             <label>Passphrase</label>
             <input id="modal-passphrase" type="password" placeholder="Enter passphrase" />
           </div>
+          <div class="field hidden" id="modal-discontinue-field">
+            <label id="modal-discontinue-label">Type the drive name to confirm</label>
+            <input id="modal-discontinue-input" type="text" placeholder="" />
+            <label class="checkbox-label">
+              <input type="checkbox" id="modal-discontinue-wipe" />
+              Also wipe all data (secure erase). Drive must be connected.
+            </label>
+          </div>
+          <div class="field hidden" id="modal-rename-field">
+            <label>Drive name (in-app)</label>
+            <input id="modal-rename-input" type="text" placeholder="e.g. My backup" />
+          </div>
           <div id="modal-error" class="muted"></div>
           <div class="actions">
             <button class="btn secondary" id="modal-cancel">Cancel</button>
             <button class="btn primary" id="modal-confirm">Continue</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div id="edit-folders-overlay" class="modal hidden">
+      <div class="modal-card" style="max-width: 28rem;">
+        <h2 id="edit-folders-title">Edit folders</h2>
+        <p class="muted">Choose which folders to back up to this drive.</p>
+        <div class="checkbox" style="margin-top: 12px;">
+          <input type="checkbox" id="edit-folders-docs" />
+          <label for="edit-folders-docs">Documents</label>
+        </div>
+        <div class="checkbox">
+          <input type="checkbox" id="edit-folders-pics" />
+          <label for="edit-folders-pics">Pictures</label>
+        </div>
+        <div class="checkbox">
+          <input type="checkbox" id="edit-folders-desktop" />
+          <label for="edit-folders-desktop">Desktop</label>
+        </div>
+        <div class="field" style="margin-top: 12px;">
+          <label>Custom folders</label>
+          <div id="edit-folders-custom-list"></div>
+          <button type="button" class="btn ghost" id="edit-folders-add">Add folder</button>
+        </div>
+        <div id="edit-folders-error" class="muted" style="margin-top: 8px;"></div>
+        <div class="actions" style="margin-top: 16px;">
+          <button type="button" class="btn secondary" id="edit-folders-cancel">Cancel</button>
+          <button type="button" class="btn primary" id="edit-folders-save">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <div class="loading-card">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <p id="loading-message" class="loading-message">Working…</p>
       </div>
     </div>
 

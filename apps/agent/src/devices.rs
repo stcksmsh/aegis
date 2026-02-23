@@ -1,8 +1,15 @@
 use anyhow::Context;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
-use tracing::{info, warn};
+use tracing::{debug, error, info, warn};
+
+/// Volume label used when Aegis formats a drive: "aegis" + 6 hex chars = 11 chars (exFAT max).
+fn generate_aegis_disk_name() -> String {
+    let n = rand::thread_rng().gen::<u32>() & 0xFF_FFFF; // 24 bits = exactly 6 hex digits
+    format!("aegis{:06x}", n)
+}
 
 #[derive(Debug, Serialize, Clone)]
 pub struct DeviceInfo {
@@ -48,6 +55,7 @@ struct LsblkDevice {
 }
 
 pub fn list_removable_devices() -> anyhow::Result<Vec<DeviceInfo>> {
+    debug!("device scan: running lsblk -J");
     let output = Command::new("lsblk")
         .args([
             "-J",
@@ -57,11 +65,20 @@ pub fn list_removable_devices() -> anyhow::Result<Vec<DeviceInfo>> {
         .output()
         .context("run lsblk")?;
     if !output.status.success() {
-        warn!("device scan: lsblk returned non-zero status: {:?}", output.status.code());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        warn!(
+            "device scan: lsblk failed status={:?} stderr={}",
+            output.status.code(),
+            stderr.trim()
+        );
         return Err(anyhow::anyhow!("lsblk failed"));
     }
     let parsed: LsblkOutput = serde_json::from_slice(&output.stdout)
         .context("parse lsblk output")?;
+    debug!(
+        "device scan: parsed {} block device(s)",
+        parsed.blockdevices.len()
+    );
     let mut devices = Vec::new();
     for dev in parsed.blockdevices {
         if dev.devtype.as_deref() != Some("disk") {
@@ -105,6 +122,7 @@ pub fn list_removable_devices() -> anyhow::Result<Vec<DeviceInfo>> {
         });
     }
     log_devices_if_changed(&devices);
+    debug!("device scan: returning {} removable disk(s)", devices.len());
     Ok(devices)
 }
 
@@ -123,7 +141,7 @@ fn log_devices_if_changed(devices: &[DeviceInfo]) {
     info!("device scan: {} removable disks", devices.len());
     for device in devices {
         let model = device.model.clone().unwrap_or_else(|| "unknown".to_string());
-        info!(
+        debug!(
             "device: path={} size={} model={}",
             device.path, device.size, model
         );
@@ -133,7 +151,7 @@ fn log_devices_if_changed(devices: &[DeviceInfo]) {
             } else {
                 part.mountpoints.join(", ")
             };
-            info!("device:  partition={} size={} mounts={}", part.path, part.size, mounts);
+            debug!("device:  partition={} size={} mounts={}", part.path, part.size, mounts);
         }
     }
 }
@@ -178,15 +196,22 @@ pub fn find_mountpoint(devnode: &str) -> anyhow::Result<Option<String>> {
         .output()
         .context("run lsblk")?;
     if !output.status.success() {
+        warn!("find_mountpoint: lsblk failed for devnode={}", devnode);
         return Err(anyhow::anyhow!("lsblk failed"));
     }
     let parsed: LsblkOutput =
         serde_json::from_slice(&output.stdout).context("parse lsblk output")?;
     for dev in parsed.blockdevices {
         if let Some(found) = find_mount_in_device(&dev, devnode) {
+            if let Some(ref mp) = found {
+                debug!("find_mountpoint: {} is mounted at {}", devnode, mp);
+            } else {
+                debug!("find_mountpoint: {} is not mounted", devnode);
+            }
             return Ok(found);
         }
     }
+    debug!("find_mountpoint: {} not found in lsblk output", devnode);
     Ok(None)
 }
 
@@ -215,7 +240,7 @@ fn normalize_mountpoints(raw: Option<Vec<Option<String>>>) -> Vec<String> {
 
 pub fn mount_partition(devnode: &str) -> anyhow::Result<String> {
     ensure_udisksctl()?;
-    info!("mount: request devnode={}", devnode);
+    debug!("mount: request devnode={}", devnode);
     for attempt in 1..=3 {
         let output = Command::new("udisksctl")
             .args(["mount", "-b", devnode])
@@ -228,41 +253,66 @@ pub fn mount_partition(devnode: &str) -> anyhow::Result<String> {
             return Ok(mount);
         }
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let retryable = stderr.contains("not a mountable filesystem");
+        if retryable && attempt < 3 {
+            debug!(
+                "mount: device not yet seen as mountable (attempt {}/3), waiting for udev/udisks2…",
+                attempt
+            );
+            std::thread::sleep(std::time::Duration::from_millis(1200));
+            continue;
+        }
         warn!(
             "mount: udisksctl failed (attempt {}/3) status {:?} stderr={}",
             attempt,
             output.status.code(),
             stderr.trim()
         );
-        if attempt < 3 && stderr.contains("not a mountable filesystem") {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            continue;
-        }
         return Err(anyhow::anyhow!("mount failed: {}", stderr.trim()));
     }
     Err(anyhow::anyhow!("mount failed"))
 }
 
-pub fn format_partition_exfat(devnode: &str, label: Option<&str>) -> anyhow::Result<()> {
-    info!("format: request devnode={} label_set={}", devnode, label.is_some());
-    if udisksctl_supports_format() {
-        ensure_udisksctl()?;
-        let mut cmd = Command::new("udisksctl");
-        cmd.args(["format", "-b", devnode, "--type", "exfat"]);
-        if let Some(label) = label {
-            if !label.trim().is_empty() {
-                cmd.args(["--label", label.trim()]);
+/// Format partition as exFAT with a fixed Aegis volume label (aegis-xxxxxxxx). In-app name is stored only in the marker file on the drive.
+pub fn format_partition_exfat(devnode: &str) -> anyhow::Result<()> {
+    let disk_label = generate_aegis_disk_name();
+    debug!("format: request devnode={} disk_label={}", devnode, disk_label);
+    for attempt in 1..=3 {
+        let mountpoint = match find_mountpoint(devnode)? {
+            None => break,
+            Some(m) => m,
+        };
+        debug!(
+            "format: unmounting {} from {} (attempt {}/3)",
+            devnode, mountpoint, attempt
+        );
+        if let Err(e) = unmount_partition(devnode) {
+            if attempt < 3 {
+                warn!("format: unmount failed (attempt {}), retrying: {}", attempt, e);
+                std::thread::sleep(std::time::Duration::from_millis(800));
+            } else {
+                error!("format: unmount failed after {} attempts: {}", attempt, e);
+                return Err(e);
             }
         }
+    }
+    debug!("format: devnode={} is unmounted (or was not mounted), proceeding", devnode);
+    if udisksctl_supports_format() {
+        ensure_udisksctl()?;
+        debug!("format: using udisksctl format (devnode={})", devnode);
+        let mut cmd = Command::new("udisksctl");
+        cmd.args(["format", "-b", devnode, "--type", "exfat", "--label", &disk_label]);
         let output = cmd.output().context("run udisksctl format")?;
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            warn!(
-                "format: udisksctl failed with status {:?} stderr={}",
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            error!(
+                "format: udisksctl format failed devnode={} status={:?} stdout={} stderr={}",
+                devnode,
                 output.status.code(),
+                stdout.trim(),
                 stderr.trim()
             );
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             return Err(anyhow::anyhow!("format failed: {}", stderr.trim()));
         }
         info!("format: success for devnode={} (udisksctl)", devnode);
@@ -270,12 +320,9 @@ pub fn format_partition_exfat(devnode: &str, label: Option<&str>) -> anyhow::Res
     }
 
     // Fallback to mkfs.exfat via pkexec.
-    if let Some(mountpoint) = find_mountpoint(devnode)? {
-        info!("format: unmounting {} from {}", devnode, mountpoint);
-        unmount_partition(devnode)?;
-    }
     let formatter = find_exfat_formatter().context("mkfs.exfat not found")?;
-    run_mkfs_exfat(&formatter, devnode, label)?;
+    debug!("format: udisksctl format not available, using mkfs formatter={}", formatter);
+    run_mkfs_exfat(&formatter, devnode, &disk_label)?;
     info!("format: success for devnode={} (mkfs)", devnode);
     Ok(())
 }
@@ -301,7 +348,8 @@ pub fn udisksctl_supports_format() -> bool {
     })
 }
 
-fn unmount_partition(devnode: &str) -> anyhow::Result<()> {
+pub fn unmount_partition(devnode: &str) -> anyhow::Result<()> {
+    debug!("unmount: devnode={}", devnode);
     ensure_udisksctl()?;
     let output = Command::new("udisksctl")
         .args(["unmount", "-b", devnode])
@@ -309,8 +357,41 @@ fn unmount_partition(devnode: &str) -> anyhow::Result<()> {
         .context("run udisksctl unmount")?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        error!(
+            "unmount: udisksctl unmount failed devnode={} status={:?} stdout={} stderr={}",
+            devnode,
+            output.status.code(),
+            stdout.trim(),
+            stderr.trim()
+        );
         return Err(anyhow::anyhow!("unmount failed: {}", stderr.trim()));
     }
+    debug!("unmount: success devnode={}", devnode);
+    Ok(())
+}
+
+/// Securely wipe a block device (partition or disk) by overwriting with zeros.
+/// Requires root (e.g. pkexec). Use only when the drive is discontinuing and unmounted.
+pub fn secure_wipe_block_device(devnode: &str) -> anyhow::Result<()> {
+    if which::which("pkexec").is_err() {
+        return Err(anyhow::anyhow!("pkexec not found; cannot run secure wipe"));
+    }
+    info!("wipe: starting secure wipe of {}", devnode);
+    let status = Command::new("pkexec")
+        .args([
+            "dd",
+            "if=/dev/zero",
+            &format!("of={}", devnode),
+            "bs=4M",
+            "status=progress",
+        ])
+        .status()
+        .context("run pkexec dd")?;
+    if !status.success() {
+        return Err(anyhow::anyhow!("secure wipe failed"));
+    }
+    info!("wipe: completed for {}", devnode);
     Ok(())
 }
 
@@ -324,16 +405,13 @@ fn find_exfat_formatter() -> Option<String> {
     None
 }
 
-fn run_mkfs_exfat(formatter: &str, devnode: &str, label: Option<&str>) -> anyhow::Result<()> {
+fn run_mkfs_exfat(formatter: &str, devnode: &str, disk_label: &str) -> anyhow::Result<()> {
     let use_pkexec = which::which("pkexec").is_ok();
-    let mut args: Vec<String> = Vec::new();
-    if let Some(label) = label {
-        if !label.trim().is_empty() {
-            args.push("-n".to_string());
-            args.push(label.trim().to_string());
-        }
-    }
-    args.push(devnode.to_string());
+    let args: Vec<String> = vec!["-n".to_string(), disk_label.to_string(), devnode.to_string()];
+    debug!(
+        "format: run_mkfs_exfat formatter={} use_pkexec={} args={:?}",
+        formatter, use_pkexec, args
+    );
 
     let output = if use_pkexec {
         Command::new("pkexec")
@@ -349,21 +427,25 @@ fn run_mkfs_exfat(formatter: &str, devnode: &str, label: Option<&str>) -> anyhow
     };
 
     if output.status.success() {
-        maybe_udevadm_settle();
+        debug!("format: mkfs.exfat succeeded, waiting for udev");
+        wait_for_udev_after_format();
         return Ok(());
     }
 
-    // Retry with -L if -n is not supported.
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    error!(
+        "format: mkfs.exfat failed devnode={} status={:?} stdout={} stderr={}",
+        devnode,
+        output.status.code(),
+        stdout.trim(),
+        stderr.trim()
+    );
+
+    // Retry with -L if -n is not supported.
     if stderr.contains("invalid option") || stderr.contains("unknown option") {
-        let mut args_alt: Vec<String> = Vec::new();
-        if let Some(label) = label {
-            if !label.trim().is_empty() {
-                args_alt.push("-L".to_string());
-                args_alt.push(label.trim().to_string());
-            }
-        }
-        args_alt.push(devnode.to_string());
+        debug!("format: retrying mkfs with -L (label) instead of -n");
+        let args_alt: Vec<String> = vec!["-L".to_string(), disk_label.to_string(), devnode.to_string()];
         let output_alt = if use_pkexec {
             Command::new("pkexec")
                 .arg(formatter)
@@ -377,18 +459,32 @@ fn run_mkfs_exfat(formatter: &str, devnode: &str, label: Option<&str>) -> anyhow
                 .context("run mkfs.exfat (alt)")?
         };
         if output_alt.status.success() {
-            maybe_udevadm_settle();
+            debug!("format: mkfs.exfat (alt -L) succeeded, waiting for udev");
+            wait_for_udev_after_format();
             return Ok(());
         }
         let stderr_alt = String::from_utf8_lossy(&output_alt.stderr).to_string();
+        let stdout_alt = String::from_utf8_lossy(&output_alt.stdout).to_string();
+        error!(
+            "format: mkfs.exfat (alt) failed devnode={} stdout={} stderr={}",
+            devnode, stdout_alt.trim(), stderr_alt.trim()
+        );
         return Err(anyhow::anyhow!("format failed: {}", stderr_alt.trim()));
     }
 
     Err(anyhow::anyhow!("format failed: {}", stderr.trim()))
 }
 
-fn maybe_udevadm_settle() {
+/// After formatting a block device (e.g. whole disk with mkfs), udev and udisks2
+/// need a moment before the device is seen as mountable. Settle udev and wait
+/// so the first mount attempt is more likely to succeed.
+fn wait_for_udev_after_format() {
     if which::which("udevadm").is_ok() {
+        debug!("format: running udevadm settle");
         let _ = Command::new("udevadm").arg("settle").output();
+    } else {
+        debug!("format: udevadm not found, skipping settle");
     }
+    debug!("format: sleeping 1200ms for udev/udisks2");
+    std::thread::sleep(std::time::Duration::from_millis(1200));
 }

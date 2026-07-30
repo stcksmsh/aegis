@@ -1,0 +1,11 @@
+{
+  "slug": "aegis",
+  "title": "Aegis",
+  "tagline": "A security-first USB backup agent built on Rust + Tauri, with restic as the backup engine.",
+  "status": "active",
+  "stack": ["Rust", "Tauri", "restic"],
+  "repo": "https://github.com/stcksmsh/aegis",
+  "accent": [0.7, 0.1, 200],
+  "featured": true,
+  "order": 2
+}

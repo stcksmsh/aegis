@@ -39,6 +39,9 @@
     ],
     "externalBin": [
       "binaries/restic"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }

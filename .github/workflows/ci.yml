@@ -2,17 +2,38 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, "claude/**"]
   pull_request:
     branches: [master, main]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  agent:
-    name: Agent
+  fmt:
+    name: Format
     runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  app:
+    name: App (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -21,42 +42,8 @@ jobs:
         with:
           components: clippy
 
-      - name: Install libudev (Linux)
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Check format
-        run: cargo fmt --all -- --check
-
-      - name: Clippy
-        run: cargo clippy -p aegis-agent -- -D warnings
-
-      - name: Test
-        run: cargo test -p aegis-agent
-
-      - name: Build (release)
-        run: cargo build -p aegis-agent --release
-
-  ui:
-    name: UI (Tauri)
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Install Tauri dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -73,15 +60,32 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-ui-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-app-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-ui-
+            ${{ runner.os }}-cargo-app-
 
       - name: Fetch bundled restic
-        run: bash scripts/fetch-restic.sh x86_64-unknown-linux-gnu
+        shell: bash
+        run: bash scripts/fetch-restic.sh ${{ matrix.target }}
 
       - name: Clippy (workspace)
         run: cargo clippy --workspace -- -D warnings
 
-      - name: Build UI (release)
-        run: cargo build -p aegis-ui --release
+      - name: Test (workspace)
+        run: cargo test --workspace
+
+      # Installers as downloadable CI artifacts, for testing before a release.
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: apps/ui
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aegis-${{ matrix.target }}
+          path: |
+            target/release/bundle/**/*.deb
+            target/release/bundle/**/*.AppImage
+            target/release/bundle/**/*.msi
+            target/release/bundle/**/*-setup.exe
+            target/release/bundle/**/*.dmg
+          if-no-files-found: error

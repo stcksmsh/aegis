@@ -439,7 +439,7 @@ async fn update_config(
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "config save failed".to_string(),
+            "Couldn't save settings. Check free disk space and try again.".to_string(),
         )
     })?;
     drop(guard);
@@ -462,7 +462,10 @@ async fn setup_drive(
             "setup drive: mount path does not exist path={}",
             req.mount_path
         );
-        return Err((StatusCode::BAD_REQUEST, "mount path not found".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Drive not found. Unplug it and plug it back in.".to_string(),
+        ));
     }
     if resolve_device_for_mount(&mount_path).is_none() {
         tracing::warn!(
@@ -471,12 +474,15 @@ async fn setup_drive(
         );
         return Err((
             StatusCode::BAD_REQUEST,
-            "mount path is not a mounted drive".to_string(),
+            "That location isn't a USB drive.".to_string(),
         ));
     }
     if req.passphrase.trim().is_empty() {
         tracing::warn!("setup drive: empty passphrase");
-        return Err((StatusCode::BAD_REQUEST, "passphrase required".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Enter your passphrase.".to_string(),
+        ));
     }
 
     let (final_label, backup_sources) = {
@@ -523,7 +529,7 @@ async fn setup_drive(
         Restic::resolve(guard.config.restic_path.as_deref()).map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "restic not available".to_string(),
+                "Backup engine missing. Please reinstall Aegis.".to_string(),
             )
         })?
     };
@@ -639,7 +645,7 @@ async fn setup_drive(
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "config save failed".to_string(),
+            "Couldn't save settings. Check free disk space and try again.".to_string(),
         )
     })?;
 
@@ -696,7 +702,7 @@ async fn discontinue_drive(
     if expected.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            "Drive has no label; cannot discontinue by name.".to_string(),
+            "This drive has no name, so it can't be removed this way.".to_string(),
         ));
     }
     let confirmed = req.confirm_label.trim();
@@ -724,7 +730,7 @@ async fn discontinue_drive(
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "config save failed".to_string(),
+            "Couldn't save settings. Check free disk space and try again.".to_string(),
         )
     })?;
     drop(guard);
@@ -773,7 +779,7 @@ async fn update_drive(
             .ok_or_else(|| {
                 (
                     StatusCode::BAD_REQUEST,
-                    "Label is empty or invalid after sanitization.".to_string(),
+                    "Please enter a drive name using letters and numbers.".to_string(),
                 )
             })?;
         if guard.config.label_exists(&new_label, Some(&req.drive_id)) {
@@ -815,7 +821,7 @@ async fn update_drive(
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "config save failed".to_string(),
+            "Couldn't save settings. Check free disk space and try again.".to_string(),
         )
     })?;
     drop(guard);
@@ -876,12 +882,15 @@ async fn start_backup(
         if guard.running_drive_ids.contains(&req.drive_id) {
             return Err((
                 StatusCode::CONFLICT,
-                "backup already running for this drive".to_string(),
+                "A backup to this drive is already running.".to_string(),
             ));
         }
     }
     let Some(drive) = config.trusted_drives.get(&req.drive_id) else {
-        return Err((StatusCode::BAD_REQUEST, "unknown drive".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "This drive isn't set up in Aegis on this computer.".to_string(),
+        ));
     };
     let passphrase = resolve_passphrase(&config, &req.drive_id, req.passphrase)?;
     let mount_path = ensure_mounted_drive(&state, &req.drive_id).await?;
@@ -919,7 +928,12 @@ async fn list_snapshots(
     let drive = config
         .trusted_drives
         .get(&req.drive_id)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "unknown drive".to_string()))?
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                "This drive isn't set up in Aegis on this computer.".to_string(),
+            )
+        })?
         .clone();
 
     let mount_path = ensure_mounted_drive(&state, &req.drive_id).await?;
@@ -928,7 +942,7 @@ async fn list_snapshots(
     let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "restic not available".to_string(),
+            "Backup engine missing. Please reinstall Aegis.".to_string(),
         )
     })?;
     let repo_path = PathBuf::from(mount_path).join(&drive.repository_path);
@@ -948,7 +962,12 @@ async fn snapshot_stats(
     let drive = config
         .trusted_drives
         .get(&req.drive_id)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "unknown drive".to_string()))?
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                "This drive isn't set up in Aegis on this computer.".to_string(),
+            )
+        })?
         .clone();
 
     let mount_path = ensure_mounted_drive(&state, &req.drive_id).await?;
@@ -957,7 +976,7 @@ async fn snapshot_stats(
     let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "restic not available".to_string(),
+            "Backup engine missing. Please reinstall Aegis.".to_string(),
         )
     })?;
     let repo_path = PathBuf::from(mount_path).join(&drive.repository_path);
@@ -977,14 +996,22 @@ async fn restore_snapshot(
     Json(req): Json<RestoreRequest>,
 ) -> Result<Json<RestoreResponse>, (StatusCode, String)> {
     if req.target_path.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "target path required".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Choose a folder to restore into.".to_string(),
+        ));
     }
 
     let config = { state.read().await.config.clone() };
     let drive = config
         .trusted_drives
         .get(&req.drive_id)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "unknown drive".to_string()))?
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                "This drive isn't set up in Aegis on this computer.".to_string(),
+            )
+        })?
         .clone();
 
     let mount_path = ensure_mounted_drive(&state, &req.drive_id).await?;
@@ -993,7 +1020,7 @@ async fn restore_snapshot(
     let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "restic not available".to_string(),
+            "Backup engine missing. Please reinstall Aegis.".to_string(),
         )
     })?;
 
@@ -1036,15 +1063,17 @@ async fn export_recovery(
     Json(req): Json<RecoveryKitRequest>,
 ) -> Result<Json<RecoveryKitResponse>, (StatusCode, String)> {
     let config = { state.read().await.config.clone() };
-    let drive = config
-        .trusted_drives
-        .get(&req.drive_id)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "unknown drive".to_string()))?;
+    let drive = config.trusted_drives.get(&req.drive_id).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "This drive isn't set up in Aegis on this computer.".to_string(),
+        )
+    })?;
 
     export_recovery_kit(drive, FsPath::new(&req.destination_dir)).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "recovery export failed".to_string(),
+            "Couldn't save the recovery kit to that folder.".to_string(),
         )
     })?;
 
@@ -1067,13 +1096,13 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "eject failed".to_string(),
+                "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
             )
         })?;
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "eject failed".to_string(),
+            "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
         ));
     }
 
@@ -1089,13 +1118,13 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "eject failed".to_string(),
+                "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
             )
         })?;
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "eject failed".to_string(),
+            "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
         ));
     }
     Ok(())
@@ -1114,13 +1143,13 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "eject failed".to_string(),
+                "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
             )
         })?;
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "eject failed".to_string(),
+            "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
         ));
     }
     Ok(())
@@ -1129,8 +1158,12 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
 #[cfg(target_os = "windows")]
 async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
     // device is the mount path (e.g. "E:\"); validate it's a drive root before it reaches a shell command.
-    let drive = windows_drive_root_letter(device)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "not a drive letter".to_string()))?;
+    let drive = windows_drive_root_letter(device).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Couldn't identify the drive. Unplug it and plug it back in.".to_string(),
+        )
+    })?;
     let script = format!(
         "(New-Object -comObject Shell.Application).Namespace(17).ParseName('{}\\').InvokeVerb('Eject')",
         drive
@@ -1145,13 +1178,13 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "eject failed".to_string(),
+                "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
             )
         })?;
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "eject failed".to_string(),
+            "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
         ));
     }
     Ok(())
@@ -1176,7 +1209,10 @@ async fn eject_drive(
 ) -> Result<Json<BackupStartResponse>, (StatusCode, String)> {
     let mount_path = PathBuf::from(req.mount_path);
     let Some(device) = resolve_device_for_mount(&mount_path) else {
-        return Err((StatusCode::BAD_REQUEST, "device not found".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Drive not found. Unplug it and plug it back in.".to_string(),
+        ));
     };
 
     do_eject(&device).await?;
@@ -1194,17 +1230,21 @@ async fn ensure_mounted_drive(
     if !guard.drive_status.connected || !guard.drive_status.trusted {
         return Err((
             StatusCode::BAD_REQUEST,
-            "trusted drive not connected".to_string(),
+            "Plug in your Aegis drive first.".to_string(),
         ));
     }
     if guard.drive_status.drive_id.as_deref() != Some(drive_id) {
-        return Err((StatusCode::BAD_REQUEST, "drive mismatch".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "A different drive is plugged in. Plug in the right Aegis drive.".to_string(),
+        ));
     }
-    guard
-        .drive_status
-        .mount_path
-        .clone()
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "drive not mounted".to_string()))
+    guard.drive_status.mount_path.clone().ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "The drive isn't ready yet. Wait a moment and try again.".to_string(),
+        )
+    })
 }
 
 /// User-facing error for a failed restic call: wrong passphrase is surfaced, rest gets `fallback`.
@@ -1225,7 +1265,10 @@ fn resolve_passphrase(
 ) -> Result<String, (StatusCode, String)> {
     if let Some(pass) = provided {
         if pass.trim().is_empty() {
-            return Err((StatusCode::BAD_REQUEST, "passphrase required".to_string()));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Enter your passphrase.".to_string(),
+            ));
         }
         return Ok(pass);
     }
@@ -1234,12 +1277,20 @@ fn resolve_passphrase(
             .map_err(|_| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "keychain error".to_string(),
+                    "Couldn't read the saved passphrase. Enter it instead.".to_string(),
                 )
             })?
-            .ok_or_else(|| (StatusCode::BAD_REQUEST, "passphrase required".to_string()));
+            .ok_or_else(|| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Enter your passphrase.".to_string(),
+                )
+            });
     }
-    Err((StatusCode::BAD_REQUEST, "passphrase required".to_string()))
+    Err((
+        StatusCode::BAD_REQUEST,
+        "Enter your passphrase.".to_string(),
+    ))
 }
 
 #[cfg(test)]

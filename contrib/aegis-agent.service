@@ -1,6 +1,6 @@
 [Unit]
 Description=Aegis backup agent (USB backup daemon)
-Documentation=https://github.com/YOUR_ORG/Aegis
+Documentation=https://github.com/stcksmsh/aegis
 After=network.target
 
 [Service]

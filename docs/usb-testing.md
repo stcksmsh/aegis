@@ -1,9 +1,13 @@
-# USB Flow Test Checklist (Linux)
+# USB Flow Test Checklist
 
 Pre-reqs:
-- Agent running
-- A USB drive available
-- restic available
+- Aegis app running (embeds the agent; restic is bundled)
+- A USB drive available (exFAT recommended so it works on every OS)
+
+Platform notes:
+- Linux: drives detected instantly via udev. Unmounted drives can be mounted from the app.
+- macOS / Windows: drives detected by polling (~3 s after the drive appears in Finder / Explorer). Drive must be mounted by the OS.
+- Secure wipe is Linux-only; the option is hidden elsewhere.
 
 ## Fresh setup
 1. Insert USB drive.

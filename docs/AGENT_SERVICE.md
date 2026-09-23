@@ -1,6 +1,8 @@
-# Running the Aegis agent as a service
+# Running the Aegis agent as a service (optional, Linux)
 
-Running the agent as a long-lived service (e.g. under systemd) lets it:
+**Most users don't need this.** The desktop app runs the agent itself, starts at login, and keeps running in the tray.
+
+A standalone service is for headless machines or setups without a tray. If the service is running, the desktop app detects it and uses it instead of starting its own. A service lets the agent:
 
 - Detect USB drives as soon as you plug them in
 - Run auto-backup when a trusted drive is inserted (if enabled)
@@ -45,10 +47,4 @@ Logs: `journalctl --user -u aegis-agent -f`
 
 ## Without a service
 
-You can still run the agent manually when you need it:
-
-```bash
-cargo run -p aegis-agent
-```
-
-Then open the Aegis UI. USB detection and backups work only while the agent process is running.
+The desktop app starts the agent automatically. For a headless one-off: `cargo run -p aegis-agent`.

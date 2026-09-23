@@ -1,60 +1,63 @@
 # Aegis
 
-Aegis is a security-first external USB backup system built on Rust + Tauri, with restic as the backup engine.
+**Encrypted backups to a USB drive. Plug in → backed up.**
 
-Status: early scaffolding. The agent builds and exposes an IPC API, but the UI is still in progress.
+Aegis copies your important folders to a USB drive and locks them with a passphrase only you know. If your laptop dies, gets stolen, or gets hit by ransomware, plug the drive into any computer and get your files back. If someone steals the drive, they get nothing.
 
-## Dev Prereqs
-- Rust toolchain (stable)
-- restic available via PATH, or a bundled binary
-- Tauri v2 Linux deps (WebKitGTK 4.1 + JavaScriptCoreGtk 4.1 dev packages, `libudev-dev`)
-- Before building `aegis-ui` (`cargo build -p aegis-ui`): fetch the restic sidecar Tauri
-  bundles as an external binary, or the build fails since `tauri-build` requires it to
-  exist:
-  ```
-  bash scripts/fetch-restic.sh <target-triple>   # e.g. x86_64-unknown-linux-gnu
-  ```
+![Aegis dashboard](docs/images/dashboard.png)
 
-## Running the Agent
+## Download
 
-From the repo root:
+Get the installer for your computer from the **[latest release](https://github.com/stcksmsh/aegis/releases/latest)**:
 
+| Computer | File to download |
+|---|---|
+| Windows 10 / 11 | `Aegis_…_x64-setup.exe` |
+| Mac with Apple chip (M1 and newer) | `Aegis_…_aarch64.dmg` |
+| Mac with Intel chip | `Aegis_…_x64.dmg` |
+| Ubuntu / Debian / Mint | `Aegis_…_amd64.deb` |
+| Other Linux | `Aegis_…_amd64.AppImage` |
+
+Everything Aegis needs is inside the installer. Nothing else to set up.
+
+First launch shows a warning because the app isn't signed by Apple/Microsoft yet:
+**Windows**: "More info" → "Run anyway". **Mac**: right-click the app → "Open" → "Open".
+
+## How it works
+
+1. **Pick folders** — Documents, Pictures, Desktop, or anything else.
+2. **Pick a passphrase** — write it down. No one (not even Aegis) can recover it.
+3. **Plug in a USB drive** — Aegis sets it up without deleting what's already on it.
+4. **Done.** Next time you plug the drive in, Aegis backs up by itself. Only changed files are copied, so later backups are fast.
+
+Restore: open Aegis → **Restore** → pick a date → pick a folder. New computer? Install Aegis, plug in the drive, type your passphrase.
+
+Full walkthrough: **[User Guide](docs/USER_GUIDE.md)**.
+
+## What you get
+
+| Feature | |
+|---|---|
+| Strong encryption | Every backup is encrypted (AES-256) before it touches the drive. |
+| Automatic | Backs up when you plug in your drive. Runs quietly in the tray / menu bar. |
+| History | Keeps every past version until you choose to clean up. Get back last week's file. |
+| Safe to unplug | Unplugging mid-backup never damages earlier backups. |
+| Checks itself | Verifies each backup after it finishes. |
+| No lock-in | Backups use the open [restic](https://restic.net) format. Readable without Aegis. |
+| Private | No accounts, no cloud, no internet. Your passphrase is never saved to disk (optionally kept in your system keychain). |
+| Windows, macOS, Linux | Same app everywhere. A drive made on one works on the others (use exFAT). |
+
+## For developers
+
+```bash
+bash scripts/fetch-restic.sh x86_64-unknown-linux-gnu   # bundled restic (your target triple)
+cargo run -p aegis-ui                                    # desktop app with embedded agent
 ```
-cargo run -p aegis-agent
-```
 
-To run the agent as a long-lived service (e.g. so it detects USB drives and can auto-backup when you plug in), see [docs/AGENT_SERVICE.md](docs/AGENT_SERVICE.md).
+- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, checks, release process
+- [CLAUDE.md](CLAUDE.md) — project layout and rules
+- [docs/ipc.md](docs/ipc.md) — local API
+- [docs/AGENT_SERVICE.md](docs/AGENT_SERVICE.md) — run the agent headless as a service (optional)
+- [CHANGELOG.md](CHANGELOG.md)
 
-## restic Resolution Order
-The agent looks for restic in this order:
-1. `restic_path` in the Aegis config
-2. The Tauri sidecar binary (`restic` / `restic.exe`) installed next to the running executable
-3. Bundled binary at `resources/restic/restic` relative to the app (dev builds)
-4. `restic` in `PATH`
-
-### Bundling restic (dev)
-Place a restic binary at:
-
-```
-resources/restic/restic
-```
-
-Or set `RESTIC_BUNDLE_PATH` to an absolute path to the restic binary. The agent build will copy it into `target/resources/restic/restic`, which is where the runtime lookup expects it in dev.
-
-## Config Location (Linux)
-Aegis uses the `directories` crate. On Linux the config file resolves to:
-
-```
-~/.config/aegis/config.json
-```
-
-## Security Notes
-- Passphrases are never written to disk.
-- Optional keychain storage is used when enabled.
-- Logs are redacted to avoid leaking sensitive paths or secrets.
-
-## Roadmap (Near Term)
-- Tauri UI (first-run wizard + dashboard)
-- IPC wiring for backups, restore, and recovery kit
-- Bundled restic with pinned version
-- Linux USB watcher hardening
+Rust + [Tauri](https://tauri.app), backups by [restic](https://restic.net). License: [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE).

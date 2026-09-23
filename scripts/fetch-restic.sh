@@ -6,6 +6,9 @@
 # Usage: scripts/fetch-restic.sh <rust-target-triple>
 set -euo pipefail
 
+# Bump deliberately; checksum verified against the release's SHA256SUMS.
+RESTIC_VERSION=0.19.1
+
 triple="${1:?usage: fetch-restic.sh <target-triple>}"
 
 case "$triple" in
@@ -34,20 +37,10 @@ dest="$out_dir/restic-${triple}${dest_suffix}"
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
-echo "fetch-restic.sh: looking up latest restic release..."
-release_json="$work_dir/release.json"
-curl -sSf https://api.github.com/repos/restic/restic/releases/latest -o "$release_json"
-version="$(jq -r '.tag_name' "$release_json" | sed 's/^v//')"
-echo "fetch-restic.sh: latest restic version is $version"
-
-asset_name="restic_${version}_${asset_os_arch}.${ext}"
-download_url="$(jq -r --arg name "$asset_name" '.assets[] | select(.name == $name) | .browser_download_url' "$release_json")"
-sums_url="$(jq -r '.assets[] | select(.name | test("^SHA256SUMS$")) | .browser_download_url' "$release_json")"
-
-if [ -z "$download_url" ] || [ -z "$sums_url" ]; then
-  echo "fetch-restic.sh: could not find asset $asset_name or SHA256SUMS in latest release" >&2
-  exit 1
-fi
+asset_name="restic_${RESTIC_VERSION}_${asset_os_arch}.${ext}"
+base_url="https://github.com/restic/restic/releases/download/v${RESTIC_VERSION}"
+download_url="$base_url/$asset_name"
+sums_url="$base_url/SHA256SUMS"
 
 echo "fetch-restic.sh: downloading $asset_name..."
 curl -sSfL "$download_url" -o "$work_dir/$asset_name"
@@ -74,7 +67,7 @@ if [ "$ext" = "bz2" ]; then
   bzip2 -dc "$work_dir/$asset_name" > "$dest"
   chmod +x "$dest"
 else
-  unzip -p "$work_dir/$asset_name" "restic_${version}_${asset_os_arch}.exe" > "$dest"
+  unzip -p "$work_dir/$asset_name" "restic_${RESTIC_VERSION}_${asset_os_arch}.exe" > "$dest"
 fi
 
 echo "fetch-restic.sh: wrote $dest"

@@ -1,8 +1,14 @@
 use anyhow::Context;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
+#[cfg(target_os = "linux")]
+use serde::Deserialize;
+use serde::Serialize;
 use std::process::Command;
+#[cfg(target_os = "linux")]
 use std::sync::{Mutex, OnceLock};
+#[cfg(not(target_os = "linux"))]
+use tracing::{error, info};
+#[cfg(target_os = "linux")]
 use tracing::{debug, error, info, warn};
 
 /// Volume label used when Aegis formats a drive: "aegis" + 6 hex chars = 11 chars (exFAT max).
@@ -129,6 +135,7 @@ pub fn list_removable_devices() -> anyhow::Result<Vec<DeviceInfo>> {
     Ok(devices)
 }
 
+#[cfg(target_os = "linux")]
 fn log_devices_if_changed(devices: &[DeviceInfo]) {
     static LAST_SNAPSHOT: OnceLock<Mutex<String>> = OnceLock::new();
     let snapshot = device_snapshot(devices);
@@ -165,6 +172,7 @@ fn log_devices_if_changed(devices: &[DeviceInfo]) {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn device_snapshot(devices: &[DeviceInfo]) -> String {
     let mut lines: Vec<String> = devices
         .iter()

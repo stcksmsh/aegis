@@ -5,6 +5,7 @@ use crate::logging::Redact;
 use crate::state::{RunPhase, RunResult, RunStatus, SharedState};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(target_os = "linux")]
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 use tracing::{debug, error, info, warn};
@@ -38,6 +39,7 @@ pub fn build_watcher() -> anyhow::Result<UsbWatcher> {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[derive(Debug)]
 enum UsbEvent {
     Added(PathBuf),
@@ -274,9 +276,6 @@ async fn scan_existing_devices(state: &SharedState) {
         }
     }
 }
-
-#[cfg(not(target_os = "linux"))]
-async fn scan_existing_devices(_state: &SharedState) {}
 
 async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()> {
     debug!("Handling USB add for {}", devnode.display());
@@ -520,6 +519,7 @@ fn mount_table() -> Vec<(PathBuf, PathBuf)> {
         .collect()
 }
 
+#[cfg(target_os = "linux")]
 fn unescape_mount(input: &str) -> String {
     input
         .replace("\\040", " ")

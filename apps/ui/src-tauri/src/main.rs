@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
 
@@ -69,7 +71,56 @@ fn toggle_devtools(app: AppHandle) {
     }
 }
 
+struct NoTray;
+
+fn show_main(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+/// Tray icon keeps Aegis running (and watching for drives) after the window closes.
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, "open", "Open Aegis", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Aegis", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &quit])?;
+    let mut tray = TrayIconBuilder::with_id("main")
+        .tooltip("Aegis backup")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "open" => show_main(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                ..
+            } = event
+            {
+                show_main(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
 fn main() {
+    // Guard must live for the whole process so file logs flush.
+    let _log_guard = aegis_agent::init_logging();
+    // Embedded agent: if the port is taken, a standalone agent service is already running; use it.
+    tauri::async_runtime::spawn(async {
+        if let Err(err) = aegis_agent::run().await {
+            eprintln!("Embedded agent not started: {:#}", err);
+        }
+    });
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -78,7 +129,22 @@ fn main() {
             is_dev_build,
             toggle_devtools
         ])
-        .setup(|_app| Ok(()))
+        .setup(|app| {
+            if let Err(err) = build_tray(app.handle()) {
+                // No tray (e.g. some Linux desktops): closing the window quits instead.
+                eprintln!("Tray unavailable: {}", err);
+                app.manage(NoTray);
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.try_state::<NoTray>().is_none() {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running Aegis UI");
 }

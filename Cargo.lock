@@ -37,6 +37,7 @@ dependencies = [
 name = "aegis-ui"
 version = "0.1.0"
 dependencies = [
+ "aegis-agent",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

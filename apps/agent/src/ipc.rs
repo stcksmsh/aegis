@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Stdio;
 use tokio_util::sync::CancellationToken;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing::{debug, error};
 
 fn default_drive_label(config: &AgentConfig) -> String {
@@ -232,9 +232,42 @@ struct FormatResponse {
     status: String,
 }
 
-pub async fn serve(state: SharedState) -> anyhow::Result<()> {
+pub const API_ADDR: &str = "127.0.0.1:7878";
+
+/// Origins of the bundled Tauri webview (Linux/macOS use tauri://, Windows http(s)://tauri.localhost).
+const ALLOWED_ORIGINS: [&str; 3] = [
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+];
+
+/// Reject requests whose Host header is not loopback (blocks DNS-rebinding from web pages).
+async fn check_host(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Result<axum::response::Response, StatusCode> {
+    let host = req
+        .headers()
+        .get(axum::http::header::HOST)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+    if host_allowed(host) {
+        Ok(next.run(req).await)
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
+}
+
+fn host_allowed(host: &str) -> bool {
+    let name = host.rsplit_once(':').map_or(host, |(name, _)| name);
+    matches!(name, "127.0.0.1" | "localhost")
+}
+
+pub async fn serve(listener: tokio::net::TcpListener, state: SharedState) -> anyhow::Result<()> {
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(AllowOrigin::list(
+            ALLOWED_ORIGINS.map(axum::http::HeaderValue::from_static),
+        ))
         .allow_methods(Any)
         .allow_headers(Any);
     let app = Router::new()
@@ -254,9 +287,9 @@ pub async fn serve(state: SharedState) -> anyhow::Result<()> {
         .route("/v1/drives/discontinue", post(discontinue_drive))
         .route("/v1/drives/update", post(update_drive))
         .with_state(state)
-        .layer(cors);
+        .layer(cors)
+        .layer(axum::middleware::from_fn(check_host));
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:7878").await?;
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -1108,4 +1141,18 @@ fn resolve_passphrase(
             .ok_or_else(|| (StatusCode::BAD_REQUEST, "passphrase required".to_string()));
     }
     Err((StatusCode::BAD_REQUEST, "passphrase required".to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::host_allowed;
+
+    #[test]
+    fn host_check_allows_only_loopback() {
+        assert!(host_allowed("127.0.0.1:7878"));
+        assert!(host_allowed("localhost:7878"));
+        assert!(!host_allowed("evil.example:7878"));
+        assert!(!host_allowed("127.0.0.1.evil.example"));
+        assert!(!host_allowed(""));
+    }
 }

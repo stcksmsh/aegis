@@ -19,6 +19,8 @@ pub struct SnapshotInfo {
     pub time: String,
     pub hostname: Option<String>,
     pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub paths: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -320,30 +322,6 @@ impl Restic {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub async fn restore(
-        &self,
-        repo: &Path,
-        passphrase: &str,
-        snapshot_id: &str,
-        target: &Path,
-        includes: &[String],
-    ) -> anyhow::Result<()> {
-        let mut args = vec![
-            "restore".to_string(),
-            snapshot_id.to_string(),
-            "--target".to_string(),
-            target.to_string_lossy().to_string(),
-        ];
-        for include in includes {
-            args.push("--include".to_string());
-            args.push(include.clone());
-        }
-        self.run_capture(repo, passphrase, &args).await?;
-        Ok(())
-    }
-
-    /// Restore with cancellation support (e.g. when drive is unplugged).
     pub async fn restore_cancellable(
         &self,
         repo: &Path,
@@ -353,9 +331,22 @@ impl Restic {
         includes: &[String],
         cancel: CancellationToken,
     ) -> anyhow::Result<()> {
+        // Restore relative to the backed-up folders' common parent, so the user gets
+        // <target>/Documents/... instead of <target>/home/user/Documents/...
+        let snapshot_paths = self
+            .snapshots(repo, passphrase)
+            .await?
+            .into_iter()
+            .find(|s| s.id == snapshot_id || s.id.starts_with(snapshot_id))
+            .map(|s| s.paths)
+            .unwrap_or_default();
+        let source = match restore_subfolder(&snapshot_paths) {
+            Some(sub) if includes.is_empty() => format!("{}:{}", snapshot_id, sub),
+            _ => snapshot_id.to_string(),
+        };
         let mut args = vec![
             "restore".to_string(),
-            snapshot_id.to_string(),
+            source,
             "--target".to_string(),
             target.to_string_lossy().to_string(),
         ];
@@ -456,6 +447,41 @@ impl Restic {
     }
 }
 
+/// Common parent of snapshot `paths`, in restic's tree form (`C:\\x` → `/C/x`).
+/// None if it would be the root (nothing to strip).
+fn restore_subfolder(paths: &[String]) -> Option<String> {
+    let mut common: Option<Vec<String>> = None;
+    for path in paths {
+        let tree = to_tree_path(path);
+        let mut parts: Vec<String> = tree
+            .split('/')
+            .filter(|p| !p.is_empty())
+            .map(String::from)
+            .collect();
+        parts.pop(); // keep the backed-up folder's own name
+        common = Some(match common {
+            None => parts,
+            Some(c) => c
+                .into_iter()
+                .zip(parts)
+                .take_while(|(a, b)| a == b)
+                .map(|(a, _)| a)
+                .collect(),
+        });
+    }
+    let common = common?;
+    (!common.is_empty()).then(|| format!("/{}", common.join("/")))
+}
+
+fn to_tree_path(path: &str) -> String {
+    let b = path.as_bytes();
+    if b.len() >= 2 && b[1] == b':' && b[0].is_ascii_alphabetic() {
+        format!("/{}{}", &path[..1], path[2..].replace('\\', "/"))
+    } else {
+        path.to_string()
+    }
+}
+
 pub const WRONG_PASSPHRASE: &str = "Wrong passphrase. Passphrases are case-sensitive.";
 
 fn restic_error(stderr: &str) -> anyhow::Error {
@@ -468,6 +494,22 @@ fn restic_error(stderr: &str) -> anyhow::Error {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn restore_subfolder_strips_common_parent() {
+        let p = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            restore_subfolder(&p(&["/home/u/Documents", "/home/u/Pictures"])),
+            Some("/home/u".into())
+        );
+        assert_eq!(
+            restore_subfolder(&p(&["C:\\Users\\u\\Documents"])),
+            Some("/C/Users/u".into())
+        );
+        assert_eq!(restore_subfolder(&p(&["/home/u/Docs", "/mnt/x"])), None);
+        assert_eq!(restore_subfolder(&p(&["/Docs"])), None);
+        assert_eq!(restore_subfolder(&[]), None);
+    }
+
     #[test]
     fn wrong_password_maps_to_friendly_error() {
         let err = restic_error("Fatal: wrong password or no key found\n");

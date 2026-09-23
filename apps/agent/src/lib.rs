@@ -5,7 +5,6 @@ mod backup;
 mod config;
 mod devices;
 mod drive;
-mod errors;
 mod ipc;
 mod keychain;
 mod logging;

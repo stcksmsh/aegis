@@ -19,8 +19,6 @@ Thumbs.db
 .idea
 .vscode
 
-# Local restic bundle (do not commit; use PATH or document install)
-resources/restic/
 
 # Fetched restic sidecar binaries for Tauri bundling (see scripts/fetch-restic.sh)
 apps/ui/src-tauri/binaries/

@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
@@ -27,6 +26,8 @@ pub struct BackupSummary {
     pub snapshot_id: Option<String>,
     pub data_added: Option<u64>,
     pub files_processed: Option<u64>,
+    /// restic exit code 3: snapshot saved, but some source files were unreadable.
+    pub incomplete: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,18 +93,6 @@ impl Restic {
                 if sidecar.exists() {
                     return Ok(Self { binary: sidecar });
                 }
-
-                // Dev path: copied by apps/agent/build.rs from RESTIC_BUNDLE_PATH.
-                if let Some(dev_candidate) = dir
-                    .parent()
-                    .map(|p| p.join("resources").join("restic").join("restic"))
-                {
-                    if dev_candidate.exists() {
-                        return Ok(Self {
-                            binary: dev_candidate,
-                        });
-                    }
-                }
             }
         }
 
@@ -126,51 +115,6 @@ impl Restic {
         let config: ResticConfig =
             serde_json::from_slice(&output.stdout).context("parse restic config")?;
         Ok(config.id)
-    }
-
-    #[allow(dead_code)]
-    pub async fn backup(
-        &self,
-        repo: &Path,
-        passphrase: &str,
-        sources: &[PathBuf],
-        includes: &[String],
-        excludes: &[String],
-    ) -> anyhow::Result<BackupSummary> {
-        debug!(
-            "restic: backup repo={} sources_count={}",
-            repo.display(),
-            sources.len()
-        );
-        let mut args = vec!["backup".to_string(), "--json".to_string()];
-        for include in includes {
-            args.push("--include".to_string());
-            args.push(include.clone());
-        }
-        for exclude in excludes {
-            args.push("--exclude".to_string());
-            args.push(exclude.clone());
-        }
-        for source in sources {
-            args.push(source.to_string_lossy().to_string());
-        }
-        let output = self.run_capture(repo, passphrase, &args).await?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut summary = BackupSummary {
-            snapshot_id: None,
-            data_added: None,
-            files_processed: None,
-        };
-        for line in stdout.lines() {
-            if let Ok(parsed) = serde_json::from_str::<ResticSummaryLine>(line) {
-                if parsed.message_type.as_deref() == Some("summary") {
-                    summary.snapshot_id = parsed.snapshot_id;
-                    summary.data_added = parsed.data_added;
-                    summary.files_processed = parsed.total_files_processed;
-                }
-            }
-        }
-        Ok(summary)
     }
 
     /// Run backup while streaming progress to `progress_tx`. If `cancel` is triggered (e.g. drive unplugged), the restic process is killed and an error is returned.
@@ -198,7 +142,7 @@ impl Restic {
             args.push(source.to_string_lossy().to_string());
         }
 
-        let mut command = Command::new(&self.binary);
+        let mut command = crate::command(&self.binary);
         command
             .arg("--repo")
             .arg(repo)
@@ -222,6 +166,7 @@ impl Restic {
             snapshot_id: None,
             data_added: None,
             files_processed: None,
+            incomplete: false,
         };
         let mut last_log_percent: f64 = -1.0;
         let mut reader = BufReader::new(stdout);
@@ -288,6 +233,10 @@ impl Restic {
 
         let status = child.wait().await?;
         let _stderr = stderr_handle.await?;
+        if status.code() == Some(3) && summary.snapshot_id.is_some() {
+            summary.incomplete = true;
+            return Ok(summary);
+        }
         if !status.success() {
             return Err(anyhow!(
                 "restic backup failed with exit code {:?}",
@@ -425,7 +374,7 @@ impl Restic {
         passphrase: &str,
         args: &[String],
     ) -> anyhow::Result<std::process::Output> {
-        let mut command = Command::new(&self.binary);
+        let mut command = crate::command(&self.binary);
         command
             .arg("--repo")
             .arg(repo)
@@ -460,7 +409,7 @@ impl Restic {
         args: &[String],
         cancel: CancellationToken,
     ) -> anyhow::Result<std::process::Output> {
-        let mut command = Command::new(&self.binary);
+        let mut command = crate::command(&self.binary);
         command
             .arg("--repo")
             .arg(repo)

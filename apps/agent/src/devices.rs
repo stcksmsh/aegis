@@ -3,13 +3,12 @@ use rand::Rng;
 #[cfg(target_os = "linux")]
 use serde::Deserialize;
 use serde::Serialize;
-use std::process::Command;
 #[cfg(target_os = "linux")]
 use std::sync::{Mutex, OnceLock};
-#[cfg(not(target_os = "linux"))]
-use tracing::{error, info};
 #[cfg(target_os = "linux")]
 use tracing::{debug, error, info, warn};
+#[cfg(not(target_os = "linux"))]
+use tracing::{error, info};
 
 /// Volume label used when Aegis formats a drive: "aegis" + 6 hex chars = 11 chars (exFAT max).
 fn generate_aegis_disk_name() -> String {
@@ -65,7 +64,7 @@ struct LsblkDevice {
 #[cfg(target_os = "linux")]
 pub fn list_removable_devices() -> anyhow::Result<Vec<DeviceInfo>> {
     debug!("device scan: running lsblk -J");
-    let output = Command::new("lsblk")
+    let output = crate::std_command("lsblk")
         .args([
             "-J",
             "-o",
@@ -209,7 +208,7 @@ fn device_snapshot(devices: &[DeviceInfo]) -> String {
 
 #[cfg(target_os = "linux")]
 pub fn find_mountpoint(devnode: &str) -> anyhow::Result<Option<String>> {
-    let output = Command::new("lsblk")
+    let output = crate::std_command("lsblk")
         .args(["-J", "-o", "NAME,PATH,TYPE,FSTYPE,MOUNTPOINTS"])
         .output()
         .context("run lsblk")?;
@@ -263,7 +262,7 @@ pub fn mount_partition(devnode: &str) -> anyhow::Result<String> {
     ensure_udisksctl()?;
     debug!("mount: request devnode={}", devnode);
     for attempt in 1..=3 {
-        let output = Command::new("udisksctl")
+        let output = crate::std_command("udisksctl")
             .args(["mount", "-b", devnode])
             .output()
             .context("run udisksctl mount")?;
@@ -331,7 +330,7 @@ pub fn format_partition_exfat(devnode: &str) -> anyhow::Result<()> {
     if udisksctl_supports_format() {
         ensure_udisksctl()?;
         debug!("format: using udisksctl format (devnode={})", devnode);
-        let mut cmd = Command::new("udisksctl");
+        let mut cmd = crate::std_command("udisksctl");
         cmd.args([
             "format",
             "-b",
@@ -379,7 +378,7 @@ fn ensure_udisksctl() -> anyhow::Result<()> {
 pub fn udisksctl_supports_format() -> bool {
     static SUPPORTS: OnceLock<bool> = OnceLock::new();
     *SUPPORTS.get_or_init(|| {
-        let output = Command::new("udisksctl").arg("help").output();
+        let output = crate::std_command("udisksctl").arg("help").output();
         if let Ok(output) = output {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
@@ -396,7 +395,7 @@ pub fn udisksctl_supports_format() -> bool {
 pub fn unmount_partition(devnode: &str) -> anyhow::Result<()> {
     debug!("unmount: devnode={}", devnode);
     ensure_udisksctl()?;
-    let output = Command::new("udisksctl")
+    let output = crate::std_command("udisksctl")
         .args(["unmount", "-b", devnode])
         .output()
         .context("run udisksctl unmount")?;
@@ -424,7 +423,7 @@ pub fn secure_wipe_block_device(devnode: &str) -> anyhow::Result<()> {
         return Err(anyhow::anyhow!("pkexec not found; cannot run secure wipe"));
     }
     info!("wipe: starting secure wipe of {}", devnode);
-    let status = Command::new("pkexec")
+    let status = crate::std_command("pkexec")
         .args([
             "dd",
             "if=/dev/zero",
@@ -466,13 +465,13 @@ fn run_mkfs_exfat(formatter: &str, devnode: &str, disk_label: &str) -> anyhow::R
     );
 
     let output = if use_pkexec {
-        Command::new("pkexec")
+        crate::std_command("pkexec")
             .arg(formatter)
             .args(&args)
             .output()
             .context("run pkexec mkfs.exfat")?
     } else {
-        Command::new(formatter)
+        crate::std_command(formatter)
             .args(&args)
             .output()
             .context("run mkfs.exfat")?
@@ -503,13 +502,13 @@ fn run_mkfs_exfat(formatter: &str, devnode: &str, disk_label: &str) -> anyhow::R
             devnode.to_string(),
         ];
         let output_alt = if use_pkexec {
-            Command::new("pkexec")
+            crate::std_command("pkexec")
                 .arg(formatter)
                 .args(&args_alt)
                 .output()
                 .context("run pkexec mkfs.exfat (alt)")?
         } else {
-            Command::new(formatter)
+            crate::std_command(formatter)
                 .args(&args_alt)
                 .output()
                 .context("run mkfs.exfat (alt)")?
@@ -540,7 +539,7 @@ fn run_mkfs_exfat(formatter: &str, devnode: &str, disk_label: &str) -> anyhow::R
 fn wait_for_udev_after_format() {
     if which::which("udevadm").is_ok() {
         debug!("format: running udevadm settle");
-        let _ = Command::new("udevadm").arg("settle").output();
+        let _ = crate::std_command("udevadm").arg("settle").output();
     } else {
         debug!("format: udevadm not found, skipping settle");
     }
@@ -626,7 +625,7 @@ pub fn format_partition_exfat(mount_path: &str) -> anyhow::Result<()> {
         "format: diskutil eraseVolume ExFAT {} {}",
         disk_label, mount_path
     );
-    let output = Command::new("diskutil")
+    let output = crate::std_command("diskutil")
         .args(["eraseVolume", "ExFAT", &disk_label, mount_path])
         .output()
         .context("run diskutil eraseVolume")?;
@@ -646,7 +645,7 @@ pub fn format_partition_exfat(mount_path: &str) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Select a drive letter to format."))?;
     let disk_label = generate_aegis_disk_name();
     info!("format: format {} /FS:exFAT /V:{}", drive, disk_label);
-    let output = Command::new("format")
+    let output = crate::std_command("format.com")
         .arg(&drive)
         .args(["/FS:exFAT", &format!("/V:{}", disk_label), "/Q", "/Y"])
         .output()
@@ -674,7 +673,7 @@ fn windows_drive_root(path: &str) -> Option<String> {
 
 #[cfg(target_os = "macos")]
 pub fn unmount_partition(mount_path: &str) -> anyhow::Result<()> {
-    let status = Command::new("diskutil")
+    let status = crate::std_command("diskutil")
         .args(["unmount", mount_path])
         .status()
         .context("run diskutil unmount")?;

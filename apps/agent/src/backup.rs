@@ -1,5 +1,5 @@
 use crate::config::AgentConfig;
-use crate::drive::{read_marker, write_marker, DriveMarker};
+use crate::drive::{read_marker, write_marker};
 use crate::logging::Redact;
 use crate::notifications;
 use crate::restic::Restic;
@@ -154,8 +154,15 @@ pub async fn run_backup(
         );
 
         let mut interrupted = false;
-        let mut status = RunStatus::Success;
-        let mut message = "Backup completed".to_string();
+        let (mut status, mut message) = if summary.incomplete {
+            (
+                RunStatus::Partial,
+                "Backup completed, but some files could not be read (in use or no permission)"
+                    .to_string(),
+            )
+        } else {
+            (RunStatus::Success, "Backup completed".to_string())
+        };
 
         if config.quick_verify {
             set_phase(
@@ -362,11 +369,4 @@ fn now_epoch() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
-}
-
-#[allow(dead_code)]
-fn update_marker_repo_id(mount_path: &Path, repo_id: &str) -> anyhow::Result<()> {
-    let mut marker = read_marker(mount_path)?.unwrap_or_else(|| DriveMarker::new(None));
-    marker.repository_id = Some(repo_id.to_string());
-    write_marker(mount_path, &marker)
 }

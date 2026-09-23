@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
 
@@ -74,6 +75,40 @@ fn toggle_devtools(app: AppHandle) {
 
 struct NoTray;
 
+/// Passed by the login item so Aegis starts quietly in the tray.
+const MINIMIZED_ARG: &str = "--minimized";
+
+#[tauri::command]
+fn get_autostart(app: AppHandle) -> bool {
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+#[tauri::command]
+fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let launcher = app.autolaunch();
+    let res = if enabled {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    };
+    res.map_err(|e| e.to_string())
+}
+
+/// Start at login by default (plug-in backups need Aegis running); only once, so user opt-out sticks.
+fn default_autostart_once(app: &AppHandle) {
+    let Ok(dir) = app.path().app_config_dir() else {
+        return;
+    };
+    let flag = dir.join("autostart-initialized");
+    if flag.exists() {
+        return;
+    }
+    let _ = std::fs::create_dir_all(&dir);
+    if app.autolaunch().enable().is_ok() {
+        let _ = std::fs::write(flag, b"");
+    }
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -123,18 +158,36 @@ fn main() {
     });
 
     tauri::Builder::default()
+        // Must be first: a second launch just focuses the running window.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main(app)
+        }))
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec![MINIMIZED_ARG]),
+        ))
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             select_folder,
             open_path,
             is_dev_build,
-            toggle_devtools
+            toggle_devtools,
+            get_autostart,
+            set_autostart
         ])
         .setup(|app| {
-            if let Err(err) = build_tray(app.handle()) {
-                // No tray (e.g. some Linux desktops): closing the window quits instead.
-                eprintln!("Tray unavailable: {}", err);
-                app.manage(NoTray);
+            default_autostart_once(app.handle());
+            let tray_ok = match build_tray(app.handle()) {
+                Ok(()) => true,
+                Err(err) => {
+                    // No tray (e.g. some Linux desktops): closing the window quits instead.
+                    eprintln!("Tray unavailable: {}", err);
+                    app.manage(NoTray);
+                    false
+                }
+            };
+            if !tray_ok || !std::env::args().any(|a| a == MINIMIZED_ARG) {
+                show_main(app.handle());
             }
             Ok(())
         })

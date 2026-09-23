@@ -1065,7 +1065,7 @@ async fn export_recovery(
 
 #[cfg(target_os = "linux")]
 async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
-    let status = tokio::process::Command::new("udisksctl")
+    let status = crate::command("udisksctl")
         .arg("unmount")
         .arg("-b")
         .arg(device)
@@ -1087,7 +1087,7 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         ));
     }
 
-    let status = tokio::process::Command::new("udisksctl")
+    let status = crate::command("udisksctl")
         .arg("power-off")
         .arg("-b")
         .arg(device)
@@ -1113,7 +1113,7 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
 
 #[cfg(target_os = "macos")]
 async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
-    let status = tokio::process::Command::new("diskutil")
+    let status = crate::command("diskutil")
         .arg("eject")
         .arg(device)
         .stdout(Stdio::null())
@@ -1145,7 +1145,7 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         "(New-Object -comObject Shell.Application).Namespace(17).ParseName('{}\\').InvokeVerb('Eject')",
         drive
     );
-    let status = tokio::process::Command::new("powershell")
+    let status = crate::command("powershell")
         .args(["-NoProfile", "-Command", &script])
         .stdout(Stdio::null())
         .stderr(Stdio::null())

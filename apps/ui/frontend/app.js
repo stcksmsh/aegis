@@ -2041,6 +2041,7 @@ function setupListeners() {
   document.getElementById("restore-run").addEventListener("click", restoreSnapshot);
 
   document.getElementById("save-settings").addEventListener("click", saveConfig);
+  initAutostartToggle();
   document.getElementById("save-advanced").addEventListener("click", saveConfig);
   document.getElementById("export-recovery").addEventListener("click", exportRecoveryKit);
 
@@ -2139,3 +2140,17 @@ fetchPreflight();
 setInterval(fetchStatus, 1500);
 setInterval(fetchDevices, 1500);
 setInterval(fetchPreflight, 5000);
+
+// "Start at login" lives in the desktop shell, not the agent config; applies immediately.
+function initAutostartToggle() {
+  const box = document.getElementById("autostart");
+  const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
+  if (!box || !invoke) return;
+  invoke("get_autostart").then((on) => (box.checked = !!on)).catch(() => {});
+  box.addEventListener("change", () => {
+    invoke("set_autostart", { enabled: box.checked }).catch(() => {
+      box.checked = !box.checked;
+      uiAlert("Couldn't change the login setting. Please try again.");
+    });
+  });
+}

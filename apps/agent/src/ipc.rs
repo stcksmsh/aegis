@@ -591,9 +591,9 @@ async fn setup_drive(
             .await
             .map_err(|e| {
                 tracing::error!("setup drive: repository_id failed error={}", e);
-                (
-                    StatusCode::BAD_REQUEST,
-                    "invalid passphrase or repo".to_string(),
+                restic_err(
+                    e,
+                    "This drive has existing Aegis backups that could not be opened.",
                 )
             })?
     } else {
@@ -935,12 +935,7 @@ async fn list_snapshots(
     let snapshots = restic
         .snapshots(&repo_path, &passphrase)
         .await
-        .map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                "unable to list snapshots".to_string(),
-            )
-        })?;
+        .map_err(|e| restic_err(e, "Could not read backups from this drive."))?;
 
     Ok(Json(SnapshotsResponse { snapshots }))
 }
@@ -969,12 +964,7 @@ async fn snapshot_stats(
     let stats = restic
         .snapshot_stats(&repo_path, &passphrase, &req.snapshot_id)
         .await
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "stats failed".to_string(),
-            )
-        })?;
+        .map_err(|e| restic_err(e, "Could not read backup details."))?;
 
     Ok(Json(SnapshotStatsResponse {
         total_size: stats.total_size,
@@ -1025,9 +1015,9 @@ async fn restore_snapshot(
         )
         .await
         .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("restore failed: {}", e),
+            restic_err(
+                e,
+                "Restore failed. Check that the drive is still connected.",
             )
         });
     {
@@ -1215,6 +1205,17 @@ async fn ensure_mounted_drive(
         .mount_path
         .clone()
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "drive not mounted".to_string()))
+}
+
+/// User-facing error for a failed restic call: wrong passphrase is surfaced, rest gets `fallback`.
+fn restic_err(err: anyhow::Error, fallback: &str) -> (StatusCode, String) {
+    error!("restic call failed: {:#}", err);
+    let msg = err.to_string();
+    if msg == crate::restic::WRONG_PASSPHRASE {
+        (StatusCode::BAD_REQUEST, msg)
+    } else {
+        (StatusCode::INTERNAL_SERVER_ERROR, fallback.to_string())
+    }
 }
 
 fn resolve_passphrase(

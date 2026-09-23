@@ -397,7 +397,7 @@ impl Restic {
                 stdout.trim(),
                 stderr.trim()
             );
-            return Err(anyhow!("restic failed: {}", stderr.trim()));
+            return Err(restic_error(&stderr));
         }
         Ok(output)
     }
@@ -441,7 +441,7 @@ impl Restic {
                 let stderr = stderr_task.await.context("join stderr task")??;
                 let output = std::process::Output { status, stdout, stderr };
                 if !output.status.success() {
-                    return Err(anyhow!("restic failed"));
+                    return Err(restic_error(&String::from_utf8_lossy(&output.stderr)));
                 }
                 Ok(output)
             }
@@ -456,8 +456,27 @@ impl Restic {
     }
 }
 
+pub const WRONG_PASSPHRASE: &str = "Wrong passphrase. Passphrases are case-sensitive.";
+
+fn restic_error(stderr: &str) -> anyhow::Error {
+    if stderr.contains("wrong password") {
+        anyhow!(WRONG_PASSPHRASE)
+    } else {
+        anyhow!("restic failed: {}", stderr.trim())
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn wrong_password_maps_to_friendly_error() {
+        let err = restic_error("Fatal: wrong password or no key found\n");
+        assert_eq!(err.to_string(), WRONG_PASSPHRASE);
+        assert!(restic_error("Fatal: disk full")
+            .to_string()
+            .contains("disk full"));
+    }
+
     use super::*;
 
     #[test]

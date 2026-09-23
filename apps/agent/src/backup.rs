@@ -281,6 +281,8 @@ pub async fn run_backup(
             let interrupted = !drive_connected;
             let message = if interrupted {
                 "Interrupted (drive disconnected)"
+            } else if err.to_string() == crate::restic::WRONG_PASSPHRASE {
+                crate::restic::WRONG_PASSPHRASE
             } else {
                 "Backup failed"
             };

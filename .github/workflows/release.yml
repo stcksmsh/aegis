@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macos-13
+            target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches tauri.conf.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          conf_version="$(jq -r .version apps/ui/src-tauri/tauri.conf.json)"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$conf_version" != "$tag_version" ]; then
+            echo "Tag v$tag_version does not match tauri.conf.json version $conf_version" >&2
+            exit 1
+          fi
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Tauri dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libudev-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-release-
+
+      - name: Fetch bundled restic
+        shell: bash
+        run: bash scripts/fetch-restic.sh ${{ matrix.target }}
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/ui
+          tagName: ${{ github.ref_name }}
+          releaseName: "Aegis v__VERSION__"
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
+          releaseBody: |
+            ## Download
+
+            Pick the file for your operating system:
+
+            - **Windows**: `.msi` or the `-setup.exe` installer
+            - **macOS (Apple Silicon, M1/M2/M3/M4)**: `aarch64.dmg`
+            - **macOS (Intel)**: `x64.dmg`
+            - **Linux**: `.AppImage` (run anywhere) or `.deb` (Debian/Ubuntu)
+
+            restic is bundled — no separate install needed.
+
+            ## First launch
+
+            **macOS**: the app isn't signed by an Apple-registered developer yet, so
+            Gatekeeper will block the first launch. Right-click (or Control-click) the
+            app and choose **Open**, then confirm in the dialog. If that doesn't show
+            an Open option, go to **System Settings → Privacy & Security** and click
+            **Open Anyway** next to the Aegis entry, then try opening it again.
+
+            **Windows**: SmartScreen may show "Windows protected your PC" because the
+            installer isn't code-signed yet. Click **More info**, then **Run anyway**.

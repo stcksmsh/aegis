@@ -85,11 +85,11 @@ struct DevicesResponse {
 #[derive(Debug, Serialize)]
 struct PreflightResponse {
     restic: bool,
-    lsblk: bool,
-    udisksctl: bool,
-    mkfs_exfat: bool,
-    pkexec: bool,
-    udisksctl_format: bool,
+    can_list: bool,
+    can_mount: bool,
+    can_format: bool,
+    can_wipe: bool,
+    platform: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -309,21 +309,46 @@ async fn list_devices(
     Ok(Json(DevicesResponse { devices }))
 }
 
-async fn preflight(State(state): State<SharedState>) -> Json<PreflightResponse> {
-    let guard = state.read().await;
-    let restic = Restic::resolve(guard.config.restic_path.as_deref()).is_ok();
+#[cfg(target_os = "linux")]
+fn drive_tool_capabilities() -> (bool, bool, bool) {
     let lsblk = which::which("lsblk").is_ok();
     let udisksctl = which::which("udisksctl").is_ok();
     let mkfs_exfat = which::which("mkfs.exfat").is_ok() || which::which("mkfs.exfatfs").is_ok();
     let pkexec = which::which("pkexec").is_ok();
-    let udisksctl_format = devices::udisksctl_supports_format();
+    let can_list = lsblk;
+    let can_mount = udisksctl && lsblk;
+    let can_format = devices::udisksctl_supports_format() || (mkfs_exfat && pkexec);
+    (can_list, can_mount, can_format)
+}
+
+#[cfg(target_os = "linux")]
+fn platform_name() -> &'static str {
+    "linux"
+}
+#[cfg(target_os = "macos")]
+fn platform_name() -> &'static str {
+    "macos"
+}
+#[cfg(target_os = "windows")]
+fn platform_name() -> &'static str {
+    "windows"
+}
+
+async fn preflight(State(state): State<SharedState>) -> Json<PreflightResponse> {
+    let guard = state.read().await;
+    let restic = Restic::resolve(guard.config.restic_path.as_deref()).is_ok();
+    #[cfg(target_os = "linux")]
+    let (can_list, can_mount, can_format) = drive_tool_capabilities();
+    #[cfg(not(target_os = "linux"))]
+    let (can_list, can_mount, can_format) = (true, true, true);
+    let can_wipe = cfg!(target_os = "linux") && which::which("pkexec").is_ok();
     Json(PreflightResponse {
         restic,
-        lsblk,
-        udisksctl,
-        mkfs_exfat,
-        pkexec,
-        udisksctl_format,
+        can_list,
+        can_mount,
+        can_format,
+        can_wipe,
+        platform: platform_name().to_string(),
     })
 }
 
@@ -1038,19 +1063,12 @@ async fn export_recovery(
     }))
 }
 
-async fn eject_drive(
-    State(_state): State<SharedState>,
-    Json(req): Json<EjectRequest>,
-) -> Result<Json<BackupStartResponse>, (StatusCode, String)> {
-    let mount_path = PathBuf::from(req.mount_path);
-    let Some(device) = resolve_device_for_mount(&mount_path) else {
-        return Err((StatusCode::BAD_REQUEST, "device not found".to_string()));
-    };
-
+#[cfg(target_os = "linux")]
+async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
     let status = tokio::process::Command::new("udisksctl")
         .arg("unmount")
         .arg("-b")
-        .arg(&device)
+        .arg(device)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -1062,7 +1080,6 @@ async fn eject_drive(
                 "eject failed".to_string(),
             )
         })?;
-
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1073,7 +1090,7 @@ async fn eject_drive(
     let status = tokio::process::Command::new("udisksctl")
         .arg("power-off")
         .arg("-b")
-        .arg(&device)
+        .arg(device)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -1085,13 +1102,94 @@ async fn eject_drive(
                 "eject failed".to_string(),
             )
         })?;
-
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             "eject failed".to_string(),
         ));
     }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
+    let status = tokio::process::Command::new("diskutil")
+        .arg("eject")
+        .arg(device)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .context("diskutil eject")
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "eject failed".to_string(),
+            )
+        })?;
+    if !status.success() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "eject failed".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
+    // device is the mount path (e.g. "E:\"); validate it's a drive root before it reaches a shell command.
+    let drive = windows_drive_root_letter(device)
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "not a drive letter".to_string()))?;
+    let script = format!(
+        "(New-Object -comObject Shell.Application).Namespace(17).ParseName('{}\\').InvokeVerb('Eject')",
+        drive
+    );
+    let status = tokio::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .context("powershell eject")
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "eject failed".to_string(),
+            )
+        })?;
+    if !status.success() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "eject failed".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Validates a Windows drive letter (e.g. "E:\" or "E:") and returns the bare "E:" form,
+/// so only a single drive letter can ever reach the PowerShell command line.
+#[cfg(any(target_os = "windows", test))]
+fn windows_drive_root_letter(path: &FsPath) -> Option<String> {
+    let s = path.to_str()?;
+    let bytes = s.as_bytes();
+    if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+        Some((bytes[0] as char).to_ascii_uppercase().to_string() + ":")
+    } else {
+        None
+    }
+}
+
+async fn eject_drive(
+    State(_state): State<SharedState>,
+    Json(req): Json<EjectRequest>,
+) -> Result<Json<BackupStartResponse>, (StatusCode, String)> {
+    let mount_path = PathBuf::from(req.mount_path);
+    let Some(device) = resolve_device_for_mount(&mount_path) else {
+        return Err((StatusCode::BAD_REQUEST, "device not found".to_string()));
+    };
+
+    do_eject(&device).await?;
 
     Ok(Json(BackupStartResponse {
         status: "ejected".to_string(),
@@ -1154,5 +1252,21 @@ mod tests {
         assert!(!host_allowed("evil.example:7878"));
         assert!(!host_allowed("127.0.0.1.evil.example"));
         assert!(!host_allowed(""));
+    }
+
+    #[test]
+    fn windows_drive_root_letter_validates() {
+        use super::windows_drive_root_letter;
+        use std::path::Path;
+        assert_eq!(
+            windows_drive_root_letter(Path::new("e:\\")),
+            Some("E:".to_string())
+        );
+        assert_eq!(
+            windows_drive_root_letter(Path::new("E:")),
+            Some("E:".to_string())
+        );
+        assert_eq!(windows_drive_root_letter(Path::new("/mnt/e")), None);
+        assert_eq!(windows_drive_root_letter(Path::new("")), None);
     }
 }

@@ -4,13 +4,14 @@
   },
   "productName": "Aegis",
   "version": "0.1.0",
-  "identifier": "com.aegis.app",
+  "identifier": "io.github.stcksmsh.aegis",
   "app": {
     "security": {
       "csp": "default-src 'self'; connect-src http://127.0.0.1:7878 ipc://localhost tauri://localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self';"
     },
     "windows": [
       {
+        "label": "main",
         "title": "Aegis",
         "width": 1280,
         "height": 900,
@@ -23,6 +24,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "publisher": "Aegis",
+    "shortDescription": "Security-first external USB backup",
+    "longDescription": "Aegis is a security-first external USB backup system built on restic, with automatic detection of attached backup drives.",
+    "category": "Utility",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": ["binaries/restic"]
   }
 }

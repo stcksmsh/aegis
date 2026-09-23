@@ -148,9 +148,59 @@ pub struct StubWatcher;
 
 #[cfg(not(target_os = "linux"))]
 impl StubWatcher {
-    pub async fn run(self, _state: SharedState) -> anyhow::Result<()> {
-        Ok(())
+    pub async fn run(self, state: SharedState) -> anyhow::Result<()> {
+        // Scan already-mounted removable volumes on startup.
+        scan_existing_mounts(&state).await;
+
+        let mut known: std::collections::HashSet<PathBuf> =
+            removable_mount_points().into_iter().collect();
+        loop {
+            sleep(Duration::from_secs(3)).await;
+            let current: std::collections::HashSet<PathBuf> =
+                removable_mount_points().into_iter().collect();
+            for mount in current.difference(&known) {
+                debug!("Removable volume appeared: {}", mount.display());
+                if let Err(err) = handle_added(&state, mount).await {
+                    error!("Handle add failed: {}", Redact::new(err));
+                }
+            }
+            for mount in known.difference(&current) {
+                debug!("Removable volume vanished: {}", mount.display());
+                if let Err(err) = handle_removed(&state, mount).await {
+                    error!("Handle remove failed: {}", Redact::new(err));
+                }
+            }
+            known = current;
+        }
     }
+}
+
+/// Removable, mounted volumes on non-Linux platforms (via `sysinfo`).
+#[cfg(not(target_os = "linux"))]
+fn removable_mount_points() -> Vec<PathBuf> {
+    use sysinfo::Disks;
+    let disks = Disks::new_with_refreshed_list();
+    disks
+        .list()
+        .iter()
+        .filter(|disk| is_removable_disk(disk))
+        .map(|disk| disk.mount_point().to_path_buf())
+        .collect()
+}
+
+/// sysinfo's `is_removable()` reports ejectable media; on macOS, external USB hard
+/// drives mounted under /Volumes are often not flagged removable, so treat any
+/// non-root volume mounted there as a candidate too.
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn is_removable_disk(disk: &sysinfo::Disk) -> bool {
+    if disk.is_removable() {
+        return true;
+    }
+    if cfg!(target_os = "macos") {
+        let mount = disk.mount_point();
+        return mount.starts_with("/Volumes/") && mount != std::path::Path::new("/");
+    }
+    false
 }
 
 async fn scan_existing_mounts(state: &SharedState) {
@@ -443,6 +493,7 @@ pub fn resolve_device_for_mount(mount: &Path) -> Option<PathBuf> {
     None
 }
 
+#[cfg(target_os = "linux")]
 fn mount_table() -> Vec<(PathBuf, PathBuf)> {
     let content = std::fs::read_to_string("/proc/mounts").unwrap_or_default();
     content
@@ -457,6 +508,15 @@ fn mount_table() -> Vec<(PathBuf, PathBuf)> {
                 PathBuf::from(unescape_mount(parts[1])),
             ))
         })
+        .collect()
+}
+
+/// Non-Linux has no devnode concept; the mount path doubles as the device identifier.
+#[cfg(not(target_os = "linux"))]
+fn mount_table() -> Vec<(PathBuf, PathBuf)> {
+    removable_mount_points()
+        .into_iter()
+        .map(|mount| (mount.clone(), mount))
         .collect()
 }
 

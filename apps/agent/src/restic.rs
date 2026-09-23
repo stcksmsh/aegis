@@ -85,13 +85,24 @@ impl Restic {
         }
 
         if let Ok(exe) = std::env::current_exe() {
-            if let Some(candidate) = exe
-                .parent()
-                .and_then(|p| p.parent())
-                .map(|p| p.join("resources").join("restic").join("restic"))
-            {
-                if candidate.exists() {
-                    return Ok(Self { binary: candidate });
+            if let Some(dir) = exe.parent() {
+                // Tauri sidecar: installed next to the main executable (also true for
+                // macOS .app bundles, which place externalBin in Contents/MacOS/).
+                let sidecar = dir.join(format!("restic{}", std::env::consts::EXE_SUFFIX));
+                if sidecar.exists() {
+                    return Ok(Self { binary: sidecar });
+                }
+
+                // Dev path: copied by apps/agent/build.rs from RESTIC_BUNDLE_PATH.
+                if let Some(dev_candidate) = dir
+                    .parent()
+                    .map(|p| p.join("resources").join("restic").join("restic"))
+                {
+                    if dev_candidate.exists() {
+                        return Ok(Self {
+                            binary: dev_candidate,
+                        });
+                    }
                 }
             }
         }

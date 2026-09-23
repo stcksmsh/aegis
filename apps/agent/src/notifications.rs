@@ -1,25 +1,17 @@
 //! Desktop notifications for backup events and trusted device detection.
-//! Uses `notify-send` on Linux when available; no-op otherwise.
+//! Uses `notify-rust` (Linux/macOS/Windows), fire-and-forget on a thread.
 
 /// Send a desktop notification (fire-and-forget). Does not block.
 pub fn notify(title: &str, body: &str) {
-    #[cfg(target_os = "linux")]
-    {
-        let title = title.to_string();
-        let body = body.to_string();
-        std::thread::spawn(move || {
-            let _ = std::process::Command::new("notify-send")
-                .args(["-a", "Aegis", &title, &body])
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status();
-        });
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = (title, body);
-    }
+    let title = title.to_string();
+    let body = body.to_string();
+    std::thread::spawn(move || {
+        let _ = notify_rust::Notification::new()
+            .appname("Aegis")
+            .summary(&title)
+            .body(&body)
+            .show();
+    });
 }
 
 pub fn notify_backup_started(drive_label: &str) {

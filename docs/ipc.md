@@ -10,6 +10,20 @@ Notes:
 - Passphrases are accepted only in-memory per request.
 - Sensitive paths are not returned by default.
 
+## Preflight
+`GET /v1/preflight`
+
+Reports what this computer can do, so the UI can gate actions without knowing about
+platform-specific tools. All fields are plain capability flags, not tool names.
+
+Response fields:
+- `restic`: boolean — restic binary is available
+- `can_list`: boolean — the agent can list removable drives
+- `can_mount`: boolean — the agent can mount a drive
+- `can_format`: boolean — the agent can format a drive as exFAT
+- `can_wipe`: boolean — the agent can securely wipe a drive (Linux only for now)
+- `platform`: `"linux" | "macos" | "windows"`
+
 ## Status
 `GET /v1/status`
 

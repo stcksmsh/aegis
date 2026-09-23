@@ -10,7 +10,8 @@ use tokio::sync::oneshot;
 fn expand_path(path: &str) -> PathBuf {
     let path = path.trim();
     if path.starts_with("~/") {
-        if let Some(home) = std::env::var_os("HOME") {
+        // USERPROFILE is the Windows equivalent of HOME.
+        if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
             return PathBuf::from(home).join(path.trim_start_matches("~/"));
         }
     }

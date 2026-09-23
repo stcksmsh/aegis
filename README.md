@@ -7,7 +7,13 @@ Status: early scaffolding. The agent builds and exposes an IPC API, but the UI i
 ## Dev Prereqs
 - Rust toolchain (stable)
 - restic available via PATH, or a bundled binary
-- Tauri v2 Linux deps (WebKitGTK 4.1 + JavaScriptCoreGtk 4.1 dev packages)
+- Tauri v2 Linux deps (WebKitGTK 4.1 + JavaScriptCoreGtk 4.1 dev packages, `libudev-dev`)
+- Before building `aegis-ui` (`cargo build -p aegis-ui`): fetch the restic sidecar Tauri
+  bundles as an external binary, or the build fails since `tauri-build` requires it to
+  exist:
+  ```
+  bash scripts/fetch-restic.sh <target-triple>   # e.g. x86_64-unknown-linux-gnu
+  ```
 
 ## Running the Agent
 
@@ -22,8 +28,9 @@ To run the agent as a long-lived service (e.g. so it detects USB drives and can 
 ## restic Resolution Order
 The agent looks for restic in this order:
 1. `restic_path` in the Aegis config
-2. Bundled binary at `resources/restic/restic` relative to the app
-3. `restic` in `PATH`
+2. The Tauri sidecar binary (`restic` / `restic.exe`) installed next to the running executable
+3. Bundled binary at `resources/restic/restic` relative to the app (dev builds)
+4. `restic` in `PATH`
 
 ### Bundling restic (dev)
 Place a restic binary at:

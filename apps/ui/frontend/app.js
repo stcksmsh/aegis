@@ -12,11 +12,11 @@ let partitionIndex = new Map();
 let selectedPartitionPath = null;
 let preflight = {
   restic: false,
-  lsblk: false,
-  udisksctl: false,
-  mkfs_exfat: false,
-  pkexec: false,
-  udisksctl_format: false,
+  can_list: false,
+  can_mount: false,
+  can_format: false,
+  can_wipe: false,
+  platform: "linux",
 };
 
 const views = Array.from(document.querySelectorAll(".view"));
@@ -906,22 +906,12 @@ function renderPreflight() {
     restic.className = `preflight-item ${preflight.restic ? "ok" : "warn"}`;
   }
   if (udisks) {
-    const ok = preflight.udisksctl && preflight.lsblk;
-    udisks.textContent = ok ? "Disk tools: ready" : "Disk tools: missing";
-    udisks.className = `preflight-item ${ok ? "ok" : "warn"}`;
+    udisks.textContent = preflight.can_mount ? "Drive tools: ready" : "Drive tools: unavailable";
+    udisks.className = `preflight-item ${preflight.can_mount ? "ok" : "warn"}`;
   }
   if (exfat) {
-    const ok = preflight.udisksctl_format || (preflight.mkfs_exfat && preflight.pkexec);
-    if (preflight.udisksctl_format) {
-      exfat.textContent = "exFAT formatter: ready (udisksctl)";
-    } else if (preflight.mkfs_exfat && preflight.pkexec) {
-      exfat.textContent = "exFAT formatter: ready (pkexec)";
-    } else if (preflight.mkfs_exfat) {
-      exfat.textContent = "exFAT formatter: needs pkexec";
-    } else {
-      exfat.textContent = "exFAT formatter: missing";
-    }
-    exfat.className = `preflight-item ${ok ? "ok" : "warn"}`;
+    exfat.textContent = preflight.can_format ? "exFAT formatting: ready" : "exFAT formatting: unavailable";
+    exfat.className = `preflight-item ${preflight.can_format ? "ok" : "warn"}`;
   }
   const setupRestic = document.getElementById("setup-drive-preflight-restic");
   const setupUdisks = document.getElementById("setup-drive-preflight-udisks");
@@ -931,23 +921,15 @@ function renderPreflight() {
     setupRestic.className = `preflight-item ${preflight.restic ? "ok" : "warn"}`;
   }
   if (setupUdisks) {
-    const ok = preflight.udisksctl && preflight.lsblk;
-    setupUdisks.textContent = ok ? "Disk tools: ready" : "Disk tools: missing";
-    setupUdisks.className = `preflight-item ${ok ? "ok" : "warn"}`;
+    setupUdisks.textContent = preflight.can_mount ? "Drive tools: ready" : "Drive tools: unavailable";
+    setupUdisks.className = `preflight-item ${preflight.can_mount ? "ok" : "warn"}`;
   }
   if (setupExfat) {
-    const ok = preflight.udisksctl_format || (preflight.mkfs_exfat && preflight.pkexec);
-    if (preflight.udisksctl_format) {
-      setupExfat.textContent = "exFAT formatter: ready (udisksctl)";
-    } else if (preflight.mkfs_exfat && preflight.pkexec) {
-      setupExfat.textContent = "exFAT formatter: ready (pkexec)";
-    } else if (preflight.mkfs_exfat) {
-      setupExfat.textContent = "exFAT formatter: needs pkexec";
-    } else {
-      setupExfat.textContent = "exFAT formatter: missing";
-    }
-    setupExfat.className = `preflight-item ${ok ? "ok" : "warn"}`;
+    setupExfat.textContent = preflight.can_format ? "exFAT formatting: ready" : "exFAT formatting: unavailable";
+    setupExfat.className = `preflight-item ${preflight.can_format ? "ok" : "warn"}`;
   }
+  const wipeOptions = document.querySelectorAll(".wipe-option");
+  wipeOptions.forEach((el) => el.classList.toggle("hidden", !preflight.can_wipe));
 }
 
 function updateSetupDriveActions() {
@@ -960,10 +942,8 @@ function updateSetupDriveActions() {
   const hasSelection = !!selection;
   const mounted = !!selection?.mountpoint;
   const hasFilesystem = !!selection?.partition?.fstype;
-  const canMount = agentOnline && preflight.udisksctl && preflight.lsblk;
-  const canFormat =
-    agentOnline &&
-    (preflight.udisksctl_format || (preflight.mkfs_exfat && preflight.pkexec));
+  const canMount = agentOnline && preflight.can_mount;
+  const canFormat = agentOnline && preflight.can_format;
   const canSetup = agentOnline && preflight.restic;
   const wantsErase = !!eraseOption?.checked;
 
@@ -978,8 +958,8 @@ function updateSetupDriveActions() {
     let message = "";
     if (!agentOnline) message = "Agent not connected.";
     else if (!hasSelection) message = "Select a partition to continue.";
-    else if (wantsErase && !canFormat) message = "Formatting requires udisksctl or exFAT tools.";
-    else if (!mounted && !canMount) message = "Mounting requires udisksctl.";
+    else if (wantsErase && !canFormat) message = "Aegis can't format drives on this computer.";
+    else if (!mounted && !canMount) message = "Aegis can't mount drives on this computer.";
     else if (!canSetup) message = "Restic is missing.";
     else if (!mounted && !wantsErase) message = "Mount the drive or enable erase & format.";
     else if (wantsErase && (erasePhrase?.value || "").trim() !== "ERASE") {
@@ -1004,10 +984,8 @@ function updateDeviceActions() {
   const hasSelection = !!selection;
   const mounted = !!selection?.mountpoint;
   const hasFilesystem = !!selection?.partition?.fstype;
-  const canMount = agentOnline && preflight.udisksctl && preflight.lsblk;
-  const canFormat =
-    agentOnline &&
-    (preflight.udisksctl_format || (preflight.mkfs_exfat && preflight.pkexec));
+  const canMount = agentOnline && preflight.can_mount;
+  const canFormat = agentOnline && preflight.can_format;
   const canSetup = agentOnline && preflight.restic;
   const wantsErase = !!eraseOption?.checked;
 
@@ -1020,7 +998,7 @@ function updateDeviceActions() {
       : mounted
       ? "Already mounted."
       : !canMount
-      ? "Mounting requires udisksctl + lsblk."
+      ? "Aegis can't mount drives on this computer."
       : "Mount the selected partition.";
   }
   if (setupButton) {
@@ -1032,9 +1010,9 @@ function updateDeviceActions() {
       : !hasFilesystem && !wantsErase
       ? "No filesystem detected. Enable erase & format."
       : !mounted && !canMount
-      ? "Mounting requires udisksctl + lsblk."
+      ? "Aegis can't mount drives on this computer."
       : wantsErase && !canFormat
-      ? "Formatting requires udisksctl + exFAT tools."
+      ? "Aegis can't format drives on this computer."
       : "Set up this drive.";
   }
 
@@ -1045,9 +1023,9 @@ function updateDeviceActions() {
     } else if (!hasSelection) {
       message = "Select a partition to continue.";
     } else if (wantsErase && !canFormat) {
-      message = "Formatting requires udisksctl + exFAT tools.";
+      message = "Aegis can't format drives on this computer.";
     } else if (!mounted && !canMount) {
-      message = "Mounting requires udisksctl.";
+      message = "Aegis can't mount drives on this computer.";
     } else if (!canSetup) {
       message = "Restic is missing.";
     } else if (!mounted && !wantsErase) {
@@ -1394,11 +1372,10 @@ async function setupDriveFromSelectionForAddDrive() {
     const wasWholeDisk = !!selection.partition._wholeDisk;
 
     if (shouldErase) {
-      const canFormat =
-        preflight.udisksctl_format || (preflight.mkfs_exfat && preflight.pkexec);
+      const canFormat = preflight.can_format;
       if (!canFormat) {
         uiAlert(
-          "Formatting requires udisksctl format support or mkfs.exfat + pkexec. Check the preflight panel."
+          "Aegis can't format drives on this computer. Format it as exFAT using your system's disk tool, then try again."
         );
         return;
       }
@@ -1450,8 +1427,8 @@ async function setupDriveFromSelectionForAddDrive() {
       }
 
       if (!mountPath) {
-        if (!preflight.udisksctl || !preflight.lsblk) {
-          uiAlert("Mounting requires udisksctl and lsblk. Check the preflight panel.");
+        if (!preflight.can_mount) {
+          uiAlert("Aegis can't mount drives on this computer.");
           return;
         }
         showLoadingOverlay("Mounting…");
@@ -1520,8 +1497,8 @@ async function mountSelectedPartition() {
       uiAlert("Select a drive first.");
       return;
     }
-    if (!preflight.udisksctl || !preflight.lsblk) {
-      uiAlert("Mounting requires udisksctl and lsblk. Check the preflight panel.");
+    if (!preflight.can_mount) {
+      uiAlert("Aegis can't mount drives on this computer.");
       return;
     }
     const res = await fetch(`${API}/drives/mount`, {
@@ -1566,11 +1543,10 @@ async function setupDriveFromSelection() {
     const wasWholeDisk = !!selection.partition._wholeDisk;
 
     if (shouldErase) {
-      const canFormat =
-        preflight.udisksctl_format || (preflight.mkfs_exfat && preflight.pkexec);
+      const canFormat = preflight.can_format;
       if (!canFormat) {
         uiAlert(
-          "Formatting requires udisksctl format support or mkfs.exfat + pkexec. Check the preflight panel."
+          "Aegis can't format drives on this computer. Format it as exFAT using your system's disk tool, then try again."
         );
         return false;
       }
@@ -1622,8 +1598,8 @@ async function setupDriveFromSelection() {
       }
 
       if (!mountPath) {
-        if (!preflight.udisksctl || !preflight.lsblk) {
-          uiAlert("Mounting requires udisksctl and lsblk. Check the preflight panel.");
+        if (!preflight.can_mount) {
+          uiAlert("Aegis can't mount drives on this computer.");
           return false;
         }
         showLoadingOverlay("Mounting…");

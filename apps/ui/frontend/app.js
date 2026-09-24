@@ -385,6 +385,10 @@ function formatLastBackup(epoch) {
   return d.toLocaleDateString();
 }
 
+function formatGB(bytes) {
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1);
+}
+
 function renderStatus(status) {
   const summaryText = document.getElementById("dashboard-summary-text");
   const summaryVerify = document.getElementById("dashboard-summary-verify");
@@ -459,6 +463,22 @@ function renderStatus(status) {
     driveDetectText = "Drive detected — not set up yet. Go to Add drive to set it up.";
   }
   driveDetectEls.forEach((el) => { el.textContent = driveDetectText; });
+
+  const driveSpaceEl = document.getElementById("dashboard-drive-space");
+  if (driveSpaceEl) {
+    const free = status.drive?.free_bytes;
+    const totalBytes = status.drive?.total_bytes;
+    if (status.drive?.connected && status.drive?.trusted && typeof free === "number" && typeof totalBytes === "number" && totalBytes > 0) {
+      const almostFull = free < totalBytes * 0.1;
+      driveSpaceEl.textContent = `${formatGB(free)} GB free of ${formatGB(totalBytes)} GB`;
+      driveSpaceEl.classList.toggle("drive-space-warning", almostFull);
+      driveSpaceEl.classList.remove("hidden");
+    } else {
+      driveSpaceEl.textContent = "";
+      driveSpaceEl.classList.add("hidden");
+      driveSpaceEl.classList.remove("drive-space-warning");
+    }
+  }
 
   const ctaHint = document.getElementById("dashboard-cta-hint");
   if (ctaHint) {
@@ -1059,11 +1079,15 @@ function syncConfigUI(status) {
   const deepVerify = document.getElementById("deep-verify");
   const remember = document.getElementById("remember-passphrase");
   const paranoid = document.getElementById("paranoid-mode");
+  const reminderDays = document.getElementById("reminder-days");
+  const backupIntervalHours = document.getElementById("backup-interval-hours");
   if (quickVerify) quickVerify.checked = !!config.quick_verify;
   if (autoBackup) autoBackup.checked = !!config.auto_backup_on_insert;
   if (deepVerify) deepVerify.checked = !!config.deep_verify;
   if (remember) remember.checked = !!config.remember_passphrase;
   if (paranoid) paranoid.checked = !!config.paranoid_mode;
+  if (reminderDays) reminderDays.value = config.reminder_days ?? 7;
+  if (backupIntervalHours) backupIntervalHours.value = config.backup_interval_hours ?? 0;
   if (status.first_run && remember && paranoid && !remember.checked && !paranoid.checked) {
     remember.checked = true;
   }
@@ -1266,6 +1290,8 @@ async function saveConfig() {
     auto_backup_on_insert: document.getElementById("auto-backup").checked,
     remember_passphrase: document.getElementById("remember-passphrase").checked,
     paranoid_mode: document.getElementById("paranoid-mode").checked,
+    reminder_days: parseInt(document.getElementById("reminder-days")?.value || "0", 10),
+    backup_interval_hours: parseInt(document.getElementById("backup-interval-hours")?.value || "0", 10),
   };
 
   const res = await fetch(`${API}/config`, {

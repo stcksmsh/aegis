@@ -103,6 +103,8 @@ struct ConfigSummary {
     auto_backup_on_insert: bool,
     remember_passphrase: bool,
     paranoid_mode: bool,
+    reminder_days: u32,
+    backup_interval_hours: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,6 +118,10 @@ struct ConfigUpdateRequest {
     auto_backup_on_insert: bool,
     remember_passphrase: bool,
     paranoid_mode: bool,
+    #[serde(default = "crate::config::default_reminder_days")]
+    reminder_days: u32,
+    #[serde(default)]
+    backup_interval_hours: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -370,6 +376,8 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
         auto_backup_on_insert: config.auto_backup_on_insert,
         remember_passphrase: config.remember_passphrase,
         paranoid_mode: config.paranoid_mode,
+        reminder_days: config.reminder_days,
+        backup_interval_hours: config.backup_interval_hours,
     };
     let current_drive_id = guard.drive_status.drive_id.as_ref();
     let trusted_drives: Vec<TrustedDriveSummary> = config
@@ -393,9 +401,18 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
             }
         })
         .collect();
+    let mut drive_status = guard.drive_status.clone();
+    if drive_status.connected && drive_status.trusted {
+        if let Some(ref mount) = drive_status.mount_path {
+            if let Some((free, total)) = crate::usb::disk_space_for_mount(FsPath::new(mount)) {
+                drive_status.free_bytes = Some(free);
+                drive_status.total_bytes = Some(total);
+            }
+        }
+    }
     Json(StatusResponse {
         first_run: config.is_first_run(),
-        drive: guard.drive_status.clone(),
+        drive: drive_status,
         last_run: guard.last_run.clone(),
         running: !guard.running_drive_ids.is_empty(),
         running_drive_ids: guard.running_drive_ids.iter().cloned().collect(),
@@ -427,6 +444,8 @@ async fn update_config(
     guard.config.auto_backup_on_insert = req.auto_backup_on_insert;
     guard.config.remember_passphrase = req.remember_passphrase;
     guard.config.paranoid_mode = req.paranoid_mode;
+    guard.config.reminder_days = req.reminder_days;
+    guard.config.backup_interval_hours = req.backup_interval_hours;
     guard.config.enforce_security_invariants();
 
     if guard.config.paranoid_mode {

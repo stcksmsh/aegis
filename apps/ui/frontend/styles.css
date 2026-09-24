@@ -405,6 +405,11 @@ h1 {
   flex-wrap: wrap;
 }
 
+.drive-space-warning {
+  color: #ff5e5e;
+  font-weight: 600;
+}
+
 .device-danger {
   margin-top: 16px;
   padding: 14px;

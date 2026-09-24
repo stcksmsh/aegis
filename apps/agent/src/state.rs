@@ -47,6 +47,9 @@ pub struct RunResult {
     pub repository_id: Option<String>,
     pub data_added: Option<u64>,
     pub files_processed: Option<u64>,
+    /// True if the drive had less than 10% free space after this backup.
+    #[serde(default)]
+    pub drive_almost_full: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +60,12 @@ pub struct DriveStatus {
     pub label: Option<String>,
     pub mount_path: Option<String>,
     pub devnode: Option<String>,
+    /// Free space on the drive's mount, in bytes (filled in when connected and trusted).
+    #[serde(default)]
+    pub free_bytes: Option<u64>,
+    /// Total capacity of the drive's mount, in bytes (filled in when connected and trusted).
+    #[serde(default)]
+    pub total_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,6 +85,9 @@ pub struct AgentRuntimeState {
     pub restore_drive_id: Option<String>,
     #[serde(skip)]
     pub restore_cancel_token: Option<CancellationToken>,
+    /// Epoch seconds a reminder notification was last sent for a drive (key = drive_id); avoids spamming.
+    #[serde(skip)]
+    pub reminder_last_sent: HashMap<String, u64>,
 }
 
 impl AgentRuntimeState {
@@ -89,6 +101,8 @@ impl AgentRuntimeState {
                 label: None,
                 mount_path: None,
                 devnode: None,
+                free_bytes: None,
+                total_bytes: None,
             },
             last_run: None,
             running_drive_ids: HashSet::new(),
@@ -96,6 +110,7 @@ impl AgentRuntimeState {
             running_cancel_tokens: HashMap::new(),
             restore_drive_id: None,
             restore_cancel_token: None,
+            reminder_last_sent: HashMap::new(),
         }
     }
 }

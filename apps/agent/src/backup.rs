@@ -251,12 +251,21 @@ pub async fn run_backup(
             repository_id,
             data_added: summary.data_added,
             files_processed: summary.files_processed,
+            drive_almost_full: false,
         })
     }
     .await;
 
     match outcome {
-        Ok(result) => {
+        Ok(mut result) => {
+            if result.status == RunStatus::Success {
+                if let Some((free, total)) = crate::usb::disk_space_for_mount(&mount_path) {
+                    if total > 0 && free < total / 10 {
+                        result.drive_almost_full = true;
+                        notifications::notify_drive_almost_full(&drive_label);
+                    }
+                }
+            }
             notifications::notify_backup_finished(
                 &drive_label,
                 result.status == RunStatus::Success,
@@ -297,6 +306,7 @@ pub async fn run_backup(
                 repository_id: None,
                 data_added: None,
                 files_processed: None,
+                drive_almost_full: false,
             };
             notifications::notify_backup_finished(&drive_label, false, result.interrupted);
             let mut guard = state.write().await;
@@ -363,6 +373,7 @@ async fn set_phase(
         repository_id: None,
         data_added: None,
         files_processed: None,
+        drive_almost_full: false,
     });
 }
 

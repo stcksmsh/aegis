@@ -223,6 +223,7 @@
               <p class="backup-progress-text muted" id="backup-progress-text"></p>
             </div>
             <p class="muted drive-detect-message">Waiting for drive…</p>
+            <p class="muted hidden" id="dashboard-drive-space"></p>
 
             <div class="backup-targets" id="backup-targets-section">
               <h2 class="step-label">Your drives</h2>
@@ -275,6 +276,14 @@
             <label class="checkbox">
               <input id="autostart" type="checkbox" /> Start Aegis when I log in (needed for automatic backups)
             </label>
+            <div class="field">
+              <label>Remind me to back up after this many days (0 = never)</label>
+              <input id="reminder-days" type="number" min="0" placeholder="7" />
+            </div>
+            <div class="field">
+              <label>While the drive stays plugged in, back up again every N hours (0 = only when plugged in)</label>
+              <input id="backup-interval-hours" type="number" min="0" placeholder="0" />
+            </div>
             <button class="btn primary" id="save-settings">Save settings</button>
           </div>
         </section>

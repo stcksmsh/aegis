@@ -400,22 +400,30 @@ async fn handle_removed(state: &SharedState, devnode: &Path) -> anyhow::Result<(
                 repository_id: None,
                 data_added: None,
                 files_processed: None,
+                drive_almost_full: false,
             });
         }
     }
     Ok(())
 }
 
-async fn attempt_auto_backup(state: &SharedState, drive_id: &str, mount_path: &Path) {
+pub(crate) async fn attempt_auto_backup(state: &SharedState, drive_id: &str, mount_path: &Path) {
+    let config = { state.read().await.config.clone() };
+    if !config.auto_backup_on_insert {
+        return;
+    }
+    start_backup_if_eligible(state, drive_id, mount_path).await;
+}
+
+/// Starts a backup for `drive_id` if none is already running, paranoid mode is off, and a
+/// stored passphrase is available. Shared by auto-backup-on-insert and the periodic-while-plugged-in check.
+async fn start_backup_if_eligible(state: &SharedState, drive_id: &str, mount_path: &Path) {
     let config = { state.read().await.config.clone() };
     {
         let guard = state.read().await;
         if guard.running_drive_ids.contains(drive_id) {
             return;
         }
-    }
-    if !config.auto_backup_on_insert {
-        return;
     }
     if config.paranoid_mode {
         info!("Paranoid mode enabled; waiting for manual passphrase entry");
@@ -634,4 +642,177 @@ fn now_epoch() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+const SECS_PER_DAY: u64 = 86_400;
+const SECS_PER_HOUR: u64 = 3_600;
+
+/// True if a "time to back up" reminder should fire now: the drive has backed up before
+/// but not in `reminder_days`, and we haven't reminded about it in the last 24h.
+/// Never backed up (no last_backup) or reminders off (reminder_days == 0) => never due.
+pub(crate) fn reminder_due(
+    now: u64,
+    last_backup: Option<u64>,
+    reminder_days: u32,
+    last_reminded: Option<u64>,
+) -> bool {
+    if reminder_days == 0 {
+        return false;
+    }
+    let Some(last_backup) = last_backup else {
+        return false;
+    };
+    if now.saturating_sub(last_backup) < reminder_days as u64 * SECS_PER_DAY {
+        return false;
+    }
+    match last_reminded {
+        Some(last) => now.saturating_sub(last) >= SECS_PER_DAY,
+        None => true,
+    }
+}
+
+/// True if a periodic backup is due for a drive that's currently plugged in:
+/// interval is on and the last backup (or never having backed up) is older than the interval.
+pub(crate) fn interval_due(now: u64, last_backup: Option<u64>, interval_hours: u32) -> bool {
+    if interval_hours == 0 {
+        return false;
+    }
+    match last_backup {
+        Some(last) => now.saturating_sub(last) >= interval_hours as u64 * SECS_PER_HOUR,
+        None => true,
+    }
+}
+
+/// (free_bytes, total_bytes) for the filesystem mounted at or containing `mount_path`, if found.
+pub(crate) fn disk_space_for_mount(mount_path: &Path) -> Option<(u64, u64)> {
+    use sysinfo::Disks;
+    let canon = std::fs::canonicalize(mount_path).ok();
+    let target = canon.as_deref().unwrap_or(mount_path);
+    let disks = Disks::new_with_refreshed_list();
+    disks
+        .list()
+        .iter()
+        .filter(|disk| target.starts_with(disk.mount_point()))
+        .max_by_key(|disk| disk.mount_point().as_os_str().len())
+        .map(|disk| (disk.available_space(), disk.total_space()))
+}
+
+/// Checks every trusted drive once: reminds about ones that are overdue and disconnected,
+/// and starts a backup for the connected one if the plugged-in backup interval is due.
+/// Run hourly from `run()`.
+pub(crate) async fn run_periodic_checks(state: SharedState) {
+    loop {
+        sleep(Duration::from_secs(SECS_PER_HOUR)).await;
+        check_reminders_and_intervals(&state).await;
+    }
+}
+
+async fn check_reminders_and_intervals(state: &SharedState) {
+    let now = now_epoch();
+    let (config, connected_drive_id, mount_path) = {
+        let guard = state.read().await;
+        (
+            guard.config.clone(),
+            guard.drive_status.drive_id.clone(),
+            guard.drive_status.mount_path.clone(),
+        )
+    };
+
+    for (drive_id, drive) in &config.trusted_drives {
+        let is_connected =
+            connected_drive_id.as_deref() == Some(drive_id.as_str()) && mount_path.is_some();
+        if is_connected {
+            if let Some(mount) = &mount_path {
+                if interval_due(now, drive.last_backup_epoch, config.backup_interval_hours) {
+                    start_backup_if_eligible(state, drive_id, Path::new(mount)).await;
+                }
+            }
+            continue;
+        }
+        let last_reminded = { state.read().await.reminder_last_sent.get(drive_id).copied() };
+        if reminder_due(
+            now,
+            drive.last_backup_epoch,
+            config.reminder_days,
+            last_reminded,
+        ) {
+            let label = drive.label.clone().unwrap_or_else(|| "drive".to_string());
+            let days = drive
+                .last_backup_epoch
+                .map(|last| now.saturating_sub(last) / SECS_PER_DAY)
+                .unwrap_or(0);
+            crate::notifications::notify_backup_reminder(&label, days);
+            state
+                .write()
+                .await
+                .reminder_last_sent
+                .insert(drive_id.clone(), now);
+        }
+    }
+}
+
+#[cfg(test)]
+mod reminder_tests {
+    use super::*;
+
+    #[test]
+    fn reminder_off_never_due() {
+        assert!(!reminder_due(1_000_000, Some(0), 0, None));
+    }
+
+    #[test]
+    fn reminder_not_due_before_threshold() {
+        let now = 10 * SECS_PER_DAY;
+        // last backup 5 days ago, reminder set to 7 days
+        assert!(!reminder_due(now, Some(now - 5 * SECS_PER_DAY), 7, None));
+    }
+
+    #[test]
+    fn reminder_due_after_threshold_never_reminded() {
+        let now = 10 * SECS_PER_DAY;
+        assert!(reminder_due(now, Some(now - 8 * SECS_PER_DAY), 7, None));
+    }
+
+    #[test]
+    fn reminder_never_backed_up_is_skipped() {
+        assert!(!reminder_due(10 * SECS_PER_DAY, None, 7, None));
+    }
+
+    #[test]
+    fn reminder_not_repeated_within_24h() {
+        let now = 10 * SECS_PER_DAY;
+        let last_backup = Some(now - 8 * SECS_PER_DAY);
+        let last_reminded = Some(now - 3600); // 1h ago
+        assert!(!reminder_due(now, last_backup, 7, last_reminded));
+    }
+
+    #[test]
+    fn reminder_repeats_after_24h() {
+        let now = 10 * SECS_PER_DAY;
+        let last_backup = Some(now - 8 * SECS_PER_DAY);
+        let last_reminded = Some(now - SECS_PER_DAY - 1);
+        assert!(reminder_due(now, last_backup, 7, last_reminded));
+    }
+
+    #[test]
+    fn interval_off_never_due() {
+        assert!(!interval_due(1_000_000, Some(0), 0));
+    }
+
+    #[test]
+    fn interval_not_due_before_threshold() {
+        let now = 10 * SECS_PER_HOUR;
+        assert!(!interval_due(now, Some(now - 2 * SECS_PER_HOUR), 6));
+    }
+
+    #[test]
+    fn interval_due_after_threshold() {
+        let now = 10 * SECS_PER_HOUR;
+        assert!(interval_due(now, Some(now - 7 * SECS_PER_HOUR), 6));
+    }
+
+    #[test]
+    fn interval_due_when_never_backed_up() {
+        assert!(interval_due(10 * SECS_PER_HOUR, None, 6));
+    }
 }

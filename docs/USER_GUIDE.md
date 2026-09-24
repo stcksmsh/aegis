@@ -18,6 +18,8 @@ Not sure which Mac you have? Apple menu → **About This Mac**. "Chip: Apple M�
 
 Nothing else to install. Aegis includes everything it needs.
 
+**Mac:** the first time Aegis backs up, macOS asks whether Aegis may access your Documents, Desktop, or removable drives. Click **Allow**, or those folders can't be backed up. Changed your mind? System Settings → Privacy & Security → Files and Folders → Aegis.
+
 ## 2. First setup (about 2 minutes)
 
 1. Open Aegis. The welcome wizard starts.

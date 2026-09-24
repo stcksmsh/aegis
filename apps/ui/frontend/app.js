@@ -556,7 +556,10 @@ function renderBackupTargets(trustedDrives, status) {
       .filter(Boolean)
   );
   list.innerHTML = "";
-  if (!Array.isArray(trustedDrives) || trustedDrives.length === 0) {
+  const noDrives = !Array.isArray(trustedDrives) || trustedDrives.length === 0;
+  // Nothing to back up to yet: hide drive actions instead of showing them disabled.
+  document.getElementById("backup-now")?.closest(".actions")?.classList.toggle("no-drives", noDrives);
+  if (noDrives) {
     empty.classList.remove("hidden");
     return;
   }

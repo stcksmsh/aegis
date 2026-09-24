@@ -1161,3 +1161,9 @@ body.setup-loading .device-danger {
   transform: none;
   box-shadow: none;
 }
+
+.actions.no-drives #backup-now,
+.actions.no-drives #restore-btn,
+.actions.no-drives #eject-btn {
+  display: none;
+}

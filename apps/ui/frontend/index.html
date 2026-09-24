@@ -252,11 +252,19 @@
             </div>
             <div class="snapshot-list" id="snapshot-list"></div>
             <div class="muted" id="snapshot-summary"></div>
+            <div class="browse-section hidden" id="browse-section">
+              <label>Get back just some files (optional)</label>
+              <p class="muted">Check the files or folders you want. Leave everything unchecked to get the whole backup.</p>
+              <ul class="browse-list" id="browse-tree" role="tree" aria-label="Backup contents"></ul>
+            </div>
             <div class="field">
               <label>Restore to folder</label>
               <input id="restore-target" type="text" placeholder="Choose an empty folder" />
             </div>
-            <button class="btn primary" id="restore-run">Restore selected</button>
+            <div class="field-row">
+              <button class="btn primary" id="restore-run">Restore everything</button>
+              <button class="btn secondary" id="restore-selected-run">Restore selected</button>
+            </div>
           </div>
         </section>
 

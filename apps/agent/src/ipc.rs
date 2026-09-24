@@ -177,6 +177,20 @@ struct SnapshotStatsResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct BrowseRequest {
+    drive_id: String,
+    snapshot_id: String,
+    /// Snapshot-internal path to list; absent/empty lists the backup's top-level folders.
+    path: Option<String>,
+    passphrase: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct BrowseResponse {
+    entries: Vec<crate::restic::BrowseEntry>,
+}
+
+#[derive(Debug, Deserialize)]
 struct RestoreRequest {
     drive_id: String,
     snapshot_id: String,
@@ -287,6 +301,7 @@ pub async fn serve(listener: tokio::net::TcpListener, state: SharedState) -> any
         .route("/v1/backup/run", post(start_backup))
         .route("/v1/snapshots", post(list_snapshots))
         .route("/v1/snapshots/stats", post(snapshot_stats))
+        .route("/v1/snapshots/browse", post(browse_snapshot))
         .route("/v1/restore", post(restore_snapshot))
         .route("/v1/recovery-kit", post(export_recovery))
         .route("/v1/drives/eject", post(eject_drive))
@@ -1009,6 +1024,57 @@ async fn snapshot_stats(
         total_size: stats.total_size,
         total_file_count: stats.total_file_count,
     }))
+}
+
+async fn browse_snapshot(
+    State(state): State<SharedState>,
+    Json(req): Json<BrowseRequest>,
+) -> Result<Json<BrowseResponse>, (StatusCode, String)> {
+    let config = { state.read().await.config.clone() };
+    let drive = config
+        .trusted_drives
+        .get(&req.drive_id)
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                "This drive isn't set up in Aegis on this computer.".to_string(),
+            )
+        })?
+        .clone();
+
+    let mount_path = ensure_mounted_drive(&state, &req.drive_id).await?;
+    let passphrase = resolve_passphrase(&config, &req.drive_id, req.passphrase)?;
+
+    let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Backup engine missing. Please reinstall Aegis.".to_string(),
+        )
+    })?;
+    let repo_path = PathBuf::from(mount_path).join(&drive.repository_path);
+
+    let dir = match req.path.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        Some(p) => p.to_string(),
+        None => {
+            let snapshots = restic
+                .snapshots(&repo_path, &passphrase)
+                .await
+                .map_err(|e| restic_err(e, "Could not read backups from this drive."))?;
+            let snapshot_paths = snapshots
+                .into_iter()
+                .find(|s| s.id == req.snapshot_id || s.id.starts_with(&req.snapshot_id))
+                .map(|s| s.paths)
+                .unwrap_or_default();
+            Restic::browse_root(&snapshot_paths)
+        }
+    };
+
+    let entries = restic
+        .ls_dir(&repo_path, &passphrase, &req.snapshot_id, &dir)
+        .await
+        .map_err(|e| restic_err(e, "Could not read the contents of this backup."))?;
+
+    Ok(Json(BrowseResponse { entries }))
 }
 
 async fn restore_snapshot(

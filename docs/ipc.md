@@ -132,8 +132,42 @@ Response:
 {"total_size": 0, "total_file_count": 0}
 ```
 
+## Browse Snapshot
+`POST /v1/snapshots/browse`
+
+Lists one directory level inside a snapshot (not the whole tree), so the UI can build an
+expandable folder view. Omit `path` (or send `null`/`""`) to list the top level, which is
+the backed-up folders' common parent (e.g. shows "Documents", "Pictures", ...) rather than
+the whole filesystem root. Pass a `path` from a previous response's `entries[].path` to list
+that folder's contents.
+
+Request:
+```
+{
+  "drive_id": "...",
+  "snapshot_id": "...",
+  "path": null,
+  "passphrase": "..."
+}
+```
+
+Response:
+```
+{
+  "entries": [
+    {"name": "Documents", "path": "/home/user/Documents", "type": "dir", "size": null, "mtime": null},
+    {"name": "notes.txt", "path": "/home/user/notes.txt", "type": "file", "size": 1234, "mtime": "2026-01-01T00:00:00Z"}
+  ]
+}
+```
+
 ## Restore
 `POST /v1/restore`
+
+`include_paths` entries are full snapshot-internal paths as returned by the browse API
+(`entries[].path`), for files and/or folders. Leave `include_paths` empty to restore
+everything. Either way, files land relative to the backed-up folders' common parent (e.g.
+`<target_path>/Documents/notes.txt`, not `<target_path>/home/user/Documents/notes.txt`).
 
 Request:
 ```

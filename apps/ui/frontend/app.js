@@ -131,6 +131,7 @@ function updateActionState(status) {
   setDisabled("restore-btn", !canOperate || !trusted);
   setDisabled("load-snapshots", !canOperate || !trusted);
   setDisabled("restore-run", !canOperate || !trusted);
+  setDisabled("restore-selected-run", !canOperate || !trusted);
   setDisabled("eject-btn", !agentOnline || !driveConnected);
   setDisabled("export-recovery", !agentOnline || !trusted);
   const setupThisDriveBtn = document.getElementById("setup-this-drive-btn");
@@ -1728,6 +1729,7 @@ async function loadSnapshots() {
   const data = await res.json();
   const list = document.getElementById("snapshot-list");
   list.innerHTML = "";
+  browseTreeReset();
   data.snapshots.forEach((snap) => {
     const item = document.createElement("div");
     item.className = "snapshot-item";
@@ -1736,7 +1738,10 @@ async function loadSnapshots() {
     radio.type = "radio";
     radio.name = "snapshot";
     radio.value = snap.id;
-    radio.addEventListener("change", () => fetchSnapshotStats(snap.id));
+    radio.addEventListener("change", () => {
+      fetchSnapshotStats(snap.id);
+      loadBrowseTree(snap.id);
+    });
     label.appendChild(radio);
     const span = document.createElement("span");
     span.textContent = `Backup from ${new Date(snap.time).toLocaleString()}`;
@@ -1746,7 +1751,145 @@ async function loadSnapshots() {
   });
 }
 
-async function restoreSnapshot() {
+// Paths (as returned by the browse API) the user has checked for a selective restore.
+let browseSelectedPaths = new Set();
+let browseSnapshotId = null;
+
+function browseTreeReset() {
+  browseSelectedPaths = new Set();
+  browseSnapshotId = null;
+  const tree = document.getElementById("browse-tree");
+  if (tree) tree.innerHTML = "";
+  const section = document.getElementById("browse-section");
+  if (section) section.classList.add("hidden");
+}
+
+async function fetchBrowseEntries(snapshotId, path) {
+  let payload = { drive_id: currentStatus.drive.drive_id, snapshot_id: snapshotId, path: path || null, passphrase: null };
+  let res = await fetch(`${API}/snapshots/browse`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const passphrase = await requestPassphrase("Enter your passphrase to browse this backup.");
+    if (!passphrase) return null;
+    payload.passphrase = passphrase;
+    res = await fetch(`${API}/snapshots/browse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+  if (!res.ok) {
+    uiAlert("Couldn't read the contents of this backup.");
+    return null;
+  }
+  return (await res.json()).entries;
+}
+
+async function loadBrowseTree(snapshotId) {
+  browseSelectedPaths = new Set();
+  browseSnapshotId = snapshotId;
+  const tree = document.getElementById("browse-tree");
+  const section = document.getElementById("browse-section");
+  if (!tree || !section) return;
+  section.classList.remove("hidden");
+  await loadBrowseChildren(null, tree);
+}
+
+async function loadBrowseChildren(path, listEl) {
+  listEl.innerHTML = "";
+  const loading = document.createElement("li");
+  loading.className = "muted";
+  loading.textContent = "Loading…";
+  listEl.appendChild(loading);
+  const entries = await fetchBrowseEntries(browseSnapshotId, path);
+  listEl.innerHTML = "";
+  if (!entries) return;
+  if (entries.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "muted";
+    empty.textContent = "(nothing here)";
+    listEl.appendChild(empty);
+    return;
+  }
+  entries.forEach((entry) => listEl.appendChild(buildBrowseNode(entry)));
+}
+
+function buildBrowseNode(entry) {
+  const li = document.createElement("li");
+  li.className = "browse-node";
+  const row = document.createElement("div");
+  row.className = "browse-row";
+  const isDir = entry.type === "dir";
+
+  let toggle = null;
+  if (isDir) {
+    toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "browse-toggle";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.textContent = "▸";
+    toggle.setAttribute("aria-label", `Show contents of ${entry.name}`);
+    row.appendChild(toggle);
+  } else {
+    const spacer = document.createElement("span");
+    spacer.className = "browse-toggle-spacer";
+    row.appendChild(spacer);
+  }
+
+  const checkboxId = `browse-cb-${Math.random().toString(36).slice(2)}`;
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.id = checkboxId;
+  checkbox.addEventListener("change", () => {
+    if (checkbox.checked) browseSelectedPaths.add(entry.path);
+    else browseSelectedPaths.delete(entry.path);
+  });
+  row.appendChild(checkbox);
+
+  const label = document.createElement("label");
+  label.htmlFor = checkboxId;
+  label.textContent = entry.name;
+  row.appendChild(label);
+
+  if (!isDir && typeof entry.size === "number") {
+    const size = document.createElement("span");
+    size.className = "muted browse-size";
+    size.textContent = formatBytes(entry.size);
+    row.appendChild(size);
+  }
+
+  li.appendChild(row);
+
+  if (isDir) {
+    const childList = document.createElement("ul");
+    childList.className = "browse-list browse-children hidden";
+    li.appendChild(childList);
+    let loaded = false;
+    toggle.addEventListener("click", async () => {
+      const expanded = toggle.getAttribute("aria-expanded") === "true";
+      if (expanded) {
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.textContent = "▸";
+        childList.classList.add("hidden");
+        return;
+      }
+      toggle.setAttribute("aria-expanded", "true");
+      toggle.textContent = "▾";
+      childList.classList.remove("hidden");
+      if (!loaded) {
+        loaded = true;
+        await loadBrowseChildren(entry.path, childList);
+      }
+    });
+  }
+
+  return li;
+}
+
+async function runRestore(includePaths, confirmMessage) {
   const selected = document.querySelector("input[name='snapshot']:checked");
   if (!selected) {
     uiAlert("Select a backup first.");
@@ -1761,7 +1904,7 @@ async function restoreSnapshot() {
     uiAlert("Choose a restore folder.");
     return;
   }
-  if (!confirm("Restore files to a new folder? Aegis will not overwrite existing files.")) {
+  if (!confirm(confirmMessage)) {
     return;
   }
 
@@ -1769,7 +1912,7 @@ async function restoreSnapshot() {
     drive_id: currentStatus.drive.drive_id,
     snapshot_id: selected.value,
     target_path: target,
-    include_paths: [],
+    include_paths: includePaths,
     passphrase: null,
   };
 
@@ -1795,6 +1938,21 @@ async function restoreSnapshot() {
   } else {
     uiAlert("Restore failed. Please try again.");
   }
+}
+
+function restoreSnapshot() {
+  return runRestore([], "Restore all files to a new folder? Aegis will not overwrite existing files.");
+}
+
+function restoreSelected() {
+  if (browseSelectedPaths.size === 0) {
+    uiAlert('Check at least one file or folder first, or use "Restore everything".');
+    return;
+  }
+  return runRestore(
+    Array.from(browseSelectedPaths),
+    "Restore the checked files to a new folder? Aegis will not overwrite existing files."
+  );
 }
 
 async function fetchSnapshotStats(snapshotId) {
@@ -2064,6 +2222,7 @@ function setupListeners() {
 
   document.getElementById("load-snapshots").addEventListener("click", loadSnapshots);
   document.getElementById("restore-run").addEventListener("click", restoreSnapshot);
+  document.getElementById("restore-selected-run").addEventListener("click", restoreSelected);
 
   document.getElementById("save-settings").addEventListener("click", saveConfig);
   initAutostartToggle();

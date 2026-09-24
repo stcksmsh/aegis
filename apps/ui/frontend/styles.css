@@ -768,6 +768,71 @@ h1 {
   color: var(--muted);
 }
 
+.browse-section {
+  margin-top: 16px;
+}
+
+.browse-section > p {
+  margin: 4px 0 8px;
+  font-size: 0.9em;
+}
+
+.browse-list {
+  list-style: none;
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.browse-list.browse-children {
+  margin-top: 4px;
+}
+
+#browse-tree.browse-list {
+  padding-left: 0;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.browse-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.browse-toggle {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  width: 18px;
+  padding: 0;
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.browse-toggle-spacer {
+  display: inline-block;
+  width: 18px;
+}
+
+.browse-row label {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.browse-size {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
 .modal {
   position: fixed;
   inset: 0;

@@ -93,3 +93,88 @@ jobs:
             target/release/bundle/**/*-setup.exe
             target/release/bundle/**/*.dmg
           if-no-files-found: error
+
+  # Full backup → browse → restore flow against a virtual drive on each OS.
+  e2e:
+    name: E2E (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libudev (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-e2e-
+
+      - name: Build agent + bundle restic next to it
+        shell: bash
+        run: |
+          cargo build -p aegis-agent --release
+          bash scripts/fetch-restic.sh ${{ matrix.target }}
+          ext=""; [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
+          cp apps/ui/src-tauri/binaries/aegis-restic-${{ matrix.target }}$ext target/release/aegis-restic$ext
+
+      - name: Create virtual drive (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          truncate -s 300M "$RUNNER_TEMP/drive.img"
+          mkfs.ext4 -q -F "$RUNNER_TEMP/drive.img"
+          mkdir -p "$RUNNER_TEMP/drive"
+          sudo mount -o loop "$RUNNER_TEMP/drive.img" "$RUNNER_TEMP/drive"
+          sudo chown "$USER" "$RUNNER_TEMP/drive"
+          echo "DRIVE=$RUNNER_TEMP/drive" >> "$GITHUB_ENV"
+
+      - name: Create virtual drive (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil create -size 300m -fs ExFAT -volname AEGISE2E -type UDIF "$RUNNER_TEMP/drive.dmg"
+          hdiutil attach "$RUNNER_TEMP/drive.dmg"
+          echo "DRIVE=/Volumes/AEGISE2E" >> "$GITHUB_ENV"
+          echo "E2E_ARGS=--eject" >> "$GITHUB_ENV"
+
+      - name: Create virtual drive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vhd = "$env:RUNNER_TEMP\drive.vhdx"
+          @"
+          create vdisk file="$vhd" maximum=300 type=expandable
+          attach vdisk
+          create partition primary
+          format fs=exfat quick label=AEGISE2E
+          assign letter=R
+          "@ | Set-Content -Encoding ascii "$env:RUNNER_TEMP\dp.txt"
+          diskpart /s "$env:RUNNER_TEMP\dp.txt"
+          "DRIVE=R:\" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Run E2E
+        shell: bash
+        run: |
+          target/release/aegis-agent > "$RUNNER_TEMP/agent.log" 2>&1 &
+          python tests/e2e.py "$DRIVE" $E2E_ARGS || { echo "::group::agent log"; cat "$RUNNER_TEMP/agent.log"; echo "::endgroup::"; exit 1; }

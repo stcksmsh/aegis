@@ -32,6 +32,15 @@ cargo check -p aegis-agent --target x86_64-pc-windows-gnu
 cargo check -p aegis-agent --target x86_64-apple-darwin
 ```
 
+End-to-end test (real backup → browse → restore against a mounted drive; CI runs it on Linux, Windows and macOS with virtual drives):
+
+```bash
+cargo build -p aegis-agent --release
+cp apps/ui/src-tauri/binaries/aegis-restic-<triple> target/release/aegis-restic
+target/release/aegis-agent &
+python3 tests/e2e.py <drive mount path> [--eject]
+```
+
 Manual USB flow: [docs/usb-testing.md](docs/usb-testing.md). API: [docs/ipc.md](docs/ipc.md).
 
 ## Release

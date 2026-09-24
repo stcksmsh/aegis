@@ -57,6 +57,16 @@
   }
   checkForUpdate();
 
+  // Version line at the bottom of Settings, for bug reports.
+  tauri.app.getVersion().then((v) => {
+    const panel = document.querySelector("#settings .panel");
+    if (!panel) return;
+    const p = document.createElement("p");
+    p.className = "muted";
+    p.textContent = `Aegis ${v}`;
+    panel.append(p);
+  }).catch(() => {});
+
   const recovery = document.getElementById("export-recovery")?.closest(".field");
   if (recovery) {
     const field = document.createElement("div");

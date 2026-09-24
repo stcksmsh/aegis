@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: User guide
+    url: https://github.com/stcksmsh/aegis/blob/master/docs/USER_GUIDE.md
+    about: Setup, restoring files, and common problems.
+  - name: Report a security problem
+    url: https://github.com/stcksmsh/aegis/security/advisories/new
+    about: Please report security issues privately.

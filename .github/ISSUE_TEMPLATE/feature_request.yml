@@ -1,0 +1,14 @@
+name: Idea or request
+description: Suggest something that would make Aegis better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Aegis to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help you?

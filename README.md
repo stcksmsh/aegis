@@ -1,5 +1,10 @@
 # Aegis
 
+[![CI](https://github.com/stcksmsh/aegis/actions/workflows/ci.yml/badge.svg)](https://github.com/stcksmsh/aegis/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/stcksmsh/aegis?label=download)](https://github.com/stcksmsh/aegis/releases/latest)
+![Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)
+[![License](https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-blue)](#for-developers)
+
 **Encrypted backups to a USB drive. Plug in → backed up.**
 
 Aegis copies your important folders to a USB drive and locks them with a passphrase only you know. If your laptop dies, gets stolen, or gets hit by ransomware, plug the drive into any computer and get your files back. If someone steals the drive, they get nothing.
@@ -32,7 +37,7 @@ First launch shows a warning because the app isn't signed by Apple/Microsoft yet
 
 Restore: open Aegis → **Restore** → pick a date → pick a folder. New computer? Install Aegis, plug in the drive, type your passphrase.
 
-Full walkthrough: **[User Guide](docs/USER_GUIDE.md)**.
+Full walkthrough: **[User Guide](docs/USER_GUIDE.md)** · all docs: **[docs/](docs/README.md)**.
 
 ## What you get
 
@@ -62,5 +67,6 @@ cargo run -p aegis-ui                                    # desktop app with embe
 - [docs/ipc.md](docs/ipc.md) — local API
 - [docs/AGENT_SERVICE.md](docs/AGENT_SERVICE.md) — run the agent headless as a service (optional)
 - [CHANGELOG.md](CHANGELOG.md)
+- [SECURITY.md](SECURITY.md) — how Aegis protects your data; reporting vulnerabilities
 
 Rust + [Tauri](https://tauri.app), backups by [restic](https://restic.net). License: [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE).

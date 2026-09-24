@@ -1,0 +1,36 @@
+name: Something isn't working
+description: Report a problem with Aegis
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping! Please never paste your passphrase here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Your computer
+      options: [Windows, Mac (Apple chip), Mac (Intel), Linux]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Aegis version
+      description: Shown at the bottom of Settings (e.g. 0.2.0).
+  - type: dropdown
+    id: drive
+    attributes:
+      label: Drive type
+      options: [USB stick, USB hard drive / SSD, SD card, Other / not sure]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log file (optional)
+      description: In Aegis go to Advanced → Open log files and attach the newest file. Logs never contain your passphrase.

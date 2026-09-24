@@ -22,6 +22,8 @@ Nothing else to install. Aegis includes everything it needs.
 
 ## 2. First setup (about 2 minutes)
 
+![Welcome wizard](images/welcome.png)
+
 1. Open Aegis. The welcome wizard starts.
 2. **Pick folders** to protect (Documents, Pictures, Desktop, or your own).
 3. **Choose a passphrase.** Write it down on paper and keep it somewhere safe.
@@ -30,6 +32,8 @@ Nothing else to install. Aegis includes everything it needs.
 5. Click **Run first backup now**. The first backup takes longest; later ones only copy what changed.
 
 ## 3. Everyday use
+
+![Dashboard](images/dashboard.png)
 
 - **Plug in your drive → backup starts automatically** (if "Remember on this computer" is on). Otherwise open Aegis and click **Back up now**.
 - Closing the window keeps Aegis running in the tray / menu bar so it can notice your drive. To stop it fully: tray icon → **Quit Aegis**.

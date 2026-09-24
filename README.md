@@ -9,7 +9,7 @@
 
 Aegis copies your important folders to a USB drive and locks them with a passphrase only you know. If your laptop dies, gets stolen, or gets hit by ransomware, plug the drive into any computer and get your files back. If someone steals the drive, they get nothing.
 
-![Aegis dashboard](docs/images/dashboard.png)
+![Aegis demo: set a passphrase, back up, restore two files](docs/images/demo.gif)
 
 ## Download
 

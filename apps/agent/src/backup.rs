@@ -317,20 +317,21 @@ pub async fn run_backup(
 }
 
 fn expand_sources(config: &AgentConfig, drive_id: &str) -> anyhow::Result<Vec<PathBuf>> {
-    let base_dirs = BaseDirs::new().context("resolve home dir")?;
-    let home = base_dirs.home_dir();
-    let sources_list = config.backup_sources_for_drive(drive_id);
-    let mut sources = Vec::new();
-    for source in &sources_list {
-        // Paths are only used for restic; never surface them in logs or UI.
-        let path = if let Some(stripped) = source.path.strip_prefix("~/") {
-            home.join(stripped)
-        } else {
-            PathBuf::from(&source.path)
-        };
-        sources.push(path);
+    // Paths are only used for restic; never surface them in logs or UI.
+    Ok(config
+        .backup_sources_for_drive(drive_id)
+        .iter()
+        .map(|source| expand_home(&source.path))
+        .collect())
+}
+
+/// `~/x` → `<home>/x` (UI shows and accepts home-relative paths on every OS).
+pub(crate) fn expand_home(path: &str) -> PathBuf {
+    let path = path.trim();
+    match (path.strip_prefix("~/"), BaseDirs::new()) {
+        (Some(rest), Some(dirs)) => dirs.home_dir().join(rest),
+        _ => PathBuf::from(path),
     }
-    Ok(sources)
 }
 
 async fn apply_retention(

@@ -1081,10 +1081,10 @@ async fn restore_snapshot(
     State(state): State<SharedState>,
     Json(req): Json<RestoreRequest>,
 ) -> Result<Json<RestoreResponse>, (StatusCode, String)> {
-    if req.target_path.trim().is_empty() {
+    if !crate::backup::expand_home(&req.target_path).is_absolute() {
         return Err((
             StatusCode::BAD_REQUEST,
-            "Choose a folder to restore into.".to_string(),
+            "Choose a folder to restore into (use Browse…).".to_string(),
         ));
     }
 
@@ -1122,7 +1122,7 @@ async fn restore_snapshot(
             &repo_path,
             &passphrase,
             &req.snapshot_id,
-            FsPath::new(&req.target_path),
+            &crate::backup::expand_home(&req.target_path),
             &req.include_paths,
             cancel,
         )
@@ -1156,12 +1156,14 @@ async fn export_recovery(
         )
     })?;
 
-    export_recovery_kit(drive, FsPath::new(&req.destination_dir)).map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't save the recovery kit to that folder.".to_string(),
-        )
-    })?;
+    export_recovery_kit(drive, &crate::backup::expand_home(&req.destination_dir)).map_err(
+        |_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Couldn't save the recovery kit to that folder.".to_string(),
+            )
+        },
+    )?;
 
     Ok(Json(RecoveryKitResponse {
         status: "created".to_string(),

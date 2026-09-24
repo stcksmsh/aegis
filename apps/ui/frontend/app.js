@@ -1892,6 +1892,8 @@ async function loadSnapshots() {
     list.appendChild(empty);
     return;
   }
+  // Newest first: that's almost always the one people want.
+  data.snapshots.sort((a, b) => (b.time || "").localeCompare(a.time || ""));
   data.snapshots.forEach((snap) => {
     const item = document.createElement("div");
     item.className = "snapshot-item";

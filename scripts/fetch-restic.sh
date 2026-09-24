@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Downloads a pinned restic release, verifies its SHA256SUMS, and places the
 # binary where Tauri's `bundle.externalBin` sidecar expects it:
-#   apps/ui/src-tauri/binaries/restic-<target-triple>[.exe]
+#   apps/ui/src-tauri/binaries/aegis-restic-<target-triple>[.exe]
 #
 # Usage: scripts/fetch-restic.sh <rust-target-triple>
 set -euo pipefail
@@ -32,7 +32,7 @@ case "$asset_os_arch" in
   windows_*) ext=zip; dest_suffix=.exe ;;
   *) ext=bz2; dest_suffix= ;;
 esac
-dest="$out_dir/restic-${triple}${dest_suffix}"
+dest="$out_dir/aegis-restic-${triple}${dest_suffix}"
 
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT

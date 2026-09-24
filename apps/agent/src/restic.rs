@@ -91,7 +91,8 @@ impl Restic {
             if let Some(dir) = exe.parent() {
                 // Tauri sidecar: installed next to the main executable (also true for
                 // macOS .app bundles, which place externalBin in Contents/MacOS/).
-                let sidecar = dir.join(format!("restic{}", std::env::consts::EXE_SUFFIX));
+                // Named aegis-restic so the Linux .deb doesn't clash with a distro restic package.
+                let sidecar = dir.join(format!("aegis-restic{}", std::env::consts::EXE_SUFFIX));
                 if sidecar.exists() {
                     return Ok(Self { binary: sidecar });
                 }

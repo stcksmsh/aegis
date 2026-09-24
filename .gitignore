@@ -22,3 +22,4 @@ Thumbs.db
 
 # Fetched restic sidecar binaries for Tauri bundling (see scripts/fetch-restic.sh)
 apps/ui/src-tauri/binaries/
+.claude/worktrees/

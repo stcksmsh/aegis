@@ -7,7 +7,7 @@
   "identifier": "io.github.stcksmsh.aegis",
   "app": {
     "security": {
-      "csp": "default-src 'self'; connect-src http://127.0.0.1:7878 ipc://localhost tauri://localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self';"
+      "csp": "default-src 'self'; connect-src http://127.0.0.1:7878 https://api.github.com ipc://localhost tauri://localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self';"
     },
     "windows": [
       {

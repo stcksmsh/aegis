@@ -17,7 +17,7 @@ mod usb;
 mod verify;
 
 pub use crate::ipc::API_ADDR;
-pub use crate::logging::init_logging;
+pub use crate::logging::{init_logging, log_dir};
 
 use crate::config::AgentConfig;
 use crate::logging::Redact;

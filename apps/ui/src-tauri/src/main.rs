@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
@@ -21,28 +21,62 @@ fn expand_path(path: &str) -> PathBuf {
 
 #[tauri::command]
 fn open_path(path: String) -> Result<(), String> {
-    let expanded = expand_path(&path);
-    if !expanded.exists() {
-        return Err(format!("Path does not exist: {}", expanded.display()));
+    open_in_file_manager(&expand_path(&path))
+}
+
+#[tauri::command]
+fn open_logs() -> Result<(), String> {
+    let dir = aegis_agent::log_dir().ok_or("Log folder not available")?;
+    open_in_file_manager(&dir)
+}
+
+fn open_in_file_manager(path: &std::path::Path) -> Result<(), String> {
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
     }
     #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open")
-        .arg(&expanded)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let program = "xdg-open";
     #[cfg(target_os = "macos")]
-    std::process::Command::new("open")
-        .arg(&expanded)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let program = "open";
     #[cfg(windows)]
-    std::process::Command::new("explorer")
-        .arg(&expanded)
+    let program = "explorer";
+    std::process::Command::new(program)
+        .arg(path)
         .spawn()
-        .map_err(|e| e.to_string())?;
-    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
-    return Err("Opening path not supported on this platform".to_string());
-    Ok(())
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Only our own release page; never arbitrary URLs from the webview.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://github.com/stcksmsh/aegis/") {
+        return Err("URL not allowed".into());
+    }
+    #[cfg(target_os = "linux")]
+    let mut cmd = std::process::Command::new("xdg-open");
+    #[cfg(target_os = "macos")]
+    let mut cmd = std::process::Command::new("open");
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = std::process::Command::new("rundll32");
+        c.arg("url.dll,FileProtocolHandler");
+        c
+    };
+    cmd.arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Tray status line, updated by the frontend whenever it polls agent status.
+struct TrayStatus(MenuItem<tauri::Wry>);
+
+#[tauri::command]
+fn set_tray_status(app: AppHandle, text: String) {
+    if let Some(item) = app.try_state::<TrayStatus>() {
+        let _ = item.0.set_text(&text);
+    }
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_tooltip(Some(format!("Aegis — {}", text)));
+    }
 }
 
 #[tauri::command]
@@ -119,15 +153,24 @@ fn show_main(app: &AppHandle) {
 
 /// Tray icon keeps Aegis running (and watching for drives) after the window closes.
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let status = MenuItem::with_id(app, "status", "Aegis is running", false, None::<&str>)?;
+    let backup = MenuItem::with_id(app, "backup", "Back up now", true, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", "Open Aegis", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Aegis", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &quit])?;
+    let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let menu = Menu::with_items(app, &[&status, &sep, &backup, &open, &quit])?;
+    app.manage(TrayStatus(status));
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip("Aegis backup")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show_main(app),
+            "backup" => {
+                // Frontend runs the normal "Back up now" flow (may need to ask for the passphrase).
+                show_main(app);
+                let _ = app.emit("tray-backup", ());
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -173,7 +216,10 @@ fn main() {
             is_dev_build,
             toggle_devtools,
             get_autostart,
-            set_autostart
+            set_autostart,
+            open_logs,
+            open_url,
+            set_tray_status
         ])
         .setup(|app| {
             default_autostart_once(app.handle());

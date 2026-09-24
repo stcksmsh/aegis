@@ -33,7 +33,7 @@ pub fn init_logging() -> Option<WorkerGuard> {
     }
 }
 
-fn log_dir() -> Option<PathBuf> {
+pub fn log_dir() -> Option<PathBuf> {
     let proj = ProjectDirs::from("com", "aegis", "Aegis")?;
     let dir = proj.data_local_dir().join("logs");
     if let Err(err) = std::fs::create_dir_all(&dir) {

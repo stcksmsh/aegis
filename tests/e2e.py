@@ -124,6 +124,17 @@ def main():
     tax_files = call("POST", "/snapshots/browse", {"drive_id": drive_id, "snapshot_id": snap,
                                                    "path": taxes["path"], "passphrase": PASS})["entries"]
     pdf = next(e for e in tax_files if e["name"].endswith(".pdf"))
+    print("  pdf path:", pdf["path"])
+
+    step("restore one plain file")
+    plain = next(e for e in inner if e["name"] == "a.txt")
+    print("  include path:", plain["path"])
+    t0 = os.path.join(work, "Plain")
+    call("POST", "/restore", {"drive_id": drive_id, "snapshot_id": snap, "target_path": t0,
+                              "include_paths": [plain["path"]], "passphrase": PASS})
+    got = sorted(os.path.relpath(os.path.join(d, f), t0) for d, _, fs in os.walk(t0) for f in fs)
+    print("  restored:", got)
+    assert got == [os.path.join("Docs", "a.txt")], got
 
     step("restore one file (name has [ ])")
     target = os.path.join(work, "Restored")

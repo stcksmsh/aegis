@@ -590,15 +590,21 @@ fn relativize_include(path: &str, subfolder: Option<&str>) -> String {
     escape_glob(rel)
 }
 
-/// Escapes `\`, `*`, `?` and `[` so restic's `--include`/`--exclude` glob matcher treats them
-/// as literal characters instead of wildcards.
+/// Makes `*`, `?` and `[` literal for restic's `--include` glob matcher by wrapping them
+/// in a character class (`[*]`). Backslash escaping is not used: on Windows Go's matcher
+/// treats `\` as a path separator, not an escape.
 fn escape_glob(pattern: &str) -> String {
     let mut out = String::with_capacity(pattern.len());
     for c in pattern.chars() {
-        if matches!(c, '\\' | '*' | '?' | '[') {
-            out.push('\\');
+        match c {
+            '*' | '?' | '[' => {
+                out.push('[');
+                out.push(c);
+                out.push(']');
+            }
+            '\\' if cfg!(unix) => out.push_str("\\\\"),
+            _ => out.push(c),
         }
-        out.push(c);
     }
     out
 }
@@ -666,14 +672,14 @@ mod tests {
         );
         assert_eq!(
             relativize_include("/home/u/w[eird]/star*.txt", Some("/home/u")),
-            "/w\\[eird]/star\\*.txt"
+            "/w[[]eird]/star[*].txt"
         );
         // Include path equal to the subfolder itself: restore everything under it.
         assert_eq!(relativize_include("/home/u", Some("/home/u")), "/");
         // No common subfolder: pass the full path through, still escaped.
         assert_eq!(
             relativize_include("/home/u/a?.txt", None),
-            "/home/u/a\\?.txt"
+            "/home/u/a[?].txt"
         );
     }
 

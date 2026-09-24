@@ -7,6 +7,7 @@ Pre-reqs:
 Platform notes:
 - Linux: drives detected instantly via udev. Unmounted drives can be mounted from the app.
 - macOS / Windows: drives detected by polling (~3 s after the drive appears in Finder / Explorer). Drive must be mounted by the OS.
+- Windows: USB hard drives/SSDs report as "fixed" disks. Add drive lists every non-system drive; once set up, the drive is recognized by its `.aegis` marker. Test with both a USB stick and a USB HDD.
 - Secure wipe is Linux-only; the option is hidden elsewhere.
 
 ## Fresh setup

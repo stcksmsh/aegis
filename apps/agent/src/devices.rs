@@ -565,6 +565,39 @@ fn human_size(bytes: u64) -> String {
 }
 
 /// There is no separate devnode on non-Linux platforms: the mount path identifies the volume.
+/// Windows shows USB hard drives as fixed disks, so offer every non-system drive for setup.
+/// ponytail: includes internal secondary drives too; filter by bus type if users get confused.
+#[cfg(not(target_os = "linux"))]
+fn is_windows_data_drive(disk: &sysinfo::Disk) -> bool {
+    if !cfg!(windows) {
+        return false;
+    }
+    let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_string());
+    !disk
+        .mount_point()
+        .to_string_lossy()
+        .to_uppercase()
+        .starts_with(&system.to_uppercase())
+}
+
+/// Mount path is a drive offered in the setup list (non-Linux: may not be "removable" yet).
+pub fn is_setup_candidate(mount: &std::path::Path) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = mount;
+        false
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        list_removable_devices()
+            .unwrap_or_default()
+            .iter()
+            .flat_map(|d| &d.partitions)
+            .flat_map(|p| &p.mountpoints)
+            .any(|m| std::path::Path::new(m) == mount)
+    }
+}
+
 #[cfg(not(target_os = "linux"))]
 pub fn list_removable_devices() -> anyhow::Result<Vec<DeviceInfo>> {
     use sysinfo::Disks;
@@ -572,7 +605,7 @@ pub fn list_removable_devices() -> anyhow::Result<Vec<DeviceInfo>> {
     let devices = disks
         .list()
         .iter()
-        .filter(|disk| crate::usb::is_removable_disk(disk))
+        .filter(|disk| crate::usb::is_removable_disk(disk) || is_windows_data_drive(disk))
         .map(|disk| {
             let mount = disk.mount_point().to_string_lossy().to_string();
             let name = disk.name().to_string_lossy().to_string();

@@ -467,7 +467,8 @@ async fn setup_drive(
             "Drive not found. Unplug it and plug it back in.".to_string(),
         ));
     }
-    if resolve_device_for_mount(&mount_path).is_none() {
+    if resolve_device_for_mount(&mount_path).is_none() && !devices::is_setup_candidate(&mount_path)
+    {
         tracing::warn!(
             "setup drive: mount path is not a mounted drive path={}",
             req.mount_path

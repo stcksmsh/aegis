@@ -198,6 +198,10 @@ pub(crate) fn is_removable_disk(disk: &sysinfo::Disk) -> bool {
     if disk.is_removable() {
         return true;
     }
+    // Windows reports USB hard drives/SSDs as fixed disks; a drive Aegis already set up counts.
+    if crate::drive::marker_path(disk.mount_point()).exists() {
+        return true;
+    }
     if cfg!(target_os = "macos") {
         let mount = disk.mount_point();
         return mount.starts_with("/Volumes/") && mount != std::path::Path::new("/");

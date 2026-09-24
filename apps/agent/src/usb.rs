@@ -195,6 +195,10 @@ fn removable_mount_points() -> Vec<PathBuf> {
 /// non-root volume mounted there as a candidate too.
 #[cfg(not(target_os = "linux"))]
 pub(crate) fn is_removable_disk(disk: &sysinfo::Disk) -> bool {
+    // Can't back up to it; also skips mounted installer images (.dmg) on macOS.
+    if disk.is_read_only() {
+        return false;
+    }
     if disk.is_removable() {
         return true;
     }

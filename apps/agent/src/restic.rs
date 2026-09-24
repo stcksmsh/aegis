@@ -304,7 +304,6 @@ impl Restic {
                 &[
                     "stats".to_string(),
                     "--json".to_string(),
-                    "--snapshot".to_string(),
                     snapshot_id.to_string(),
                 ],
             )

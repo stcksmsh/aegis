@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — first public release
 
 - UI now follows your system's light/dark theme automatically.
 - Passphrase fields have a show/hide toggle and a strength meter ("Too short" / "Okay" / "Strong"); a new passphrase must be at least 8 characters.
@@ -15,8 +15,6 @@
 - Restore never overwrites files already in the target folder.
 - Restore: get back just some files. Browse a backup's folders and check the files/folders you want, instead of restoring everything.
 
-## 0.2.0
-
 - Desktop app now runs the backup agent itself — no separate service or terminal needed.
 - Tray / menu-bar icon: closing the window keeps Aegis watching for your drive.
 - Windows and macOS support (drive detection, eject, notifications).
@@ -27,6 +25,7 @@
 - Restores land as `<folder>/Documents/...` instead of the full original path.
 - Clear messages for wrong passphrase and partial backups (files in use); plain-language text across the app.
 - Single instance; starts at login (can be turned off in Settings).
+- Tray menu shows last backup / progress and has "Back up now"; update-available banner; "Open log files" for support.
 
 ## 0.1.0
 

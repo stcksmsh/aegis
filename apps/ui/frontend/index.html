@@ -29,7 +29,7 @@
         </nav>
       </header>
 
-      <div id="status-banner" class="status-banner hidden"></div>
+      <div id="status-banner" class="status-banner hidden" role="status" aria-live="polite"></div>
 
       <main>
         <section id="wizard" class="view hidden">
@@ -51,8 +51,8 @@
                   <label><input type="checkbox" id="src-desktop" checked /> Desktop <span class="muted">(~/Desktop)</span></label>
                 </div>
                 <div class="field-row">
-                  <input id="custom-label" type="text" placeholder="Custom folder label" />
-                  <input id="custom-path" type="text" placeholder="Folder location" />
+                  <input id="custom-label" type="text" placeholder="Custom folder label" aria-label="Custom folder label" />
+                  <input id="custom-path" type="text" placeholder="Folder location" aria-label="Folder location" />
                   <button class="btn ghost" id="browse-folder" type="button">Browse…</button>
                   <button class="btn secondary" id="add-custom" type="button">Add</button>
                 </div>
@@ -64,12 +64,23 @@
                 <h2>Security setup</h2>
                 <p class="muted">Your passphrase unlocks the backup. Aegis never stores it on the USB drive.</p>
                 <div class="field">
-                  <label>Passphrase</label>
-                  <input id="passphrase" type="password" placeholder="Create a strong passphrase" />
+                  <label for="passphrase">Passphrase</label>
+                  <div class="password-field">
+                    <input id="passphrase" type="password" placeholder="Create a strong passphrase" autocomplete="new-password" aria-describedby="passphrase-meter-label" />
+                    <button type="button" class="password-toggle" data-toggle-for="passphrase" aria-label="Show passphrase">Show</button>
+                  </div>
+                  <p class="muted passphrase-hint">Use 4+ random words, e.g. "maple-orbit-candle-river".</p>
+                  <div class="passphrase-meter" aria-live="polite">
+                    <div class="passphrase-meter-track"><div class="passphrase-meter-bar" id="passphrase-meter-bar"></div></div>
+                    <span class="passphrase-meter-label" id="passphrase-meter-label"></span>
+                  </div>
                 </div>
                 <div class="field">
-                  <label>Confirm</label>
-                  <input id="passphrase-confirm" type="password" placeholder="Re-enter passphrase" />
+                  <label for="passphrase-confirm">Confirm</label>
+                  <div class="password-field">
+                    <input id="passphrase-confirm" type="password" placeholder="Re-enter passphrase" autocomplete="new-password" />
+                    <button type="button" class="password-toggle" data-toggle-for="passphrase-confirm" aria-label="Show passphrase">Show</button>
+                  </div>
                 </div>
                 <label class="checkbox">
                   <input id="remember-passphrase" type="checkbox" checked /> Remember on this computer (secure storage)
@@ -102,7 +113,7 @@
                   <div id="device-list" class="device-list"></div>
                 </div>
                 <div class="field">
-                  <label>Drive label (optional)</label>
+                  <label for="drive-label">Drive label (optional)</label>
                   <input id="drive-label" type="text" placeholder="Work Backup" />
                 </div>
                 <div class="device-actions">
@@ -161,7 +172,7 @@
               <div id="setup-drive-device-list" class="device-list"></div>
             </div>
             <div class="field">
-              <label>Drive label (optional)</label>
+              <label for="setup-drive-label">Drive label (optional)</label>
               <input id="setup-drive-label" type="text" placeholder="Leave empty for auto name (e.g. backup-abc123)" />
             </div>
             <h2 class="step-label" style="margin-top: 20px;">What to back up to this drive</h2>
@@ -172,8 +183,8 @@
               <label><input type="checkbox" id="setup-drive-src-desktop" checked /> Desktop <span class="muted">(~/Desktop)</span></label>
             </div>
             <div class="field-row">
-              <input id="setup-drive-custom-label" type="text" placeholder="Custom folder label" />
-              <input id="setup-drive-custom-path" type="text" placeholder="Folder location" />
+              <input id="setup-drive-custom-label" type="text" placeholder="Custom folder label" aria-label="Custom folder label" />
+              <input id="setup-drive-custom-path" type="text" placeholder="Folder location" aria-label="Folder location" />
               <button class="btn ghost" id="setup-drive-browse" type="button">Browse…</button>
               <button class="btn secondary" id="setup-drive-add-custom" type="button">Add</button>
             </div>
@@ -194,12 +205,23 @@
             <h2 class="step-label" style="margin-top: 24px;">Passphrase for this drive</h2>
             <p class="muted">Your passphrase encrypts the backup. Aegis never stores it on the USB drive.</p>
             <div class="field">
-              <label>Passphrase</label>
-              <input id="setup-drive-passphrase" type="password" placeholder="Create a strong passphrase" />
+              <label for="setup-drive-passphrase">Passphrase</label>
+              <div class="password-field">
+                <input id="setup-drive-passphrase" type="password" placeholder="Create a strong passphrase" autocomplete="new-password" aria-describedby="setup-drive-passphrase-meter-label" />
+                <button type="button" class="password-toggle" data-toggle-for="setup-drive-passphrase" aria-label="Show passphrase">Show</button>
+              </div>
+              <p class="muted passphrase-hint">Use 4+ random words, e.g. "maple-orbit-candle-river".</p>
+              <div class="passphrase-meter" aria-live="polite">
+                <div class="passphrase-meter-track"><div class="passphrase-meter-bar" id="setup-drive-passphrase-meter-bar"></div></div>
+                <span class="passphrase-meter-label" id="setup-drive-passphrase-meter-label"></span>
+              </div>
             </div>
             <div class="field">
-              <label>Confirm</label>
-              <input id="setup-drive-passphrase-confirm" type="password" placeholder="Re-enter passphrase" />
+              <label for="setup-drive-passphrase-confirm">Confirm</label>
+              <div class="password-field">
+                <input id="setup-drive-passphrase-confirm" type="password" placeholder="Re-enter passphrase" autocomplete="new-password" />
+                <button type="button" class="password-toggle" data-toggle-for="setup-drive-passphrase-confirm" aria-label="Show passphrase">Show</button>
+              </div>
             </div>
             <label class="checkbox">
               <input id="setup-drive-remember" type="checkbox" checked /> Remember on this computer (secure storage)
@@ -220,7 +242,7 @@
               <div class="backup-progress-track">
                 <div class="backup-progress-bar" id="backup-progress-bar"></div>
               </div>
-              <p class="backup-progress-text muted" id="backup-progress-text"></p>
+              <p class="backup-progress-text muted" id="backup-progress-text" aria-live="polite"></p>
             </div>
             <p class="muted drive-detect-message">Waiting for drive…</p>
             <p class="muted hidden" id="dashboard-drive-space"></p>
@@ -229,7 +251,10 @@
               <h2 class="step-label">Your drives</h2>
               <p class="muted">What is backed up and to which drive.</p>
               <div id="backup-targets-list" class="backup-targets-list"></div>
-              <div id="backup-targets-empty" class="muted">No drives set up yet. Add a drive to get started.</div>
+              <div id="backup-targets-empty" class="empty-state muted">
+                <p>No drives set up yet.</p>
+                <button class="btn primary" id="backup-targets-empty-add" type="button">Add drive</button>
+              </div>
             </div>
 
             <p class="muted dashboard-cta-hint hidden" id="dashboard-cta-hint" aria-live="polite"></p>
@@ -258,7 +283,7 @@
               <ul class="browse-list" id="browse-tree" role="tree" aria-label="Backup contents"></ul>
             </div>
             <div class="field">
-              <label>Restore to folder</label>
+              <label for="restore-target">Restore to folder</label>
               <input id="restore-target" type="text" placeholder="Choose an empty folder" />
             </div>
             <div class="field-row">
@@ -272,7 +297,7 @@
           <div class="panel">
             <h1>Settings</h1>
             <div class="field">
-              <label>Skip these files or folders</label>
+              <label for="exclude-patterns">Skip these files or folders</label>
               <input id="exclude-patterns" type="text" placeholder=".cache, node_modules" />
             </div>
             <label class="checkbox">
@@ -285,11 +310,11 @@
               <input id="autostart" type="checkbox" /> Start Aegis when I log in (needed for automatic backups)
             </label>
             <div class="field">
-              <label>Remind me to back up after this many days (0 = never)</label>
+              <label for="reminder-days">Remind me to back up after this many days (0 = never)</label>
               <input id="reminder-days" type="number" min="0" placeholder="7" />
             </div>
             <div class="field">
-              <label>While the drive stays plugged in, back up again every N hours (0 = only when plugged in)</label>
+              <label for="backup-interval-hours">While the drive stays plugged in, back up again every N hours (0 = only when plugged in)</label>
               <input id="backup-interval-hours" type="number" min="0" placeholder="0" />
             </div>
             <button class="btn primary" id="save-settings">Save settings</button>
@@ -305,17 +330,33 @@
               </label>
             </div>
             <div class="field">
-              <label>Only include files matching (advanced)</label>
+              <label for="include-patterns">Only include files matching (advanced)</label>
               <input id="include-patterns" type="text" placeholder="Photos/**, *.docx" />
             </div>
             <div class="field">
-              <label>Retention policy</label>
-              <div class="field-row">
-                <input id="keep-last" type="number" min="0" placeholder="Keep last" />
-                <input id="keep-daily" type="number" min="0" placeholder="Keep daily" />
-                <input id="keep-weekly" type="number" min="0" placeholder="Keep weekly" />
-                <input id="keep-monthly" type="number" min="0" placeholder="Keep monthly" />
-                <input id="keep-yearly" type="number" min="0" placeholder="Keep yearly" />
+              <h2 class="step-label" style="margin-top: 0;">Clean up old backups</h2>
+              <p class="muted">Aegis can automatically remove older backups to save space, while keeping a spread of recent, daily, weekly, monthly and yearly copies.</p>
+              <div class="retention-grid">
+                <div class="field">
+                  <label for="keep-last">Keep the last N backups</label>
+                  <input id="keep-last" type="number" min="0" placeholder="0" />
+                </div>
+                <div class="field">
+                  <label for="keep-daily">Keep one per day, for N days</label>
+                  <input id="keep-daily" type="number" min="0" placeholder="0" />
+                </div>
+                <div class="field">
+                  <label for="keep-weekly">Keep one per week, for N weeks</label>
+                  <input id="keep-weekly" type="number" min="0" placeholder="0" />
+                </div>
+                <div class="field">
+                  <label for="keep-monthly">Keep one per month, for N months</label>
+                  <input id="keep-monthly" type="number" min="0" placeholder="0" />
+                </div>
+                <div class="field">
+                  <label for="keep-yearly">Keep one per year, for N years</label>
+                  <input id="keep-yearly" type="number" min="0" placeholder="0" />
+                </div>
               </div>
               <label class="checkbox">
                 <input id="retention-enabled" type="checkbox" /> Automatically delete old backups based on these settings
@@ -323,7 +364,7 @@
             </div>
             <button class="btn primary" id="save-advanced">Save advanced</button>
             <div class="field">
-              <label>Recovery kit</label>
+              <label for="recovery-destination">Recovery kit</label>
               <input id="recovery-destination" type="text" placeholder="Folder location" />
               <button class="btn secondary" id="export-recovery">Export recovery kit</button>
             </div>
@@ -336,8 +377,11 @@
           <h2 id="modal-title">Secure prompt</h2>
           <p id="modal-body" class="muted"></p>
           <div class="field" id="modal-field">
-            <label>Passphrase</label>
-            <input id="modal-passphrase" type="password" placeholder="Enter passphrase" />
+            <label for="modal-passphrase">Passphrase</label>
+            <div class="password-field">
+              <input id="modal-passphrase" type="password" placeholder="Enter passphrase" autocomplete="current-password" />
+              <button type="button" class="password-toggle" data-toggle-for="modal-passphrase" aria-label="Show passphrase">Show</button>
+            </div>
           </div>
           <div class="field hidden" id="modal-discontinue-field">
             <label id="modal-discontinue-label">Type the drive name to confirm</label>
@@ -389,7 +433,7 @@
       </div>
     </div>
 
-    <div id="loading-overlay" class="loading-overlay hidden">
+    <div id="loading-overlay" class="loading-overlay hidden" role="status" aria-live="polite">
       <div class="loading-card">
         <div class="loading-spinner" aria-hidden="true"></div>
         <p id="loading-message" class="loading-message">Working…</p>

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- UI now follows your system's light/dark theme automatically.
+- Passphrase fields have a show/hide toggle and a strength meter ("Too short" / "Okay" / "Strong"); a new passphrase must be at least 8 characters.
+- Advanced page: "Retention policy" renamed to "Clean up old backups" with plain labels for each field; fixed the misaligned "Deep verification" checkbox.
+- Accessibility: visible focus outlines, screen-reader labels on form fields, live status/progress announcements, and a modal that traps Tab, closes on Escape, and returns focus to what opened it.
+- Empty states: "Add drive" button when no drives are set up yet; "No backups on this drive yet" when restoring from an empty drive.
+- Window has a minimum size (900x640) and the layout no longer breaks or scrolls sideways at that size.
 - Backup reminders: notifies once a day if a trusted drive hasn't backed up in a while (Settings; default 7 days, 0 = off).
 - Optional periodic backups while a drive stays plugged in, on top of the usual backup-on-insert (Settings, 0 = off).
 - Dashboard shows free/total space on the connected drive, with a warning when it's almost full; notifies after a backup if under 10% free.

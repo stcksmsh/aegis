@@ -74,7 +74,7 @@ Your backups are standard [restic](https://restic.net) repositories. Even withou
 | Quick verify | After each backup, quickly checks the backup is readable. Recommended. |
 | Deep verify | Reads back all backup data. Slow; catches failing drives. |
 | Skip these files or folders | Files to skip, e.g. `*.tmp` or `node_modules`. Aegis already skips common junk like `node_modules`, `.cache`, temporary files, and Windows/Mac system clutter by default. |
-| Retention | How many old backups to keep before cleaning up. Off = keep everything. |
+| Clean up old backups | How many old backups to keep before removing older ones. Off = keep everything. |
 | Remind me to back up after [N] days | If your Aegis drive hasn't been plugged in and backed up for this many days, Aegis reminds you with a notification. 0 turns reminders off. |
 | Back up every [N] hours while plugged in | If you leave the drive plugged in, Aegis backs up again automatically every N hours instead of only once. 0 means back up once per plug-in. |
 
@@ -86,5 +86,5 @@ Your backups are standard [restic](https://restic.net) repositories. Even withou
 | "Wrong passphrase" | Passphrases are case-sensitive. Check Caps Lock. |
 | Backup says "partial" | Some files were in use or unreadable (e.g. an open database). Everything else was saved. Close apps and back up again. |
 | Can't format drive (Windows/Mac) | Format it as **exFAT** with Disk Management (Windows) or Disk Utility (Mac), then try again. |
-| "Your backup drive is almost full" | Less than 10% free space is left on the drive. Plug in a bigger drive, free up space on it, or turn on automatic cleanup of old backups in **Settings → Advanced → Retention**. |
+| "Your backup drive is almost full" | Less than 10% free space is left on the drive. Plug in a bigger drive, free up space on it, or turn on automatic cleanup of old backups in **Settings → Advanced → Clean up old backups**. |
 | Something else | Open an [issue](https://github.com/stcksmsh/aegis/issues). Logs live in: Windows `%LOCALAPPDATA%\aegis\Aegis\data\logs`, Mac `~/Library/Application Support/com.aegis.Aegis/logs`, Linux `~/.local/share/aegis/logs`. Logs never contain your passphrase. |

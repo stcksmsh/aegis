@@ -32,6 +32,7 @@ const modalConfirm = document.getElementById("modal-confirm");
 const modalCancel = document.getElementById("modal-cancel");
 let modalResolve = null;
 let modalMode = "passphrase";
+let modalOpenerElement = null;
 let discontinueDrivePending = null;
 let renameDrivePending = null;
 let editFoldersPending = null;
@@ -88,7 +89,13 @@ function showView(id) {
     view.classList.toggle("hidden", view.id !== id);
   });
   navButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.view === id);
+    const active = btn.dataset.view === id;
+    btn.classList.toggle("active", active);
+    if (active) {
+      btn.setAttribute("aria-current", "page");
+    } else {
+      btn.removeAttribute("aria-current");
+    }
   });
   currentView = id;
   if (id === "setup-drive") {
@@ -210,6 +217,7 @@ function openModal({ title, body, mode, drive_id, drive_label }) {
       modalCancel.classList.remove("hidden");
     }
 
+    modalOpenerElement = document.activeElement;
     modalOverlay.classList.remove("hidden");
     setTimeout(() => {
       if (needsPassphrase) {
@@ -223,6 +231,26 @@ function openModal({ title, body, mode, drive_id, drive_label }) {
       }
     }, 0);
   });
+}
+
+// Keeps Tab from leaving the modal while it's open (a basic focus trap).
+function trapModalTab(event) {
+  if (event.key !== "Tab") return;
+  const card = modalOverlay.querySelector(".modal-card");
+  if (!card) return;
+  const focusable = Array.from(
+    card.querySelectorAll('button, input, [href], select, textarea, [tabindex]:not([tabindex="-1"])')
+  ).filter((el) => !el.disabled && el.offsetParent !== null);
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function uiAlert(message, title = "Notice") {
@@ -242,6 +270,10 @@ function requestPassphrase(message) {
 
 function closeModal(value) {
   modalOverlay.classList.add("hidden");
+  if (modalOpenerElement && typeof modalOpenerElement.focus === "function") {
+    modalOpenerElement.focus();
+  }
+  modalOpenerElement = null;
   if (modalResolve) {
     const resolver = modalResolve;
     modalResolve = null;
@@ -694,7 +726,20 @@ function openEditFoldersModal(d) {
   const title = document.getElementById("edit-folders-title");
   if (title) title.textContent = `Edit folders — ${editFoldersPending.drive_label || "Drive"}`;
   document.getElementById("edit-folders-error").textContent = "";
+  editFoldersOpenerElement = document.activeElement;
   document.getElementById("edit-folders-overlay").classList.remove("hidden");
+  setTimeout(() => docs?.focus(), 0);
+}
+
+let editFoldersOpenerElement = null;
+
+function closeEditFoldersModal() {
+  document.getElementById("edit-folders-overlay").classList.add("hidden");
+  editFoldersPending = null;
+  if (editFoldersOpenerElement && typeof editFoldersOpenerElement.focus === "function") {
+    editFoldersOpenerElement.focus();
+  }
+  editFoldersOpenerElement = null;
 }
 
 let editFoldersCustomSources = [];
@@ -745,8 +790,7 @@ async function saveEditFolders() {
       }),
     });
     if (res.ok) {
-      document.getElementById("edit-folders-overlay").classList.add("hidden");
-      editFoldersPending = null;
+      closeEditFoldersModal();
       await fetchStatus();
     } else {
       const text = await res.text();
@@ -1119,12 +1163,118 @@ function renderWizard() {
   }
 }
 
+const MIN_PASSPHRASE_LENGTH = 8;
+const COMMON_PASSPHRASE_WORDS = [
+  "password",
+  "123456",
+  "qwerty",
+  "letmein",
+  "welcome",
+  "admin",
+  "iloveyou",
+  "dragon",
+  "monkey",
+  "football",
+  "abc123",
+];
+
+// Simple heuristic: length + character variety, with a penalty for common words.
+// No library, just plain rules so the label stays easy to explain ("too short",
+// "okay", "strong").
+function passphraseStrength(value) {
+  if (!value) return { score: 0, label: "" };
+  const lower = value.toLowerCase();
+  const tooShort = value.length < MIN_PASSPHRASE_LENGTH;
+  const hasCommonWord = COMMON_PASSPHRASE_WORDS.some((word) => lower.includes(word));
+
+  let variety = 0;
+  if (/[a-z]/.test(value)) variety++;
+  if (/[A-Z]/.test(value)) variety++;
+  if (/[0-9]/.test(value)) variety++;
+  if (/[^a-zA-Z0-9]/.test(value)) variety++;
+  const wordCount = value.split(/[\s-_]+/).filter(Boolean).length;
+
+  if (tooShort) {
+    return { score: 1, label: "Too short" };
+  }
+  if (hasCommonWord) {
+    return { score: 1, label: "Too short" };
+  }
+  const long = value.length >= 20 || wordCount >= 4;
+  const decent = value.length >= 12 || variety >= 3;
+  if (long && (variety >= 2 || wordCount >= 4)) {
+    return { score: 3, label: "Strong" };
+  }
+  if (decent) {
+    return { score: 2, label: "Okay" };
+  }
+  return { score: 1, label: "Too short" };
+}
+
+function updatePassphraseMeter(inputId, barId, labelId) {
+  const input = document.getElementById(inputId);
+  const bar = document.getElementById(barId);
+  const label = document.getElementById(labelId);
+  if (!input || !bar || !label) return;
+  const { score, label: text } = passphraseStrength(input.value);
+  const pct = [0, 33, 66, 100][score] ?? 0;
+  bar.style.width = `${pct}%`;
+  label.textContent = input.value ? text : "";
+  label.classList.remove("weak", "okay", "strong");
+  bar.classList.remove("weak", "okay", "strong");
+  if (score <= 1 && input.value) {
+    label.classList.add("weak");
+    bar.classList.add("weak");
+  }
+  if (score === 2) {
+    label.classList.add("okay");
+    bar.classList.add("okay");
+  }
+  if (score === 3) {
+    label.classList.add("strong");
+    bar.classList.add("strong");
+  }
+}
+
+function wirePassphraseMeter(inputId, barId, labelId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.addEventListener("input", () => updatePassphraseMeter(inputId, barId, labelId));
+}
+
+function wirePassphraseToggles() {
+  document.querySelectorAll(".password-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.dataset.toggleFor;
+      const input = document.getElementById(targetId);
+      if (!input) return;
+      const showing = input.type === "text";
+      input.type = showing ? "password" : "text";
+      btn.textContent = showing ? "Show" : "Hide";
+      btn.setAttribute("aria-label", showing ? "Show passphrase" : "Hide passphrase");
+    });
+  });
+}
+
+// Shared check used before creating a new passphrase (wizard step 2 and the
+// Add-drive form). Returns an error message, or null when the passphrase is OK.
+function checkNewPassphrase(passphrase, confirm) {
+  if (!passphrase || passphrase.length < MIN_PASSPHRASE_LENGTH) {
+    return `Your passphrase needs to be at least ${MIN_PASSPHRASE_LENGTH} characters. Try 4+ random words, like "maple-orbit-candle-river".`;
+  }
+  if (passphrase !== confirm) {
+    return "Passphrases do not match.";
+  }
+  return null;
+}
+
 function validateWizardStep(step) {
   if (step === 1) {
     const passphrase = document.getElementById("passphrase").value;
     const confirm = document.getElementById("passphrase-confirm").value;
-    if (!passphrase || passphrase !== confirm) {
-      uiAlert("Passphrases do not match.");
+    const error = checkNewPassphrase(passphrase, confirm);
+    if (error) {
+      uiAlert(error);
       return false;
     }
   }
@@ -1321,8 +1471,9 @@ async function setupDriveWithMount(mountPath) {
 
   const passphrase = document.getElementById("passphrase").value;
   const confirm = document.getElementById("passphrase-confirm").value;
-  if (!passphrase || passphrase !== confirm) {
-    uiAlert("Passphrases do not match.");
+  const passphraseError = checkNewPassphrase(passphrase, confirm);
+  if (passphraseError) {
+    uiAlert(passphraseError);
     return;
   }
 
@@ -1385,8 +1536,9 @@ async function setupDriveFromSelectionForAddDrive() {
     }
     const passphrase = document.getElementById("setup-drive-passphrase")?.value ?? "";
     const confirm = document.getElementById("setup-drive-passphrase-confirm")?.value ?? "";
-    if (!passphrase || passphrase !== confirm) {
-      uiAlert("Passphrases do not match.");
+    const passphraseError = checkNewPassphrase(passphrase, confirm);
+    if (passphraseError) {
+      uiAlert(passphraseError);
       return;
     }
     const eraseOption = document.getElementById("setup-drive-erase-option");
@@ -1730,6 +1882,13 @@ async function loadSnapshots() {
   const list = document.getElementById("snapshot-list");
   list.innerHTML = "";
   browseTreeReset();
+  if (!data.snapshots || data.snapshots.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No backups on this drive yet.";
+    list.appendChild(empty);
+    return;
+  }
   data.snapshots.forEach((snap) => {
     const item = document.createElement("div");
     item.className = "snapshot-item";
@@ -2061,6 +2220,14 @@ function setupListeners() {
     btn.addEventListener("click", () => showView(btn.dataset.view));
   });
 
+  wirePassphraseToggles();
+  wirePassphraseMeter("passphrase", "passphrase-meter-bar", "passphrase-meter-label");
+  wirePassphraseMeter(
+    "setup-drive-passphrase",
+    "setup-drive-passphrase-meter-bar",
+    "setup-drive-passphrase-meter-label"
+  );
+
   document.getElementById("add-custom").addEventListener("click", () => {
     const label = document.getElementById("custom-label").value.trim();
     const path = document.getElementById("custom-path").value.trim();
@@ -2183,6 +2350,10 @@ function setupListeners() {
   if (setupThisDriveBtn) {
     setupThisDriveBtn.addEventListener("click", () => showView("setup-drive"));
   }
+  const backupTargetsEmptyAdd = document.getElementById("backup-targets-empty-add");
+  if (backupTargetsEmptyAdd) {
+    backupTargetsEmptyAdd.addEventListener("click", () => showView("setup-drive"));
+  }
 
   const erasePhrase = document.getElementById("erase-phrase");
   if (erasePhrase) erasePhrase.addEventListener("input", updateDeviceActions);
@@ -2254,6 +2425,13 @@ function setupListeners() {
       closeModal(null);
     }
   });
+  modalOverlay.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeModal(modalMode === "confirm" ? false : null);
+      return;
+    }
+    trapModalTab(event);
+  });
   modalPassphrase.addEventListener("keydown", (event) => {
     if (event.key === "Enter") confirmModal();
     if (event.key === "Escape") closeModal(null);
@@ -2270,12 +2448,37 @@ function setupListeners() {
   const editFoldersSave = document.getElementById("edit-folders-save");
   const editFoldersAdd = document.getElementById("edit-folders-add");
   if (editFoldersCancel) {
-    editFoldersCancel.addEventListener("click", () => {
-      document.getElementById("edit-folders-overlay").classList.add("hidden");
-      editFoldersPending = null;
-    });
+    editFoldersCancel.addEventListener("click", closeEditFoldersModal);
   }
   if (editFoldersSave) editFoldersSave.addEventListener("click", saveEditFolders);
+  const editFoldersOverlay = document.getElementById("edit-folders-overlay");
+  if (editFoldersOverlay) {
+    editFoldersOverlay.addEventListener("click", (event) => {
+      if (event.target === editFoldersOverlay) closeEditFoldersModal();
+    });
+    editFoldersOverlay.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeEditFoldersModal();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const card = editFoldersOverlay.querySelector(".modal-card");
+      if (!card) return;
+      const focusable = Array.from(
+        card.querySelectorAll('button, input, [href], select, textarea, [tabindex]:not([tabindex="-1"])')
+      ).filter((el) => !el.disabled && el.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+  }
   if (editFoldersAdd) {
     editFoldersAdd.addEventListener("click", async () => {
       const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;

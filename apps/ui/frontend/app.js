@@ -2080,28 +2080,42 @@ async function runRestore(includePaths, confirmMessage) {
     passphrase: null,
   };
 
-  let res = await fetch(`${API}/restore`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const passphrase = await requestPassphrase("Enter your passphrase to restore.");
-    if (!passphrase) return;
-    payload.passphrase = passphrase;
-    res = await fetch(`${API}/restore`, {
+  if (sessionPassphrase) payload.passphrase = sessionPassphrase;
+  const send = () =>
+    fetch(`${API}/restore`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-  }
 
-  if (res.ok) {
-    notify("Restore complete", "Aegis restored your files.");
-  } else {
-    uiAlert("Restore failed. Please try again.");
+  showLoadingOverlay("Restoring your files…");
+  let res;
+  try {
+    res = await send();
+    let detail = res.ok ? "" : await res.text();
+    // Only ask for the passphrase when that's actually the problem.
+    if (!res.ok && /passphrase/i.test(detail)) {
+      hideLoadingOverlay();
+      const passphrase = await requestPassphrase("Enter your passphrase to restore.");
+      if (!passphrase) return;
+      payload.passphrase = passphrase;
+      showLoadingOverlay("Restoring your files…");
+      res = await send();
+      detail = res.ok ? "" : await res.text();
+    }
+    hideLoadingOverlay();
+    if (!res.ok) {
+      uiAlert(detail || "Restore failed. Please try again.", "Restore failed");
+      return;
+    }
+  } catch (_) {
+    hideLoadingOverlay();
+    uiAlert("Can't connect to Aegis right now. Try restarting the app.", "Restore failed");
+    return;
   }
+  notify("Restore complete", "Aegis restored your files.");
+  await uiAlert(`Your files are back in ${target}. Existing files were left untouched.`, "Restore complete");
+  openFolderPath(target);
 }
 
 function restoreSnapshot() {

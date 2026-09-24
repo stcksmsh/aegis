@@ -41,6 +41,9 @@ Full walkthrough: **[User Guide](docs/USER_GUIDE.md)**.
 | Strong encryption | Every backup is encrypted (AES-256) before it touches the drive. |
 | Automatic | Backs up when you plug in your drive. Runs quietly in the tray / menu bar. |
 | History | Keeps every past version until you choose to clean up. Get back last week's file. |
+| Get back one file | Browse any past backup and restore just the files you need. Never overwrites what's already there. |
+| Reminders | Nudges you when it's been a week since your last backup. Optional hourly backups while the drive stays plugged in. |
+| Drive space | Shows free space and warns before your drive fills up. |
 | Safe to unplug | Unplugging mid-backup never damages earlier backups. |
 | Checks itself | Verifies each backup after it finishes. |
 | No lock-in | Backups use the open [restic](https://restic.net) format. Readable without Aegis. |

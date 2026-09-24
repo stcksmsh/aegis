@@ -47,6 +47,8 @@ pub async fn run() -> anyhow::Result<()> {
             error!("USB watcher failed: {}", Redact::new(err));
         }
     });
+    let reminder_state = state.clone();
+    tokio::spawn(usb::run_periodic_checks(reminder_state));
     ipc::serve(listener, state).await
 }
 

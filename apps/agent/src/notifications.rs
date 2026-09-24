@@ -50,3 +50,23 @@ pub fn notify_trusted_device(drive_label: &str) {
         &format!("\"{}\" is connected and ready to back up.", drive_label),
     );
 }
+
+pub fn notify_backup_reminder(drive_label: &str, days_since: u64) {
+    notify(
+        "Time to back up",
+        &format!(
+            "Time to back up: plug in \"{}\". Last backup was {} days ago.",
+            drive_label, days_since
+        ),
+    );
+}
+
+pub fn notify_drive_almost_full(drive_label: &str) {
+    notify(
+        "Backup drive almost full",
+        &format!(
+            "Your backup drive \"{}\" is almost full. Turn on automatic cleanup of old backups in Aegis → Advanced.",
+            drive_label
+        ),
+    );
+}

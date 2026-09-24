@@ -67,6 +67,16 @@ pub struct AgentConfig {
     pub paranoid_mode: bool,
     /// Optional override for the restic binary path.
     pub restic_path: Option<String>,
+    /// Remind to back up when a trusted drive hasn't been backed up in this many days. 0 = off.
+    #[serde(default = "default_reminder_days")]
+    pub reminder_days: u32,
+    /// While a trusted drive stays plugged in, back up again after this many hours. 0 = off.
+    #[serde(default)]
+    pub backup_interval_hours: u32,
+}
+
+pub(crate) fn default_reminder_days() -> u32 {
+    7
 }
 
 impl Default for AgentConfig {
@@ -88,7 +98,16 @@ impl Default for AgentConfig {
                 },
             ],
             include_patterns: Vec::new(),
-            exclude_patterns: Vec::new(),
+            exclude_patterns: vec![
+                "node_modules".to_string(),
+                ".cache".to_string(),
+                "*.tmp".to_string(),
+                "Thumbs.db".to_string(),
+                ".DS_Store".to_string(),
+                "$RECYCLE.BIN".to_string(),
+                ".Trash*".to_string(),
+                "~$*".to_string(),
+            ],
             retention: RetentionPolicy::default(),
             quick_verify: true,
             deep_verify: false,
@@ -96,6 +115,8 @@ impl Default for AgentConfig {
             remember_passphrase: true,
             paranoid_mode: false,
             restic_path: None,
+            reminder_days: default_reminder_days(),
+            backup_interval_hours: 0,
         }
     }
 }

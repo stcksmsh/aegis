@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Backup reminders: notifies once a day if a trusted drive hasn't backed up in a while (Settings, off by default is 7 days; 0 = off).
+- Optional periodic backups while a drive stays plugged in, on top of the usual backup-on-insert (Settings, 0 = off).
+- Dashboard shows free/total space on the connected drive, with a warning when it's almost full; notifies after a backup if under 10% free.
+- New configs now skip common junk by default (`node_modules`, `.cache`, `*.tmp`, `Thumbs.db`, `.DS_Store`, `$RECYCLE.BIN`, `.Trash*`, Office lock files).
+
 ## 0.2.0
 
 - Desktop app now runs the backup agent itself — no separate service or terminal needed.

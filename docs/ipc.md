@@ -29,11 +29,13 @@ Response fields:
 
 Response fields:
 - `first_run`: boolean
-- `drive`: connected/trusted status + mount path
-- `last_run`: last run summary
+- `drive`: connected/trusted status + mount path; when connected and trusted also includes
+  `free_bytes` and `total_bytes` (bytes free/total on that drive's mount, if known)
+- `last_run`: last run summary; `drive_almost_full` is true if the drive had under 10% free
+  space after this run
 - `running`: boolean
 - `restic_available`: boolean
-- `config`: summary flags
+- `config`: summary flags, including `reminder_days` and `backup_interval_hours`
 
 ## Update Config
 `POST /v1/config`
@@ -49,9 +51,15 @@ Request:
   "deep_verify": false,
   "auto_backup_on_insert": true,
   "remember_passphrase": false,
-  "paranoid_mode": false
+  "paranoid_mode": false,
+  "reminder_days": 7,
+  "backup_interval_hours": 0
 }
 ```
+
+`reminder_days` (0 = off): notify once per day if a trusted drive hasn't backed up in this many
+days and isn't connected. `backup_interval_hours` (0 = off): while a trusted drive stays plugged
+in, back it up again automatically once this many hours have passed since its last backup.
 
 ## Setup Drive
 `POST /v1/drives/setup`

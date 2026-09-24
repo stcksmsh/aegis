@@ -2066,7 +2066,7 @@ async function runRestore(includePaths, confirmMessage) {
     uiAlert("Choose a restore folder.");
     return;
   }
-  if (!confirm(confirmMessage)) {
+  if (!(await uiConfirm(confirmMessage, "Restore files"))) {
     return;
   }
 
@@ -2165,7 +2165,7 @@ async function ejectDrive() {
     uiAlert("No drive to eject.");
     return;
   }
-  if (!confirm("Eject the drive now?")) return;
+  if (!(await uiConfirm("Eject the drive now?", "Eject drive"))) return;
   const res = await fetch(`${API}/drives/eject`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

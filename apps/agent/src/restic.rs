@@ -164,6 +164,7 @@ impl Restic {
             args.push("--exclude".to_string());
             args.push(exclude.clone());
         }
+        args.push("--".to_string()); // sources are paths, never flags
         for source in sources {
             args.push(source.to_string_lossy().to_string());
         }
@@ -295,6 +296,7 @@ impl Restic {
         passphrase: &str,
         snapshot_id: &str,
     ) -> anyhow::Result<SnapshotStats> {
+        check_snapshot_id(snapshot_id)?;
         let output = self
             .run_capture(
                 repo,
@@ -355,6 +357,7 @@ impl Restic {
         includes: &[String],
         cancel: CancellationToken,
     ) -> anyhow::Result<()> {
+        check_snapshot_id(snapshot_id)?;
         // Restore relative to the backed-up folders' common parent, so the user gets
         // <target>/Documents/... instead of <target>/home/user/Documents/..., whether
         // restoring everything or just a few selected files/folders.
@@ -398,6 +401,11 @@ impl Restic {
         snapshot_id: &str,
         dir: &str,
     ) -> anyhow::Result<Vec<BrowseEntry>> {
+        check_snapshot_id(snapshot_id)?;
+        // Absolute snapshot path; also stops it being read as a restic flag.
+        if !dir.starts_with('/') {
+            return Err(anyhow!("invalid folder"));
+        }
         let output = self
             .run_capture(
                 repo,
@@ -605,6 +613,16 @@ fn to_tree_path(path: &str) -> String {
     }
 }
 
+/// Snapshot IDs come from the UI and become restic arguments: allow hex only,
+/// so a value like `--password-command=...` can never be parsed as a flag.
+fn check_snapshot_id(id: &str) -> anyhow::Result<()> {
+    if !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Ok(())
+    } else {
+        Err(anyhow!("invalid backup id"))
+    }
+}
+
 pub const WRONG_PASSPHRASE: &str = "Wrong passphrase. Passphrases are case-sensitive.";
 
 fn restic_error(stderr: &str) -> anyhow::Error {
@@ -617,6 +635,14 @@ fn restic_error(stderr: &str) -> anyhow::Error {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn snapshot_id_must_be_hex() {
+        assert!(check_snapshot_id("2b343a70").is_ok());
+        assert!(check_snapshot_id("--password-command=calc").is_err());
+        assert!(check_snapshot_id("").is_err());
+        assert!(check_snapshot_id("latest").is_err());
+    }
+
     #[test]
     fn restore_subfolder_strips_common_parent() {
         let p = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();

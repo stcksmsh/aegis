@@ -25,8 +25,8 @@ Get the installer for your computer from the **[latest release](https://github.c
 
 Everything Aegis needs is inside the installer. Nothing else to set up.
 
-First launch shows a warning because the app isn't signed by Apple/Microsoft yet:
-**Windows**: "More info" → "Run anyway". **Mac**: right-click the app → "Open" → "Open".
+Aegis is free and not signed with a paid Apple/Microsoft certificate, so the first launch shows a warning. It's safe to continue:
+**Windows**: "More info" → "Run anyway". **Mac**: open Aegis once, click "Done", then System Settings → Privacy & Security → scroll down → "Open Anyway". [Details](docs/USER_GUIDE.md#first-launch-warning)
 
 ## How it works
 

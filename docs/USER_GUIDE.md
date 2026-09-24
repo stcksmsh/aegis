@@ -9,12 +9,22 @@ Go to the [latest release](https://github.com/stcksmsh/aegis/releases/latest) an
 | Your computer | Download | Then |
 |---|---|---|
 | Windows | `Aegis_x.y.z_x64-setup.exe` | Double-click. If Windows says "Windows protected your PC": click **More info → Run anyway**. |
-| Mac (Apple chip, 2020+) | `Aegis_x.y.z_aarch64.dmg` | Open, drag Aegis to Applications. First launch: right-click Aegis → **Open** → **Open**. |
+| Mac (Apple chip, 2020+) | `Aegis_x.y.z_aarch64.dmg` | Open, drag Aegis to Applications. First launch: see [below](#first-launch-warning). |
 | Mac (Intel) | `Aegis_x.y.z_x64.dmg` | Same as above. |
 | Linux (Ubuntu, Debian, Mint) | `Aegis_x.y.z_amd64.deb` | Double-click to install, or `sudo apt install ./Aegis_*.deb`. |
 | Linux (any other) | `Aegis_x.y.z_amd64.AppImage` | Right-click → Properties → allow executing, then double-click. |
 
 Not sure which Mac you have? Apple menu → **About This Mac**. "Chip: Apple M…" = Apple chip. "Processor: Intel" = Intel.
+
+### First-launch warning
+
+Aegis is free and isn't signed with a paid Apple or Microsoft certificate, so your computer warns you the first time. This happens once.
+
+- **Windows** — "Windows protected your PC": click **More info**, then **Run anyway**.
+- **Mac** — "Aegis can't be opened" / "Apple could not verify…":
+  1. Click **Done** (not "Move to Trash").
+  2. Open **System Settings → Privacy & Security**, scroll down, click **Open Anyway** next to Aegis, and confirm with your password.
+  3. On older macOS (14 and earlier) you can instead right-click Aegis in Applications → **Open** → **Open**.
 
 Nothing else to install. Aegis includes everything it needs.
 

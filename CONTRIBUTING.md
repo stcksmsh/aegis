@@ -42,7 +42,7 @@ Manual USB flow: [docs/usb-testing.md](docs/usb-testing.md). API: [docs/ipc.md](
 
 `.github/workflows/release.yml` builds Windows, macOS (Apple chip + Intel) and Linux installers with restic bundled and publishes the GitHub Release.
 
-Installers are not code-signed yet, so users see a one-time OS warning (explained in the user guide and release notes). Signing needs an Apple Developer ID / Windows certificate — add via tauri-action secrets when available.
+Installers are intentionally not code-signed (paid certificates). macOS builds are ad-hoc signed so they open via Privacy & Security → Open Anyway; the one-time warning is explained in the user guide and release notes. If signing is ever added: Apple Developer ID / Windows certificate via tauri-action secrets.
 
 ## Style
 

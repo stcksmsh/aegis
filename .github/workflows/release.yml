@@ -96,11 +96,12 @@ jobs:
 
             ## First launch
 
-            **macOS**: the app isn't signed by an Apple-registered developer yet, so
-            Gatekeeper will block the first launch. Right-click (or Control-click) the
-            app and choose **Open**, then confirm in the dialog. If that doesn't show
-            an Open option, go to **System Settings → Privacy & Security** and click
-            **Open Anyway** next to the Aegis entry, then try opening it again.
+            Aegis is free and not signed with a paid certificate, so the first launch
+            shows a warning once. It's safe to continue:
 
-            **Windows**: SmartScreen may show "Windows protected your PC" because the
-            installer isn't code-signed yet. Click **More info**, then **Run anyway**.
+            **macOS**: click **Done**, then open **System Settings → Privacy & Security**,
+            scroll down and click **Open Anyway** next to Aegis.
+
+            **Windows**: on "Windows protected your PC", click **More info**, then **Run anyway**.
+
+            Step-by-step help: [User Guide](https://github.com/stcksmsh/aegis/blob/master/docs/USER_GUIDE.md#first-launch-warning)

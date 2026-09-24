@@ -79,6 +79,29 @@ pub(crate) struct ResticConfig {
     id: String,
 }
 
+/// One entry from `restic ls`: a file or folder inside a snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowseEntry {
+    pub name: String,
+    /// Full snapshot-internal path (restic tree form), reusable as a browse `path` or restore `include_paths` entry.
+    pub path: String,
+    #[serde(rename = "type")]
+    pub entry_type: String,
+    pub size: Option<u64>,
+    pub mtime: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ResticLsNode {
+    struct_type: Option<String>,
+    name: Option<String>,
+    #[serde(rename = "type")]
+    node_type: Option<String>,
+    path: Option<String>,
+    size: Option<u64>,
+    mtime: Option<String>,
+}
+
 impl Restic {
     pub fn resolve(override_path: Option<&str>) -> anyhow::Result<Self> {
         if let Some(path) = override_path {
@@ -333,7 +356,8 @@ impl Restic {
         cancel: CancellationToken,
     ) -> anyhow::Result<()> {
         // Restore relative to the backed-up folders' common parent, so the user gets
-        // <target>/Documents/... instead of <target>/home/user/Documents/...
+        // <target>/Documents/... instead of <target>/home/user/Documents/..., whether
+        // restoring everything or just a few selected files/folders.
         let snapshot_paths = self
             .snapshots(repo, passphrase)
             .await?
@@ -341,9 +365,10 @@ impl Restic {
             .find(|s| s.id == snapshot_id || s.id.starts_with(snapshot_id))
             .map(|s| s.paths)
             .unwrap_or_default();
-        let source = match restore_subfolder(&snapshot_paths) {
-            Some(sub) if includes.is_empty() => format!("{}:{}", snapshot_id, sub),
-            _ => snapshot_id.to_string(),
+        let subfolder = restore_subfolder(&snapshot_paths);
+        let source = match &subfolder {
+            Some(sub) => format!("{}:{}", snapshot_id, sub),
+            None => snapshot_id.to_string(),
         };
         let mut args = vec![
             "restore".to_string(),
@@ -353,11 +378,76 @@ impl Restic {
         ];
         for include in includes {
             args.push("--include".to_string());
-            args.push(include.clone());
+            args.push(relativize_include(include, subfolder.as_deref()));
         }
         self.run_capture_cancellable(repo, passphrase, &args, cancel)
             .await?;
         Ok(())
+    }
+
+    /// List one directory level inside a snapshot (like `ls`, not `find`): `dir` must be an
+    /// absolute snapshot-internal path (restic tree form), e.g. from `browse_root` or a
+    /// previous `BrowseEntry::path`.
+    pub async fn ls_dir(
+        &self,
+        repo: &Path,
+        passphrase: &str,
+        snapshot_id: &str,
+        dir: &str,
+    ) -> anyhow::Result<Vec<BrowseEntry>> {
+        let output = self
+            .run_capture(
+                repo,
+                passphrase,
+                &[
+                    "ls".to_string(),
+                    "--json".to_string(),
+                    snapshot_id.to_string(),
+                    dir.to_string(),
+                ],
+            )
+            .await?;
+        let mut entries = Vec::new();
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let Ok(node) = serde_json::from_str::<ResticLsNode>(line) else {
+                continue;
+            };
+            if node.struct_type.as_deref() != Some("node") {
+                continue; // the first line is the snapshot summary, not an entry
+            }
+            let (Some(name), Some(path)) = (node.name, node.path) else {
+                continue;
+            };
+            if path == dir {
+                continue; // `restic ls <dir>` also reports the directory itself
+            }
+            let is_dir = node.node_type.as_deref() == Some("dir");
+            entries.push(BrowseEntry {
+                name,
+                path,
+                entry_type: if is_dir { "dir" } else { "file" }.to_string(),
+                size: if is_dir { None } else { node.size },
+                mtime: node.mtime,
+            });
+        }
+        entries.sort_by(|a, b| {
+            let a_is_file = a.entry_type != "dir";
+            let b_is_file = b.entry_type != "dir";
+            a_is_file
+                .cmp(&b_is_file)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+        Ok(entries)
+    }
+
+    /// Starting point for browsing a snapshot: the backed-up folders' common parent
+    /// (so the root shows "Documents", "Pictures", ...), or the snapshot root if there's none.
+    pub fn browse_root(paths: &[String]) -> String {
+        restore_subfolder(paths).unwrap_or_else(|| "/".to_string())
     }
 
     async fn run_capture(
@@ -474,6 +564,35 @@ fn restore_subfolder(paths: &[String]) -> Option<String> {
     (!common.is_empty()).then(|| format!("/{}", common.join("/")))
 }
 
+/// Turn a full snapshot-internal path into a `--include` pattern for a `snap:subfolder`
+/// restore: made relative to `subfolder` (restic matches `--include` against the
+/// subfolder-relative path, not the full snapshot path), and with glob characters
+/// escaped so filenames containing `*`, `?` or `[` are matched literally, not as patterns.
+fn relativize_include(path: &str, subfolder: Option<&str>) -> String {
+    let rel = match subfolder {
+        Some(sub) => match path.strip_prefix(sub) {
+            Some(rest) if !rest.is_empty() => rest,
+            Some(_) => "/", // include path is the subfolder itself
+            None => path,   // doesn't share the subfolder prefix; pass through defensively
+        },
+        None => path,
+    };
+    escape_glob(rel)
+}
+
+/// Escapes `\`, `*`, `?` and `[` so restic's `--include`/`--exclude` glob matcher treats them
+/// as literal characters instead of wildcards.
+fn escape_glob(pattern: &str) -> String {
+    let mut out = String::with_capacity(pattern.len());
+    for c in pattern.chars() {
+        if matches!(c, '\\' | '*' | '?' | '[') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 fn to_tree_path(path: &str) -> String {
     let b = path.as_bytes();
     if b.len() >= 2 && b[1] == b':' && b[0].is_ascii_alphabetic() {
@@ -509,6 +628,25 @@ mod tests {
         assert_eq!(restore_subfolder(&p(&["/home/u/Docs", "/mnt/x"])), None);
         assert_eq!(restore_subfolder(&p(&["/Docs"])), None);
         assert_eq!(restore_subfolder(&[]), None);
+    }
+
+    #[test]
+    fn relativize_include_strips_subfolder_and_escapes_globs() {
+        assert_eq!(
+            relativize_include("/home/u/Documents/a.txt", Some("/home/u")),
+            "/Documents/a.txt"
+        );
+        assert_eq!(
+            relativize_include("/home/u/w[eird]/star*.txt", Some("/home/u")),
+            "/w\\[eird]/star\\*.txt"
+        );
+        // Include path equal to the subfolder itself: restore everything under it.
+        assert_eq!(relativize_include("/home/u", Some("/home/u")), "/");
+        // No common subfolder: pass the full path through, still escaped.
+        assert_eq!(
+            relativize_include("/home/u/a?.txt", None),
+            "/home/u/a\\?.txt"
+        );
     }
 
     #[test]

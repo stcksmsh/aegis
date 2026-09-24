@@ -40,9 +40,19 @@ Nothing else to install. Aegis includes everything it needs.
 
 1. Plug in the drive, open Aegis, go to **Restore**.
 2. Click **Show backups** (each backup is listed with its date).
-3. Pick one, choose an empty folder, click **Restore selected**.
+3. Pick one and choose an empty folder.
+4. Click **Restore everything** for the whole backup, or click **Restore selected**.
 
 Aegis restores into the folder you choose; it never overwrites your current files.
+
+### Getting back just some files
+
+If you only lost a few files or one folder, you don't need to restore everything:
+
+1. After picking a backup, a list of its folders appears below it.
+2. Click the arrow next to a folder to look inside it.
+3. Check the boxes next to the files or folders you want back.
+4. Choose an empty folder, then click **Restore selected**.
 
 ### On a new or reinstalled computer
 

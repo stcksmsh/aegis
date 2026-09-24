@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Restore: get back just some files. Browse a backup's folders and check the files/folders you want, instead of restoring everything.
+
 ## 0.2.0
 
 - Desktop app now runs the backup agent itself — no separate service or terminal needed.

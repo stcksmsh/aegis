@@ -13,6 +13,8 @@
 - Dashboard shows free/total space on the connected drive, with a warning when it's almost full; notifies after a backup if under 10% free.
 - New configs now skip common junk by default (`node_modules`, `.cache`, `*.tmp`, `Thumbs.db`, `.DS_Store`, `$RECYCLE.BIN`, `.Trash*`, Office lock files).
 - Restore never overwrites files already in the target folder.
+- Restore shows progress and a clear result, opens the restored folder, lists newest backups first, and accepts `~/` folders.
+- Fixed: backup details (file count/size) never loaded; Cancel on restore/eject confirmations was ignored; drive space could show the wrong disk.
 - Restore: get back just some files. Browse a backup's folders and check the files/folders you want, instead of restoring everything.
 
 - Desktop app now runs the backup agent itself — no separate service or terminal needed.

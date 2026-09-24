@@ -36,8 +36,9 @@
           <div class="panel">
             <h1>Welcome to Aegis</h1>
             <p class="lead">
-              Aegis protects your files from offline drive theft by encrypting every backup.
-              It does not protect against a compromised computer, malware, or coercion.
+              Aegis protects your files by encrypting every backup, so if your USB drive is lost or
+              stolen, no one else can read it. It can't protect you if your computer is already
+              infected, or if someone forces you to unlock your files.
             </p>
             <div class="wizard-progress" id="wizard-progress">Step 1 of 4</div>
             <div class="step-grid">
@@ -51,7 +52,7 @@
                 </div>
                 <div class="field-row">
                   <input id="custom-label" type="text" placeholder="Custom folder label" />
-                  <input id="custom-path" type="text" placeholder="/path/to/folder" />
+                  <input id="custom-path" type="text" placeholder="Folder location" />
                   <button class="btn ghost" id="browse-folder" type="button">Browse…</button>
                   <button class="btn secondary" id="add-custom" type="button">Add</button>
                 </div>
@@ -71,17 +72,17 @@
                   <input id="passphrase-confirm" type="password" placeholder="Re-enter passphrase" />
                 </div>
                 <label class="checkbox">
-                  <input id="remember-passphrase" type="checkbox" checked /> Remember on this PC (OS keychain)
+                  <input id="remember-passphrase" type="checkbox" checked /> Remember on this computer (secure storage)
                 </label>
                 <label class="checkbox">
-                  <input id="paranoid-mode" type="checkbox" /> Paranoid Mode (ask every time)
+                  <input id="paranoid-mode" type="checkbox" /> Always ask for my passphrase (Paranoid Mode)
                 </label>
               </div>
 
               <div class="step-card wizard-step hidden" data-step="2">
                 <div class="step-label">Step 3</div>
                 <h2>Connect your USB drive</h2>
-                <p class="muted">Select a drive below. You can mount it or erase &amp; set it up for Aegis.</p>
+                <p class="muted">Select a drive below. You can open it, or erase &amp; set it up for Aegis.</p>
                 <div class="drive-detect drive-detect-message">Waiting for drive…</div>
                 <div class="device-panel">
                   <div class="device-panel-header">
@@ -93,9 +94,9 @@
                     <div class="device-panel-subtitle" id="device-status"></div>
                   </div>
                   <div class="preflight" id="preflight">
-                    <div class="preflight-item" id="preflight-restic">Restic: checking…</div>
-                    <div class="preflight-item" id="preflight-udisks">Disk tools: checking…</div>
-                    <div class="preflight-item" id="preflight-exfat">exFAT formatter: checking…</div>
+                    <div class="preflight-item" id="preflight-restic">Backup engine: checking…</div>
+                    <div class="preflight-item" id="preflight-udisks">Drive tools: checking…</div>
+                    <div class="preflight-item" id="preflight-exfat">Drive formatting: checking…</div>
                   </div>
                   <div id="device-empty" class="muted hidden">No removable drives detected.</div>
                   <div id="device-list" class="device-list"></div>
@@ -105,12 +106,12 @@
                   <input id="drive-label" type="text" placeholder="Work Backup" />
                 </div>
                 <div class="device-actions">
-                  <button class="btn secondary" id="mount-drive" type="button">Mount</button>
+                  <button class="btn secondary" id="mount-drive" type="button">Open drive</button>
                   <button class="btn primary" id="setup-drive" type="button">Use this drive</button>
                 </div>
                 <div class="device-danger">
                   <label class="checkbox">
-                    <input id="erase-option" type="checkbox" /> Erase &amp; format as exFAT (destructive)
+                    <input id="erase-option" type="checkbox" /> Erase &amp; format as exFAT (this deletes everything on the drive)
                   </label>
                   <label class="field hidden" id="erase-phrase-field">
                     <span>Type ERASE to confirm formatting</span>
@@ -142,7 +143,7 @@
           <div class="panel">
             <h1>Set up a new drive</h1>
             <p class="lead">
-              Add another USB drive as a trusted backup target. Select a partition, mount or format it, then set a passphrase.
+              Add another USB drive for Aegis to back up to. Choose the drive, open or format it, then set a passphrase.
             </p>
             <div class="device-panel">
               <div class="device-panel-header">
@@ -152,9 +153,9 @@
                 <div class="device-panel-subtitle" id="setup-drive-status"></div>
               </div>
               <div class="preflight" id="setup-drive-preflight">
-                <div class="preflight-item" id="setup-drive-preflight-restic">Restic: checking…</div>
-                <div class="preflight-item" id="setup-drive-preflight-udisks">Disk tools: checking…</div>
-                <div class="preflight-item" id="setup-drive-preflight-exfat">exFAT formatter: checking…</div>
+                <div class="preflight-item" id="setup-drive-preflight-restic">Backup engine: checking…</div>
+                <div class="preflight-item" id="setup-drive-preflight-udisks">Drive tools: checking…</div>
+                <div class="preflight-item" id="setup-drive-preflight-exfat">Drive formatting: checking…</div>
               </div>
               <div id="setup-drive-device-empty" class="muted hidden">No removable drives detected.</div>
               <div id="setup-drive-device-list" class="device-list"></div>
@@ -172,18 +173,18 @@
             </div>
             <div class="field-row">
               <input id="setup-drive-custom-label" type="text" placeholder="Custom folder label" />
-              <input id="setup-drive-custom-path" type="text" placeholder="/path/to/folder" />
+              <input id="setup-drive-custom-path" type="text" placeholder="Folder location" />
               <button class="btn ghost" id="setup-drive-browse" type="button">Browse…</button>
               <button class="btn secondary" id="setup-drive-add-custom" type="button">Add</button>
             </div>
             <ul id="setup-drive-custom-list" class="chip-list"></ul>
             <div class="device-actions">
-              <button class="btn secondary" id="setup-drive-mount" type="button">Mount</button>
+              <button class="btn secondary" id="setup-drive-mount" type="button">Open drive</button>
               <button class="btn primary" id="setup-drive-setup-btn" type="button">Set up this drive</button>
             </div>
             <div class="device-danger">
               <label class="checkbox">
-                <input id="setup-drive-erase-option" type="checkbox" /> Erase &amp; format as exFAT (destructive)
+                <input id="setup-drive-erase-option" type="checkbox" /> Erase &amp; format as exFAT (this deletes everything on the drive)
               </label>
               <label class="field hidden" id="setup-drive-erase-phrase-field">
                 <span>Type ERASE to confirm formatting</span>
@@ -201,10 +202,10 @@
               <input id="setup-drive-passphrase-confirm" type="password" placeholder="Re-enter passphrase" />
             </div>
             <label class="checkbox">
-              <input id="setup-drive-remember" type="checkbox" checked /> Remember on this PC (OS keychain)
+              <input id="setup-drive-remember" type="checkbox" checked /> Remember on this computer (secure storage)
             </label>
             <label class="checkbox">
-              <input id="setup-drive-paranoid" type="checkbox" /> Paranoid Mode (ask every time)
+              <input id="setup-drive-paranoid" type="checkbox" /> Always ask for my passphrase (Paranoid Mode)
             </label>
           </div>
         </section>
@@ -224,7 +225,7 @@
             <p class="muted drive-detect-message">Waiting for drive…</p>
 
             <div class="backup-targets" id="backup-targets-section">
-              <h2 class="step-label">Backup targets</h2>
+              <h2 class="step-label">Your drives</h2>
               <p class="muted">What is backed up and to which drive.</p>
               <div id="backup-targets-list" class="backup-targets-list"></div>
               <div id="backup-targets-empty" class="muted">No drives set up yet. Add a drive to get started.</div>
@@ -243,16 +244,16 @@
         <section id="restore" class="view hidden">
           <div class="panel">
             <h1>Restore</h1>
-            <p class="lead">Choose a snapshot and restore to a new folder. Aegis never overwrites without confirmation.</p>
+            <p class="lead">Choose a backup and restore it to a new folder. Aegis never overwrites your existing files.</p>
             <div class="field-row">
-              <button class="btn secondary" id="load-snapshots">Load snapshots</button>
-              <span class="muted" id="snapshot-info">Snapshots are encrypted. Passphrase required.</span>
+              <button class="btn secondary" id="load-snapshots">Show backups</button>
+              <span class="muted" id="snapshot-info">Backups are encrypted. Passphrase required.</span>
             </div>
             <div class="snapshot-list" id="snapshot-list"></div>
             <div class="muted" id="snapshot-summary"></div>
             <div class="field">
               <label>Restore to folder</label>
-              <input id="restore-target" type="text" placeholder="/path/to/restore" />
+              <input id="restore-target" type="text" placeholder="Choose an empty folder" />
             </div>
             <button class="btn primary" id="restore-run">Restore selected</button>
           </div>
@@ -262,14 +263,14 @@
           <div class="panel">
             <h1>Settings</h1>
             <div class="field">
-              <label>Exclude patterns</label>
+              <label>Skip these files or folders</label>
               <input id="exclude-patterns" type="text" placeholder=".cache, node_modules" />
             </div>
             <label class="checkbox">
               <input id="quick-verify" type="checkbox" checked /> Quick verify after backup
             </label>
             <label class="checkbox">
-              <input id="auto-backup" type="checkbox" checked /> Run backup when trusted drive is inserted
+              <input id="auto-backup" type="checkbox" checked /> Back up automatically when your Aegis drive is plugged in
             </label>
             <label class="checkbox">
               <input id="autostart" type="checkbox" /> Start Aegis when I log in (needed for automatic backups)
@@ -287,7 +288,7 @@
               </label>
             </div>
             <div class="field">
-              <label>Include patterns (advanced)</label>
+              <label>Only include files matching (advanced)</label>
               <input id="include-patterns" type="text" placeholder="Photos/**, *.docx" />
             </div>
             <div class="field">
@@ -300,13 +301,13 @@
                 <input id="keep-yearly" type="number" min="0" placeholder="Keep yearly" />
               </div>
               <label class="checkbox">
-                <input id="retention-enabled" type="checkbox" /> Enable retention pruning
+                <input id="retention-enabled" type="checkbox" /> Automatically delete old backups based on these settings
               </label>
             </div>
             <button class="btn primary" id="save-advanced">Save advanced</button>
             <div class="field">
               <label>Recovery kit</label>
-              <input id="recovery-destination" type="text" placeholder="/path/to/folder" />
+              <input id="recovery-destination" type="text" placeholder="Folder location" />
               <button class="btn secondary" id="export-recovery">Export recovery kit</button>
             </div>
           </div>
@@ -326,11 +327,11 @@
             <input id="modal-discontinue-input" type="text" placeholder="" />
             <label class="checkbox-label wipe-option">
               <input type="checkbox" id="modal-discontinue-wipe" />
-              Also wipe all data (secure erase). Drive must be connected.
+              Also erase all data on the drive so it can't be recovered. Drive must be connected.
             </label>
           </div>
           <div class="field hidden" id="modal-rename-field">
-            <label>Drive name (in-app)</label>
+            <label>Drive name (just for Aegis)</label>
             <input id="modal-rename-input" type="text" placeholder="e.g. My backup" />
           </div>
           <div id="modal-error" class="muted"></div>

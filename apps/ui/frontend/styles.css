@@ -652,12 +652,6 @@ h1 {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
 
 .btn.primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
@@ -886,4 +880,12 @@ body.setup-loading .device-danger {
   main {
     max-height: calc(100vh - 150px);
   }
+}
+
+/* Last so it beats .btn.primary etc. */
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }

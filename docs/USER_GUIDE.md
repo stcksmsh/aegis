@@ -29,7 +29,7 @@ Nothing else to install. Aegis includes everything it needs.
 
 ## 3. Everyday use
 
-- **Plug in your drive → backup starts automatically** (if "remember passphrase" is on). Otherwise open Aegis and click **Back up now**.
+- **Plug in your drive → backup starts automatically** (if "Remember on this computer" is on). Otherwise open Aegis and click **Back up now**.
 - Closing the window keeps Aegis running in the tray / menu bar so it can notice your drive. To stop it fully: tray icon → **Quit Aegis**.
 - Wait for "Backup completed", then click **Eject drive** before unplugging.
 - Unplugged mid-backup? No harm. Older backups stay intact; the next backup picks up again.
@@ -37,8 +37,8 @@ Nothing else to install. Aegis includes everything it needs.
 ## 4. Get files back
 
 1. Plug in the drive, open Aegis, go to **Restore**.
-2. Click **Load snapshots** (each snapshot = one backup, with its date).
-3. Pick one, choose an empty folder, click **Restore to folder**.
+2. Click **Show backups** (each backup is listed with its date).
+3. Pick one, choose an empty folder, click **Restore selected**.
 
 Aegis restores into the folder you choose; it never overwrites your current files.
 
@@ -56,12 +56,12 @@ Your backups are standard [restic](https://restic.net) repositories. Even withou
 
 | Setting | Meaning |
 |---|---|
-| Run backup when drive is inserted | Automatic backups on plug-in. Needs "remember passphrase". |
-| Remember passphrase | Stores the passphrase in your system's secure keychain so backups run without asking. |
-| Paranoid mode | Never store the passphrase anywhere; you type it every time. Disables automatic backups. |
+| Back up automatically when your Aegis drive is plugged in | Automatic backups on plug-in. Needs "Remember on this computer". |
+| Remember on this computer (secure storage) | Stores the passphrase securely on your computer so backups run without asking. |
+| Always ask for my passphrase (Paranoid Mode) | Never store the passphrase anywhere; you type it every time. Disables automatic backups. |
 | Quick verify | After each backup, quickly checks the backup is readable. Recommended. |
 | Deep verify | Reads back all backup data. Slow; catches failing drives. |
-| Exclude patterns | Files to skip, e.g. `*.tmp` or `node_modules`. |
+| Skip these files or folders | Files to skip, e.g. `*.tmp` or `node_modules`. |
 | Retention | How many old backups to keep before cleaning up. Off = keep everything. |
 
 ## 7. Problems?

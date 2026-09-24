@@ -3,7 +3,7 @@
     "frontendDist": "../frontend"
   },
   "productName": "Aegis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "io.github.stcksmsh.aegis",
   "app": {
     "security": {

@@ -696,8 +696,8 @@ pub(crate) fn disk_space_for_mount(mount_path: &Path) -> Option<(u64, u64)> {
     disks
         .list()
         .iter()
-        .filter(|disk| target.starts_with(disk.mount_point()))
-        .max_by_key(|disk| disk.mount_point().as_os_str().len())
+        // Exact mount only: a prefix match would report the parent disk's space.
+        .find(|disk| disk.mount_point() == target)
         .map(|disk| (disk.available_space(), disk.total_space()))
 }
 

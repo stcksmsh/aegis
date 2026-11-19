@@ -1,0 +1,82 @@
+# Builds this repository's `website` branch and deploys it to this
+# repository's own GitHub Pages. Fully independent of stcksmsh.github.io:
+# the root site only ever reads publication.json from this branch, and a
+# failure here never blocks the root site's build (or vice versa).
+#
+# One-time setup: Settings -> Pages -> Build and deployment -> Source:
+# "GitHub Actions".
+name: deploy website
+
+on:
+  push:
+    branches: [website]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: install
+        run: if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - name: build
+        run: npm run build
+        env:
+          # Empty unless the repository variable BASE_PATH is set (e.g. to
+          # "/" after moving to a custom domain); vite.config.js falls back
+          # to "/<Repo>/" for the default project-pages URL.
+          BASE_PATH: ${{ vars.BASE_PATH }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  # Optional: ask the root site to rebuild so a changed publication.json
+  # (url/category/visibility) shows up there. Same workflow_dispatch pattern
+  # and SITE_DISPATCH_TOKEN secret as the io-page notify-site.yml. Skipped
+  # when the secret is not set; a failure here is reported but does not
+  # affect this site's deployment, which has already finished.
+  notify-root-site:
+    needs: deploy
+    runs-on: ubuntu-latest
+    env:
+      SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+    steps:
+      - name: dispatch root site rebuild
+        if: env.SITE_DISPATCH_TOKEN != ''
+        continue-on-error: true
+        run: |
+          resp=$(curl -sS -w '\n%{http_code}' -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $SITE_DISPATCH_TOKEN" \
+            https://api.github.com/repos/stcksmsh/stcksmsh.github.io/actions/workflows/deploy.yml/dispatches \
+            -d '{"ref":"main"}')
+          status="${resp##*$'\n'}"
+          body="${resp%$'\n'*}"
+          echo "HTTP $status"
+          echo "$body"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::dispatch failed (HTTP $status) - check SITE_DISPATCH_TOKEN"
+            exit 1
+          fi

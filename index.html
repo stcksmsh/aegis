@@ -3,15 +3,176 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>aegis</title>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Aegis — encrypted backups to a USB drive</title>
+    <meta name="description" content="Aegis copies your important folders to a USB drive and locks them with a passphrase only you know. Plug in, backed up. Windows, macOS, Linux." />
+    <meta property="og:title" content="Aegis — encrypted backups to a USB drive" />
+    <meta property="og:description" content="Plug in → backed up. Encrypted, automatic, no cloud. Rust + Tauri, backups by restic." />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#0d1117" />
+    <link rel="icon" href="/media/icon128.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" />
   </head>
   <body>
-    <main>
-      <h1>aegis</h1>
-      <p>This site is built and deployed from the <code>website</code> branch of its own repository.</p>
-      <p id="built"></p>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="top">
+      <a class="logo" href="#" aria-label="Aegis, top of page"><img src="/media/icon128.png" alt="" width="36" height="36" /><span>Aegis<small>secure usb backup</small></span></a>
+      <nav aria-label="Sections">
+        <a href="#how">How it works</a>
+        <a href="#security">Security</a>
+        <a href="#download">Download</a>
+        <a href="https://github.com/stcksmsh/aegis">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="copy">
+          <p class="eyebrow mono">Windows · macOS · Linux</p>
+          <h1>Plug in.<br /><span class="grad">Backed up.</span></h1>
+          <p class="lede">Aegis copies your important folders to a USB drive and locks them with a passphrase only you know. If your laptop dies, gets stolen or gets hit by ransomware, plug the drive into any computer and get your files back. If someone steals the drive, they get nothing.</p>
+          <div class="cta">
+            <a class="btn primary" href="#download">Download</a>
+            <a class="btn" href="#sim">Try the plug-in</a>
+          </div>
+        </div>
+
+        <div id="sim" class="sim" aria-labelledby="sim-h">
+          <h2 id="sim-h" class="sr">Simulation: back up to a USB drive</h2>
+          <div class="pc">
+            <div class="pc-bar"><span></span><span></span><span></span><b class="mono">your computer</b></div>
+            <ul class="files" id="files" aria-label="Files to protect"></ul>
+            <div class="port-row">
+              <div class="port" id="port" aria-hidden="true"><i></i></div>
+              <p class="status mono" id="status" role="status">Drive not connected</p>
+            </div>
+            <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+          </div>
+          <div class="usb-dock" id="dock">
+            <button type="button" class="usb" id="usb" aria-describedby="usb-hint">
+              <span class="plug" aria-hidden="true"></span>
+              <span class="body" aria-hidden="true"><b class="mono">BACKUP</b><em id="usb-led"></em></span>
+              <span class="sr" id="usb-label">Plug in the drive</span>
+            </button>
+            <p id="usb-hint" class="hint">Drag the drive to the port, or press it.</p>
+          </div>
+          <div class="sim-tools">
+            <button type="button" class="btn small" id="edit">Change a file</button>
+            <button type="button" class="btn small" id="steal" disabled>Look inside the drive</button>
+          </div>
+          <div class="history" aria-labelledby="hist-h">
+            <h3 id="hist-h" class="mono">Backups on the drive</h3>
+            <ol id="snaps"><li class="empty">None yet. Plug the drive in.</li></ol>
+          </div>
+          <div class="peek" id="peek" hidden>
+            <h3 class="mono">What a thief sees</h3>
+            <pre id="peek-body" class="mono"></pre>
+          </div>
+          <p class="caption">A simulation of the flow, in this page. The file names are made up.</p>
+        </div>
+      </section>
+
+      <section id="how" class="band" aria-labelledby="how-h">
+        <h2 id="how-h">How it works</h2>
+        <ol class="steps">
+          <li><b>Pick folders.</b> Documents, Pictures, Desktop, or anything else.</li>
+          <li><b>Pick a passphrase.</b> Write it down. No one, not even Aegis, can recover it.</li>
+          <li><b>Plug in a USB drive.</b> Aegis sets it up without deleting what's already on it.</li>
+          <li><b>Done.</b> Next time you plug the drive in, Aegis backs up by itself. Only changed files are copied, so later backups are fast.</li>
+        </ol>
+        <p class="restore">Restore: open Aegis → <b>Restore</b> → pick a date → pick a folder. New computer? Install Aegis, plug in the drive, type your passphrase.</p>
+        <figure class="video">
+          <video id="demo" src="/media/demo.mp4" poster="/media/demo-poster.png" muted loop playsinline preload="metadata" width="1280" height="900" aria-label="Aegis demo: set a passphrase, back up, restore two files"></video>
+          <button type="button" class="play" id="play" aria-label="Play demo video">▶</button>
+          <figcaption>Set a passphrase, back up, restore two files.</figcaption>
+        </figure>
+        <div class="shots">
+          <figure><img src="/media/welcome.png" alt="Aegis welcome screen, step 1 of 4: select what to protect (Documents, Pictures, Desktop)" width="900" height="464" loading="lazy" /><figcaption>First run: pick what to protect.</figcaption></figure>
+          <figure><img src="/media/dashboard.png" alt="Aegis dashboard: one drive set up, Back up now, Restore, Eject drive" width="900" height="352" loading="lazy" /><figcaption>The dashboard.</figcaption></figure>
+        </div>
+      </section>
+
+      <section class="band" aria-labelledby="feat-h">
+        <h2 id="feat-h">What you get</h2>
+        <ul class="features">
+          <li><b>Strong encryption</b>Every backup is encrypted (AES-256) before it touches the drive.</li>
+          <li><b>Automatic</b>Backs up when you plug in your drive. Runs quietly in the tray or menu bar.</li>
+          <li><b>History</b>Keeps every past version until you choose to clean up. Get back last week's file.</li>
+          <li><b>Get back one file</b>Browse any past backup and restore just the files you need. Never overwrites what's already there.</li>
+          <li><b>Reminders</b>Nudges you when it's been a week since your last backup. Optional hourly backups while the drive stays plugged in.</li>
+          <li><b>Drive space</b>Shows free space and warns before your drive fills up.</li>
+          <li><b>Safe to unplug</b>Unplugging mid-backup never damages earlier backups.</li>
+          <li><b>Checks itself</b>Verifies each backup after it finishes.</li>
+          <li><b>No lock-in</b>Backups use the open <a href="https://restic.net">restic</a> format. Readable without Aegis.</li>
+          <li><b>Private</b>No accounts, no cloud, no internet. Your passphrase is never saved to disk (optionally kept in your system keychain).</li>
+          <li><b>Every desktop</b>Same app on Windows, macOS and Linux. A drive made on one works on the others (use exFAT).</li>
+        </ul>
+      </section>
+
+      <section id="security" class="band" aria-labelledby="sec-h">
+        <h2 id="sec-h">Lose the drive, not the files</h2>
+        <div class="lock">
+          <div class="lock-in">
+            <label for="secret">A file on your computer</label>
+            <textarea id="secret" rows="3">Tax return 2025 — final.pdf
+Passport scan, both pages.</textarea>
+            <label for="pass">Passphrase</label>
+            <input id="pass" type="text" value="correct horse battery staple" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="lock-out">
+            <p class="label">On the drive</p>
+            <pre id="cipher" class="mono" aria-live="off"></pre>
+            <label for="guess">Someone who found the drive tries a passphrase</label>
+            <input id="guess" type="text" placeholder="guess…" autocomplete="off" spellcheck="false" />
+            <p id="verdict" class="verdict mono" role="status"></p>
+          </div>
+          <p class="caption">This runs your browser's Web Crypto (AES-256-GCM, key from PBKDF2) as an illustration. Aegis adds no crypto of its own: backups are restic repositories (AES-256-CTR + Poly1305, scrypt key derivation).</p>
+        </div>
+        <ul class="sec-list">
+          <li><b>Passphrase</b> never written to disk or logs, never passed on a command line. Optional storage in the OS keychain; paranoid mode turns that off.</li>
+          <li><b>Local API</b> listens on <code>127.0.0.1</code> only and accepts requests only from the Aegis window, which blocks websites from talking to it.</li>
+          <li><b>Drives are untrusted.</b> Drive markers hold no secrets and are sanitized when read.</li>
+          <li><b>Restore never overwrites</b> existing files.</li>
+          <li><b>Supply chain:</b> the bundled restic is a pinned release, checked against restic's published SHA-256 checksums at build time.</li>
+          <li><b>Out of scope:</b> malware already running as you, or someone who forces you to reveal your passphrase.</li>
+        </ul>
+        <p class="more"><a href="https://github.com/stcksmsh/aegis/blob/master/SECURITY.md">Security design and how to report a vulnerability →</a></p>
+      </section>
+
+      <section id="download" class="band" aria-labelledby="dl-h">
+        <h2 id="dl-h">Download</h2>
+        <p id="rel-note" class="rel-note">Installers are published on the <a href="https://github.com/stcksmsh/aegis/releases">releases page</a>. Everything Aegis needs is inside the installer.</p>
+        <table class="dl">
+          <thead><tr><th scope="col">Computer</th><th scope="col">File</th></tr></thead>
+          <tbody id="dl-rows">
+            <tr data-os="win"><td>Windows 10 / 11</td><td class="mono">Aegis_…_x64-setup.exe</td></tr>
+            <tr data-os="mac-arm"><td>Mac with Apple chip (M1 and newer)</td><td class="mono">Aegis_…_aarch64.dmg</td></tr>
+            <tr data-os="mac-intel"><td>Mac with Intel chip</td><td class="mono">Aegis_…_x64.dmg</td></tr>
+            <tr data-os="deb"><td>Ubuntu / Debian / Mint</td><td class="mono">Aegis_…_amd64.deb</td></tr>
+            <tr data-os="linux"><td>Other Linux</td><td class="mono">Aegis_…_amd64.AppImage</td></tr>
+          </tbody>
+        </table>
+        <details class="warn">
+          <summary>First launch shows a warning</summary>
+          <p>Aegis is free and not signed with a paid Apple or Microsoft certificate, so the first launch shows a warning. It's safe to continue.</p>
+          <p><b>Windows:</b> "More info" → "Run anyway". <b>Mac:</b> open Aegis once, click "Done", then System Settings → Privacy &amp; Security → scroll down → "Open Anyway". <a href="https://github.com/stcksmsh/aegis/blob/master/docs/USER_GUIDE.md#first-launch-warning">Details</a></p>
+        </details>
+        <div class="dev">
+          <h3>From source</h3>
+          <pre class="mono"><code>bash scripts/fetch-restic.sh x86_64-unknown-linux-gnu   # bundled restic
+cargo run -p aegis-ui                                    # desktop app with embedded agent</code></pre>
+          <p><a href="https://github.com/stcksmsh/aegis/blob/master/docs/USER_GUIDE.md">User guide</a> · <a href="https://github.com/stcksmsh/aegis/blob/master/CONTRIBUTING.md">Contributing</a> · <a href="https://github.com/stcksmsh/aegis/blob/master/CHANGELOG.md">Changelog</a></p>
+        </div>
+      </section>
     </main>
+
+    <footer>
+      <p>Rust + <a href="https://tauri.app">Tauri</a>, backups by <a href="https://restic.net">restic</a>. MIT or Apache-2.0. <a href="https://github.com/stcksmsh/aegis">github.com/stcksmsh/aegis</a></p>
+      <p>Made by <a href="https://kostavukicevic.com/">Kosta Vukićević</a>.</p>
+    </footer>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -1,5 +1,7 @@
 # Contributing to Aegis
 
+Anything that changes what is written to drives or the config must follow [COMPATIBILITY.md](COMPATIBILITY.md).
+
 ## Setup
 
 - Rust stable (`rustup`)

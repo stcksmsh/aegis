@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased (1.0.0)
+
+- One drive can hold several separate backups (e.g. one per company), each with its own passphrase. Typing a passphrase finds its backup; a passphrase that opens none asks before creating a new one.
+- Drives from Aegis 0.2 are upgraded automatically and keep working with 0.2.
+- Every backup drive now carries an AEGIS-RESTORE folder: restore your files on any Windows, Mac or Linux computer without Aegis (instructions in English and Serbian).
+- Cleaning up old backups only touches this computer's backups, so several computers can share one drive safely.
+- Settings saved by a newer Aegis version are kept when an older one runs.
+
 ## 0.2.0 — first public release
 
 - UI now follows your system's light/dark theme automatically.

@@ -142,6 +142,25 @@ impl Restic {
         })
     }
 
+    /// Tests: bundled restic (scripts/fetch-restic.sh, as in CI) or one on PATH.
+    #[cfg(test)]
+    pub(crate) fn for_test(host: &str) -> Option<Self> {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui/src-tauri/binaries");
+        let binary = std::fs::read_dir(dir)
+            .ok()
+            .and_then(|rd| {
+                rd.flatten().map(|e| e.path()).find(|p| {
+                    p.file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with("aegis-restic-"))
+                })
+            })
+            .or_else(|| which("restic").ok())?;
+        Some(Self {
+            binary,
+            host: host.to_string(),
+        })
+    }
+
     pub async fn init_repo(&self, repo: &Path, passphrase: &str) -> anyhow::Result<String> {
         debug!("restic: init_repo repo={}", repo.display());
         self.run_capture(repo, passphrase, &["init".to_string()])
@@ -759,23 +778,9 @@ mod tests {
         assert_eq!(parsed.files_done, None);
     }
 
-    /// Bundled restic (fetched by scripts/fetch-restic.sh, as in CI) or one on PATH.
-    fn test_restic() -> Option<PathBuf> {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui/src-tauri/binaries");
-        std::fs::read_dir(dir)
-            .ok()
-            .and_then(|rd| {
-                rd.flatten().map(|e| e.path()).find(|p| {
-                    p.file_name()
-                        .is_some_and(|n| n.to_string_lossy().starts_with("aegis-restic-"))
-                })
-            })
-            .or_else(|| which("restic").ok())
-    }
-
     #[tokio::test]
     async fn retention_never_prunes_another_computers_snapshots() {
-        let Some(binary) = test_restic() else {
+        let Some(restic) = Restic::for_test("laptop") else {
             eprintln!("skipping: no restic binary (run scripts/fetch-restic.sh)");
             return;
         };
@@ -786,8 +791,8 @@ mod tests {
         std::fs::write(src.join("f.txt"), "x").unwrap();
         let pass = "retention-test-pass";
         let as_host = |host: &str| Restic {
-            binary: binary.clone(),
             host: host.to_string(),
+            ..restic.clone()
         };
 
         as_host("laptop").init_repo(&repo, pass).await.unwrap();

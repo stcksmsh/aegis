@@ -15,6 +15,9 @@ mod restic;
 mod retention;
 mod state;
 mod usb;
+
+#[cfg(test)]
+mod compat_tests;
 mod verify;
 
 pub use crate::ipc::API_ADDR;

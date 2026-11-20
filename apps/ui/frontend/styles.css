@@ -472,6 +472,10 @@ div.checkbox input[type="checkbox"] {
   color: var(--strength-strong);
 }
 
+.drive-detect:empty {
+  display: none;
+}
+
 .drive-detect {
   margin-top: 12px;
   padding: 12px;
@@ -1251,11 +1255,12 @@ body.setup-loading .device-danger {
 
 /* Drive card header is a button (keyboard + screen readers). */
 button.backup-target-header {
-  all: unset;
-  display: block;
   width: 100%;
-  box-sizing: border-box;
-  cursor: pointer;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   border-radius: 10px;
 }
 

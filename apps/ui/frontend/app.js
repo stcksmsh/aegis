@@ -463,7 +463,11 @@ async function fetchStatus() {
     const res = await fetch(`${API}/status`);
     if (!res.ok) throw new Error("status failed");
     currentStatus = await res.json();
-    agentOnline = true;
+    // Check drive tools as soon as the agent answers, not 5 s later.
+    if (!agentOnline) {
+      agentOnline = true;
+      fetchPreflight();
+    }
     renderStatus(currentStatus);
   } catch (err) {
     agentOnline = false;
@@ -679,9 +683,8 @@ function renderStatus(status) {
   if (status.first_run && !wizardDismissed) {
     showView("wizard");
     renderWizard();
-  } else if (currentView === "wizard") {
-    showView("dashboard");
   }
+  // Setup ends first_run while the wizard is up; it stays until the user leaves its last step.
   updateWizardSummary(status);
   renderBanner(status);
   updateActionState(status);
@@ -1332,7 +1335,7 @@ function updateDeviceActions() {
 }
 
 function applyFirstRunMode(status) {
-  const inWizard = status?.first_run && !wizardDismissed;
+  const inWizard = currentView === "wizard";
   if (topNav) topNav.classList.toggle("hidden", inWizard);
 }
 
@@ -1389,7 +1392,8 @@ function renderWizard() {
   if (wizardProgress) {
     wizardProgress.textContent = `Step ${wizardStep + 1} of ${wizardSteps.length}`;
   }
-  if (wizardBack) wizardBack.disabled = wizardStep === 0;
+  // The last step comes after the drive is set up: there's nothing to go back to.
+  if (wizardBack) wizardBack.disabled = wizardStep === 0 || wizardStep === wizardSteps.length - 1;
   if (wizardNext) {
     wizardNext.classList.toggle("hidden", wizardStep === wizardSteps.length - 1);
     wizardNext.textContent = wizardStep === 2 ? "Set up this drive" : "Next";
@@ -2611,7 +2615,11 @@ function setupListeners() {
     if (field) field.classList.toggle("hidden", !eraseOption.checked);
   }
   document.getElementById("run-first-backup").addEventListener("click", async () => {
-    if (await saveConfig(wizardPayload())) await startBackup();
+    if (!(await saveConfig(wizardPayload()))) return;
+    wizardDismissed = true;
+    showView("dashboard");
+    applyFirstRunMode(currentStatus);
+    await startBackup();
   });
   if (wizardBack) wizardBack.addEventListener("click", goWizardBack);
   if (wizardNext)

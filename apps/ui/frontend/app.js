@@ -1526,7 +1526,7 @@ function showHandoverInfo(data) {
   uiAlert(
     "This computer now continues an existing backup. Earlier backups stay on the drive and can still be restored.\n\n" +
       "Folders backed up so far:\n" + lines.join("\n") +
-      "\n\nIf this computer keeps the same files in other folders, open the drive under "Your drives" and choose Edit folders.",
+      "\n\nIf this computer keeps the same files in other folders, open the drive under Your drives and choose Edit folders.",
     "Continuing an existing backup"
   );
 }

@@ -145,6 +145,39 @@ struct SetupDriveRequest {
 struct SetupDriveResponse {
     drive_id: String,
     repository_id: String,
+    /// True if the passphrase opened a backup that already existed (e.g. handover to a new computer).
+    existing: bool,
+    /// For an existing backup: the computers that backed up to it and their folders (newest backup each).
+    previous_computers: Vec<PreviousComputer>,
+}
+
+#[derive(Debug, Serialize)]
+struct PreviousComputer {
+    host: String,
+    folders: Vec<String>,
+    last_backup: String,
+}
+
+/// Newest snapshot per computer, newest computer first.
+fn previous_computers(snapshots: Vec<crate::restic::SnapshotInfo>) -> Vec<PreviousComputer> {
+    let mut latest: std::collections::HashMap<String, crate::restic::SnapshotInfo> =
+        Default::default();
+    for snap in snapshots {
+        let host = snap.hostname.clone().unwrap_or_default();
+        if latest.get(&host).is_none_or(|s| s.time < snap.time) {
+            latest.insert(host, snap);
+        }
+    }
+    let mut out: Vec<PreviousComputer> = latest
+        .into_iter()
+        .map(|(host, s)| PreviousComputer {
+            host,
+            folders: s.paths,
+            last_backup: s.time,
+        })
+        .collect();
+    out.sort_by(|a, b| b.last_backup.cmp(&a.last_backup));
+    out
 }
 
 #[derive(Debug, Deserialize)]
@@ -237,6 +270,79 @@ struct MountResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct SheetRequest {
+    drive_id: String,
+}
+
+#[derive(Debug, Serialize)]
+struct SheetResponse {
+    path: String,
+}
+
+/// Writes a printable passphrase sheet for one backup and returns where (UI opens it).
+async fn passphrase_sheet(
+    State(state): State<SharedState>,
+    Json(req): Json<SheetRequest>,
+) -> Result<Json<SheetResponse>, (StatusCode, String)> {
+    let (label, drive_label) = {
+        let guard = state.read().await;
+        let drive = guard
+            .config
+            .trusted_drives
+            .get(&req.drive_id)
+            .ok_or((StatusCode::NOT_FOUND, "Drive not found.".to_string()))?;
+        let marker_label = guard
+            .drive_status
+            .has_instance(&req.drive_id)
+            .then(|| guard.drive_status.mount_path.clone())
+            .flatten()
+            .and_then(|m| read_marker(FsPath::new(&m)).ok().flatten())
+            .and_then(|m| m.label);
+        (drive.label.clone().unwrap_or_default(), marker_label)
+    };
+    let created = chrono_free_date();
+    let path = crate::sheet::write_sheet(&crate::sheet::SheetInfo {
+        instance_id: &req.drive_id,
+        label: &label,
+        drive_label: drive_label.as_deref(),
+        created: &created,
+    })
+    .map_err(|e| {
+        error!("passphrase sheet: {}", Redact::new(e));
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't create the passphrase sheet.".to_string(),
+        )
+    })?;
+    Ok(Json(SheetResponse {
+        path: path.to_string_lossy().to_string(),
+    }))
+}
+
+/// Today's date as YYYY-MM-DD (UTC), without a date library.
+fn chrono_free_date() -> String {
+    let days = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() / 86_400)
+        .unwrap_or(0) as i64;
+    ymd(days)
+}
+
+/// Days since 1970-01-01 → YYYY-MM-DD (Howard Hinnant's civil_from_days).
+fn ymd(days: i64) -> String {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+#[derive(Debug, Deserialize)]
 struct UpdateDriveRequest {
     drive_id: String,
     /// New in-app name (sanitized; duplicate check excluding this drive).
@@ -313,6 +419,7 @@ pub async fn serve(listener: tokio::net::TcpListener, state: SharedState) -> any
         .route("/v1/drives/eject", post(eject_drive))
         .route("/v1/drives/discontinue", post(discontinue_drive))
         .route("/v1/drives/update", post(update_drive))
+        .route("/v1/drives/passphrase-sheet", post(passphrase_sheet))
         .with_state(state)
         .layer(cors)
         .layer(axum::middleware::from_fn(check_host));
@@ -612,6 +719,7 @@ async fn setup_drive(
         }
     }
 
+    let existing = found.is_some();
     let (meta, repo_id) = match found {
         Some(hit) => hit,
         None if marker.instances.is_empty() || req.new_instance => {
@@ -635,6 +743,16 @@ async fn setup_drive(
         }
     };
     let instance_id = meta.instance_id.clone();
+    let previous = if existing {
+        let repo = mount_path.join(&meta.repo_path);
+        restic
+            .snapshots(&repo, &req.passphrase)
+            .await
+            .map(previous_computers)
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
 
     let mut guard = state.write().await;
     guard.config.remember_passphrase = req.remember_passphrase;
@@ -693,6 +811,8 @@ async fn setup_drive(
     Ok(Json(SetupDriveResponse {
         drive_id: instance_id,
         repository_id: repo_id,
+        existing,
+        previous_computers: previous,
     }))
 }
 
@@ -1386,6 +1506,31 @@ fn resolve_passphrase(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ymd_from_days() {
+        assert_eq!(super::ymd(0), "1970-01-01");
+        assert_eq!(super::ymd(20512), "2026-02-28");
+    }
+
+    #[test]
+    fn previous_computers_keeps_newest_per_host() {
+        let snap = |host: &str, time: &str, path: &str| crate::restic::SnapshotInfo {
+            id: "ab".into(),
+            time: time.into(),
+            hostname: Some(host.into()),
+            tags: None,
+            paths: vec![path.into()],
+        };
+        let out = super::previous_computers(vec![
+            snap("laptop", "2026-01-01T10:00:00Z", "/old"),
+            snap("laptop", "2026-02-01T10:00:00Z", "/home/k/Firma"),
+            snap("office", "2026-03-01T10:00:00Z", "C:\\Firma"),
+        ]);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].host, "office");
+        assert_eq!(out[1].folders, vec!["/home/k/Firma".to_string()]);
+    }
+
     use super::host_allowed;
 
     #[test]

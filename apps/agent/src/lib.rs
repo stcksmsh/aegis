@@ -13,6 +13,7 @@ mod notifications;
 mod recovery;
 mod restic;
 mod retention;
+mod sheet;
 mod state;
 mod usb;
 

@@ -92,7 +92,20 @@ Settings → **Export recovery kit** also saves a small note describing where yo
 
 Your backups are standard [restic](https://restic.net) repositories, so anyone technical can also restore them with restic and your passphrase.
 
-## 6. Settings explained
+## 6. Moving backups to another computer
+
+A backup belongs to the data, not to a computer. To let another computer take over (for example, you set it up on your laptop and the office PC should continue):
+
+1. On the new computer: install Aegis, plug in the drive, choose **Add drive**, pick the drive and type the backup's passphrase.
+2. Aegis finds the existing backup and shows which folders the other computer backed up. If the files live in different folders on this computer, open the drive under **Your drives** and choose **Edit folders**.
+3. Earlier backups stay on the drive and can still be restored. On the Restore page, each backup shows which computer made it. Cleaning up old backups on one computer never deletes the other computer's backups.
+4. On the old computer: open the drive under **Your drives** and choose **Forget on this computer**. Aegis stops backing up there and forgets the saved passphrase; the backups on the drive are kept. Delete any copies of the files that should not stay on the old computer.
+
+### Passphrase sheet
+
+Under **Your drives**, **Print passphrase sheet** opens a page to print: the backup's name, a blank to write the passphrase on by hand, and restore steps in English and Serbian. Keep it in a safe place, never together with the drive.
+
+## 7. Settings explained
 
 | Setting | Meaning |
 |---|---|
@@ -106,7 +119,7 @@ Your backups are standard [restic](https://restic.net) repositories, so anyone t
 | Remind me to back up after [N] days | If your Aegis drive hasn't been plugged in and backed up for this many days, Aegis reminds you with a notification. 0 turns reminders off. |
 | Back up every [N] hours while plugged in | If you leave the drive plugged in, Aegis backs up again automatically every N hours instead of only once. 0 means back up once per plug-in. |
 
-## 7. Problems?
+## 8. Problems?
 
 | Problem | Fix |
 |---|---|

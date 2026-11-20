@@ -15,9 +15,12 @@ pub struct Restic {
     host: String,
 }
 
-/// This computer's name, as restic would record it.
+/// This computer's name, as restic would record it. `AEGIS_HOSTNAME` overrides it
+/// (E2E tests simulate two computers on one machine).
 fn host_name() -> String {
-    sysinfo::System::host_name()
+    std::env::var("AEGIS_HOSTNAME")
+        .ok()
+        .or_else(sysinfo::System::host_name)
         .filter(|h| !h.trim().is_empty())
         .unwrap_or_else(|| "aegis".to_string())
 }

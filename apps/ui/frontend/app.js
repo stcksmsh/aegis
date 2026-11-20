@@ -207,7 +207,7 @@ function openModal({ title, body, mode, drive_id, drive_label }) {
       modalConfirm.textContent = "Confirm";
       modalCancel.classList.remove("hidden");
     } else if (mode === "discontinue") {
-      modalConfirm.textContent = "Discontinue";
+      modalConfirm.textContent = "Forget";
       modalCancel.classList.remove("hidden");
     } else if (mode === "rename-drive") {
       modalConfirm.textContent = "Save";
@@ -323,7 +323,7 @@ async function confirmModal() {
         await fetchStatus();
       } else {
         const text = await res.text();
-        modalError.textContent = text && text.trim() ? text.trim() : "Couldn't discontinue the drive. Please try again.";
+        modalError.textContent = text && text.trim() ? text.trim() : "Couldn't forget the drive. Please try again.";
       }
     } catch (err) {
       modalError.textContent = "Something went wrong. Please try again.";
@@ -703,18 +703,31 @@ function renderBackupTargets(trustedDrives, status) {
       if (!canEdit) return;
       openEditFoldersModal(d);
     });
+    const sheetBtn = document.createElement("button");
+    sheetBtn.type = "button";
+    sheetBtn.className = "btn ghost";
+    sheetBtn.textContent = "Print passphrase sheet";
+    sheetBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openPassphraseSheet(d.drive_id);
+    });
     driveActions.appendChild(renameBtn);
     driveActions.appendChild(editFoldersBtn);
+    driveActions.appendChild(sheetBtn);
     expanded.appendChild(driveActions);
     const discontinueBtn = document.createElement("button");
     discontinueBtn.type = "button";
     discontinueBtn.className = "btn ghost backup-target-discontinue";
-    discontinueBtn.textContent = "Discontinue drive";
+    discontinueBtn.textContent = "Forget on this computer";
     discontinueBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       openModal({
-        title: "Discontinue drive",
-        body: "This will remove the drive from Aegis. Backups on the drive are not deleted. Type the drive name to confirm:",
+        title: "Forget this drive on this computer",
+        body:
+          "This computer stops backing up to this drive and forgets its saved passphrase. " +
+          "The backups on the drive are kept, and other computers can keep using it.\n\n" +
+          "Handing the drive over to someone else? Also delete any copies of the backed-up files " +
+          "that should not stay on this computer.\n\nType the name to confirm:",
         mode: "discontinue",
         drive_id: d.drive_id,
         drive_label: d.label || "",
@@ -1501,6 +1514,40 @@ async function saveConfig() {
   }
 }
 
+// After "Add drive" opened a backup that other computers already use (e.g. a handover):
+// show their folders so the user can pick the matching ones on this computer.
+function showHandoverInfo(data) {
+  if (!data?.existing || !(data.previous_computers || []).length) return;
+  const lines = data.previous_computers.map(
+    (c) =>
+      `• ${c.host || "unknown computer"} (last backup ${new Date(c.last_backup).toLocaleDateString()}):\n    ` +
+      c.folders.join("\n    ")
+  );
+  uiAlert(
+    "This computer now continues an existing backup. Earlier backups stay on the drive and can still be restored.\n\n" +
+      "Folders backed up so far:\n" + lines.join("\n") +
+      "\n\nIf this computer keeps the same files in other folders, open the drive under "Your drives" and choose Edit folders.",
+    "Continuing an existing backup"
+  );
+}
+
+async function openPassphraseSheet(driveId) {
+  try {
+    const res = await fetch(`${API}/drives/passphrase-sheet`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ drive_id: driveId }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const { path } = await res.json();
+    const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
+    await invoke("open_path", { path });
+  } catch (err) {
+    console.error(err);
+    uiAlert("Couldn't open the passphrase sheet.");
+  }
+}
+
 // POST /drives/setup. If the drive already has backups that this passphrase doesn't open,
 // ask before creating a separate one, so a typo never silently starts a new backup.
 // Returns null if the user declined.
@@ -1562,6 +1609,7 @@ async function setupDriveWithMount(mountPath) {
       currentStatus.drive.trusted = true;
       currentStatus.drive.drive_id = data.drive_id;
       pickedInstanceId = data.drive_id;
+      showHandoverInfo(data);
       currentStatus.drive.label = currentStatus.drive.label || payload.label;
     }
     renderStatus(currentStatus);
@@ -1711,6 +1759,7 @@ async function setupDriveFromSelectionForAddDrive() {
         currentStatus.drive.trusted = true;
         currentStatus.drive.drive_id = data.drive_id;
         pickedInstanceId = data.drive_id;
+        showHandoverInfo(data);
         currentStatus.drive.label = currentStatus.drive.label || payload.label;
       }
       renderStatus(currentStatus);
@@ -1953,6 +2002,7 @@ async function loadSnapshots() {
   }
   // Newest first: that's almost always the one people want.
   data.snapshots.sort((a, b) => (b.time || "").localeCompare(a.time || ""));
+  const severalComputers = new Set(data.snapshots.map((s) => s.hostname)).size > 1;
   data.snapshots.forEach((snap) => {
     const item = document.createElement("div");
     item.className = "snapshot-item";
@@ -1967,7 +2017,8 @@ async function loadSnapshots() {
     });
     label.appendChild(radio);
     const span = document.createElement("span");
-    span.textContent = `Backup from ${new Date(snap.time).toLocaleString()}`;
+    span.textContent = `Backup from ${new Date(snap.time).toLocaleString()}` +
+      (severalComputers && snap.hostname ? ` · computer: ${snap.hostname}` : "");
     label.appendChild(span);
     item.appendChild(label);
     list.appendChild(item);

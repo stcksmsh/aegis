@@ -1167,3 +1167,8 @@ body.setup-loading .device-danger {
 .actions.no-drives #eject-btn {
   display: none;
 }
+
+/* Modal messages use \n for line breaks. */
+#modal-body {
+  white-space: pre-line;
+}

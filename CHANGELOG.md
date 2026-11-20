@@ -7,6 +7,9 @@
 - Every backup drive now carries an AEGIS-RESTORE folder: restore your files on any Windows, Mac or Linux computer without Aegis (instructions in English and Serbian).
 - Cleaning up old backups only touches this computer's backups, so several computers can share one drive safely.
 - Settings saved by a newer Aegis version are kept when an older one runs.
+- Hand a backup over to another computer: type the passphrase there, Aegis shows which folders the old computer backed up, and both computers' history stays restorable. The Restore page shows which computer made each backup.
+- "Discontinue drive" is now "Forget on this computer", with a reminder to delete local copies when handing over.
+- Print a passphrase sheet per backup (name, a blank for the passphrase, restore steps in English and Serbian).
 
 ## 0.2.0 — first public release
 

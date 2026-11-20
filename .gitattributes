@@ -2,3 +2,6 @@
 apps/agent/kit/* text eol=lf
 apps/agent/kit/*.bat text eol=crlf
 tests/fixtures/** -text
+# Read by bash on every OS (fetch-restore-kit.sh) and copied to drives as SHA256SUMS.
+scripts/*.sha256 text eol=lf
+scripts/*.sh text eol=lf

@@ -283,19 +283,59 @@ function uiConfirm(message, title = "Confirm") {
   return openModal({ title, body: message, mode: "confirm" });
 }
 
+let passphrasePrompt = null;
+
 function requestPassphrase(message) {
-  if (sessionPassphrase && !currentStatus?.config?.paranoid_mode) {
-    return Promise.resolve(sessionPassphrase);
+  if (!passphrasePrompt) {
+    modalPassphrase.value = "";
+    // A "Restoring…" overlay would hide the prompt; bring it back once answered.
+    const wasLoading = loadingOverlay && !loadingOverlay.classList.contains("hidden");
+    if (wasLoading) loadingOverlay.classList.add("hidden");
+    passphrasePrompt = openModal({ title: "Passphrase required", body: message, mode: "passphrase" })
+      .finally(() => {
+        passphrasePrompt = null;
+        if (wasLoading) loadingOverlay.classList.remove("hidden");
+      });
   }
-  return openModal({ title: "Passphrase required", body: message, mode: "passphrase" });
+  return passphrasePrompt;
+}
+
+// POSTs to an endpoint that needs the backup passphrase. Tries the passphrase this session
+// already proved (or the one saved on this computer) first, and asks only when the agent says
+// the passphrase is missing or wrong. A passphrase is kept for the session only after the agent
+// accepted it, so a typo never sticks. `verifies: false` for calls that accept any passphrase
+// up front (starting a backup checks it later). Returns { res, detail }, or null if cancelled.
+async function postWithPassphrase(path, payload, promptMessage, { verifies = true } = {}) {
+  const post = (passphrase) =>
+    fetch(`${API}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, passphrase }),
+    });
+  let res = await post(sessionPassphrase);
+  let detail = res.ok ? "" : await res.text();
+  let message = promptMessage;
+  while (!res.ok && /passphrase/i.test(detail)) {
+    if (/wrong/i.test(detail)) {
+      sessionPassphrase = null;
+      message = "That passphrase didn't open this backup. Passphrases are case-sensitive. Try again.";
+    }
+    const passphrase = await requestPassphrase(message);
+    if (!passphrase) return null;
+    res = await post(passphrase);
+    detail = res.ok ? "" : await res.text();
+    if (res.ok && verifies && !currentStatus?.config?.paranoid_mode) {
+      sessionPassphrase = passphrase;
+    }
+  }
+  return { res, detail: detail.trim() };
 }
 
 function closeModal(value) {
   modalOverlay.classList.add("hidden");
-  if (modalOpenerElement && typeof modalOpenerElement.focus === "function") {
-    modalOpenerElement.focus();
-  }
+  const opener = modalOpenerElement;
   modalOpenerElement = null;
+  if (opener && typeof opener.focus === "function") setTimeout(() => opener.focus(), 0);
   if (modalResolve) {
     const resolver = modalResolve;
     modalResolve = null;
@@ -305,14 +345,12 @@ function closeModal(value) {
 
 async function confirmModal() {
   if (modalMode === "passphrase") {
-    const value = modalPassphrase.value.trim();
-    if (!value) {
-      modalError.textContent = "Passphrase required.";
+    const value = modalPassphrase.value;
+    if (!value.trim()) {
+      modalError.textContent = "Enter your passphrase.";
       return;
     }
-    if (!currentStatus?.config?.paranoid_mode) {
-      sessionPassphrase = value;
-    }
+    modalPassphrase.value = "";
     closeModal(value);
     return;
   }
@@ -1257,7 +1295,7 @@ const COMMON_PASSPHRASE_WORDS = [
 
 // Simple heuristic: length + character variety, with a penalty for common words.
 // No library, just plain rules so the label stays easy to explain ("too short",
-// "okay", "strong").
+// "easy to guess", "weak", "okay", "strong").
 function passphraseStrength(value) {
   if (!value) return { score: 0, label: "" };
   const lower = value.toLowerCase();
@@ -1275,7 +1313,7 @@ function passphraseStrength(value) {
     return { score: 1, label: "Too short" };
   }
   if (hasCommonWord) {
-    return { score: 1, label: "Too short" };
+    return { score: 1, label: "Easy to guess" };
   }
   const long = value.length >= 20 || wordCount >= 4;
   const decent = value.length >= 12 || variety >= 3;
@@ -1285,7 +1323,7 @@ function passphraseStrength(value) {
   if (decent) {
     return { score: 2, label: "Okay" };
   }
-  return { score: 1, label: "Too short" };
+  return { score: 1, label: "Weak" };
 }
 
 function updatePassphraseMeter(inputId, barId, labelId) {
@@ -1335,6 +1373,13 @@ function wirePassphraseToggles() {
 
 // Shared check used before creating a new passphrase (wizard step 2 and the
 // Add-drive form). Returns an error message, or null when the passphrase is OK.
+function clearPassphraseFields(...ids) {
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+}
+
 function checkNewPassphrase(passphrase, confirm) {
   if (!passphrase || passphrase.length < MIN_PASSPHRASE_LENGTH) {
     return `Your passphrase needs to be at least ${MIN_PASSPHRASE_LENGTH} characters. Try 4+ random words, like "maple-orbit-candle-river".`;
@@ -1635,7 +1680,7 @@ async function setupDriveWithMount(mountPath) {
       currentStatus.drive.label = currentStatus.drive.label || payload.label;
     }
     renderStatus(currentStatus);
-    notify("Drive ready", "Aegis set up the drive successfully.");
+    clearPassphraseFields("passphrase", "passphrase-confirm");
   } else {
     const detail = await res.text();
     uiAlert(
@@ -1785,7 +1830,7 @@ async function setupDriveFromSelectionForAddDrive() {
         currentStatus.drive.label = currentStatus.drive.label || payload.label;
       }
       renderStatus(currentStatus);
-      notify("Drive ready", "Aegis set up the drive successfully.");
+      clearPassphraseFields("setup-drive-passphrase", "setup-drive-passphrase-confirm");
       showView("dashboard");
     } else {
       const detail = await res.text();
@@ -1954,28 +1999,15 @@ async function startBackup() {
     return;
   }
 
-  let payload = { drive_id: currentStatus.drive.drive_id, passphrase: null };
-  let res = await fetch(`${API}/backup/run`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const passphrase = await requestPassphrase("Enter your passphrase to start the backup.");
-    if (!passphrase) return;
-    payload.passphrase = passphrase;
-    res = await fetch(`${API}/backup/run`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  }
-
-  if (res.ok) {
-    notify("Backup started", "Aegis is running your backup.");
-  } else {
-    uiAlert("Couldn't start the backup. Please try again.");
+  const result = await postWithPassphrase(
+    "/backup/run",
+    { drive_id: currentStatus.drive.drive_id },
+    "Enter your passphrase to start the backup.",
+    { verifies: false }
+  );
+  if (!result) return;
+  if (!result.res.ok) {
+    uiAlert(result.detail || "Couldn't start the backup. Please try again.", "Backup not started");
   }
 }
 
@@ -1988,30 +2020,18 @@ async function loadSnapshots() {
     uiAlert("Backup engine missing — please reinstall Aegis.");
     return;
   }
-  let payload = { drive_id: currentStatus.drive.drive_id, passphrase: null };
-  let res = await fetch(`${API}/snapshots`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const passphrase = await requestPassphrase("Enter your passphrase to see your backups.");
-    if (!passphrase) return;
-    payload.passphrase = passphrase;
-    res = await fetch(`${API}/snapshots`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  }
-
-  if (!res.ok) {
-    uiAlert("Couldn't load your backups. Please try again.");
+  const result = await postWithPassphrase(
+    "/snapshots",
+    { drive_id: currentStatus.drive.drive_id },
+    "Enter your passphrase to see your backups."
+  );
+  if (!result) return;
+  if (!result.res.ok) {
+    uiAlert(result.detail || "Couldn't load your backups. Please try again.");
     return;
   }
 
-  const data = await res.json();
+  const data = await result.res.json();
   const list = document.getElementById("snapshot-list");
   list.innerHTML = "";
   browseTreeReset();
@@ -2061,27 +2081,17 @@ function browseTreeReset() {
 }
 
 async function fetchBrowseEntries(snapshotId, path) {
-  let payload = { drive_id: currentStatus.drive.drive_id, snapshot_id: snapshotId, path: path || null, passphrase: null };
-  let res = await fetch(`${API}/snapshots/browse`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const passphrase = await requestPassphrase("Enter your passphrase to browse this backup.");
-    if (!passphrase) return null;
-    payload.passphrase = passphrase;
-    res = await fetch(`${API}/snapshots/browse`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  }
-  if (!res.ok) {
-    uiAlert("Couldn't read the contents of this backup.");
+  const result = await postWithPassphrase(
+    "/snapshots/browse",
+    { drive_id: currentStatus.drive.drive_id, snapshot_id: snapshotId, path: path || null },
+    "Enter your passphrase to browse this backup."
+  );
+  if (!result) return null;
+  if (!result.res.ok) {
+    uiAlert(result.detail || "Couldn't read the contents of this backup.");
     return null;
   }
-  return (await res.json()).entries;
+  return (await result.res.json()).entries;
 }
 
 async function loadBrowseTree(snapshotId) {
@@ -2204,40 +2214,22 @@ async function runRestore(includePaths, confirmMessage) {
     return;
   }
 
-  let payload = {
-    drive_id: currentStatus.drive.drive_id,
-    snapshot_id: selected.value,
-    target_path: target,
-    include_paths: includePaths,
-    passphrase: null,
-  };
-
-  if (sessionPassphrase) payload.passphrase = sessionPassphrase;
-  const send = () =>
-    fetch(`${API}/restore`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
   showLoadingOverlay("Restoring your files…");
-  let res;
   try {
-    res = await send();
-    let detail = res.ok ? "" : await res.text();
-    // Only ask for the passphrase when that's actually the problem.
-    if (!res.ok && /passphrase/i.test(detail)) {
-      hideLoadingOverlay();
-      const passphrase = await requestPassphrase("Enter your passphrase to restore.");
-      if (!passphrase) return;
-      payload.passphrase = passphrase;
-      showLoadingOverlay("Restoring your files…");
-      res = await send();
-      detail = res.ok ? "" : await res.text();
-    }
+    const result = await postWithPassphrase(
+      "/restore",
+      {
+        drive_id: currentStatus.drive.drive_id,
+        snapshot_id: selected.value,
+        target_path: target,
+        include_paths: includePaths,
+      },
+      "Enter your passphrase to restore."
+    );
     hideLoadingOverlay();
-    if (!res.ok) {
-      uiAlert(detail || "Restore failed. Please try again.", "Restore failed");
+    if (!result) return;
+    if (!result.res.ok) {
+      uiAlert(result.detail || "Restore failed. Please try again.", "Restore failed");
       return;
     }
   } catch (_) {
@@ -2270,29 +2262,17 @@ async function fetchSnapshotStats(snapshotId) {
   const summary = document.getElementById("snapshot-summary");
   summary.textContent = "Loading backup details…";
 
-  let payload = { drive_id: currentStatus.drive.drive_id, snapshot_id: snapshotId, passphrase: null };
-  let res = await fetch(`${API}/snapshots/stats`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const passphrase = await requestPassphrase("Enter your passphrase to view backup details.");
-    if (!passphrase) return;
-    payload.passphrase = passphrase;
-    res = await fetch(`${API}/snapshots/stats`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  }
-
-  if (!res.ok) {
+  const result = await postWithPassphrase(
+    "/snapshots/stats",
+    { drive_id: currentStatus.drive.drive_id, snapshot_id: snapshotId },
+    "Enter your passphrase to view backup details."
+  );
+  if (!result || !result.res.ok) {
     summary.textContent = "Couldn't load backup details.";
     return;
   }
 
-  const stats = await res.json();
+  const stats = await result.res.json();
   summary.textContent = `Files: ${stats.total_file_count.toLocaleString()} · Size: ${formatBytes(stats.total_size)}`;
 }
 
@@ -2583,17 +2563,15 @@ function setupListeners() {
     }
     trapModalTab(event);
   });
-  modalPassphrase.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") confirmModal();
-    if (event.key === "Escape") closeModal(null);
-  });
-  const modalDiscontinueInput = document.getElementById("modal-discontinue-input");
-  if (modalDiscontinueInput) {
-    modalDiscontinueInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") confirmModal();
-      if (event.key === "Escape") closeModal(null);
+  // Enter in a dialog field confirms. preventDefault so the same key press can't also
+  // activate the button that focus returns to.
+  ["modal-passphrase", "modal-discontinue-input", "modal-rename-input"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      confirmModal();
     });
-  }
+  });
 
   const editFoldersCancel = document.getElementById("edit-folders-cancel");
   const editFoldersSave = document.getElementById("edit-folders-save");

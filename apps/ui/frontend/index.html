@@ -67,10 +67,12 @@
                 <div class="step-label">Step 2</div>
                 <h2>Security setup</h2>
                 <p class="muted">Your passphrase unlocks the backup. Aegis never stores it on the USB drive.</p>
+                <p class="callout">Write your passphrase down and keep it somewhere safe, away from the drive. If you forget it, nobody can open your backups, not even Aegis. There is no reset.</p>
+                <p class="muted">Already used this drive with Aegis on another computer? Type the passphrase you chose back then.</p>
                 <div class="field">
                   <label for="passphrase">Passphrase</label>
                   <div class="password-field">
-                    <input id="passphrase" type="password" placeholder="Create a strong passphrase" autocomplete="new-password" aria-describedby="passphrase-meter-label" />
+                    <input id="passphrase" type="password" placeholder="Type a passphrase" autocomplete="new-password" aria-describedby="passphrase-meter-label" />
                     <button type="button" class="password-toggle" data-toggle-for="passphrase" aria-label="Show passphrase">Show</button>
                   </div>
                   <p class="muted passphrase-hint">Use 4+ random words, e.g. "maple-orbit-candle-river".</p>
@@ -208,10 +210,12 @@
             </div>
             <h2 class="step-label" style="margin-top: 24px;">Passphrase for this drive</h2>
             <p class="muted">Your passphrase encrypts the backup. Aegis never stores it on the USB drive.</p>
+            <p class="callout">Write your passphrase down and keep it somewhere safe, away from the drive. If you forget it, nobody can open your backups, not even Aegis. There is no reset.</p>
+            <p class="muted">Already used this drive with Aegis on another computer? Type the passphrase you chose back then.</p>
             <div class="field">
               <label for="setup-drive-passphrase">Passphrase</label>
               <div class="password-field">
-                <input id="setup-drive-passphrase" type="password" placeholder="Create a strong passphrase" autocomplete="new-password" aria-describedby="setup-drive-passphrase-meter-label" />
+                <input id="setup-drive-passphrase" type="password" placeholder="Type a passphrase" autocomplete="new-password" aria-describedby="setup-drive-passphrase-meter-label" />
                 <button type="button" class="password-toggle" data-toggle-for="setup-drive-passphrase" aria-label="Show passphrase">Show</button>
               </div>
               <p class="muted passphrase-hint">Use 4+ random words, e.g. "maple-orbit-candle-river".</p>

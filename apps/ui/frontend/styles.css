@@ -1172,3 +1172,13 @@ body.setup-loading .device-danger {
 #modal-body {
   white-space: pre-line;
 }
+
+/* Important notice inside a form (e.g. "there is no passphrase reset"). */
+.callout {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0;
+}

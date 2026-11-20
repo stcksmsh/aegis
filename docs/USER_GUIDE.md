@@ -144,6 +144,7 @@ Each page has its own Save button and saves only what is on that page.
 | Drive not detected | Unplug and re-plug. Make sure the drive shows up in your file manager. |
 | "Wrong passphrase" | Passphrases are case-sensitive. Check Caps Lock. |
 | "Saved, but some files were skipped" | Some files were open or couldn't be read. Everything else was saved. Close other apps and back up again. |
+| "Saved, but these folders weren't found" | A folder Aegis backs up was moved, renamed or deleted. Everything else was saved. Open the drive under **Your drives** and choose **Edit folders**. |
 | Can't erase drive | Unplug it, plug it back in, and try again. Still failing? Erase it as **exFAT** with Disk Management (Windows) or Disk Utility (Mac), then try again. |
 | "Your backup drive is almost full" | Less than 10% free space is left on the drive. Plug in a bigger drive, free up space on it, or turn on automatic cleanup of old backups in **Advanced → Clean up old backups**. |
 | Something else | Open an [issue](https://github.com/stcksmsh/aegis/issues) and attach the logs: **Advanced → Open log files**. They are in: Windows `%LOCALAPPDATA%\aegis\Aegis\data\logs`, Mac `~/Library/Application Support/com.aegis.Aegis/logs`, Linux `~/.local/share/aegis/logs`. Logs never contain your passphrase. |

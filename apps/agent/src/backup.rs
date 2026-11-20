@@ -1,4 +1,4 @@
-use crate::config::AgentConfig;
+use crate::config::BackupSource;
 use crate::logging::Redact;
 use crate::notifications;
 use crate::restic::Restic;
@@ -79,11 +79,9 @@ pub async fn run_backup(
             return Err(anyhow::anyhow!("repository not initialized"));
         }
 
-        let sources = expand_sources(&config, &drive_id)?;
+        let (sources, missing) = split_sources(&config.backup_sources_for_drive(&drive_id));
         if sources.is_empty() {
-            return Err(anyhow::anyhow!(
-                "no backup sources configured for this drive"
-            ));
+            return Err(anyhow::anyhow!(NO_FOLDERS));
         }
         debug!(
             "backup: sources count={} paths={:?}",
@@ -149,7 +147,21 @@ pub async fn run_backup(
         );
 
         let mut interrupted = false;
-        let (mut status, mut message) = if summary.incomplete {
+        let (mut status, mut message) = if !missing.is_empty() {
+            (
+                RunStatus::Partial,
+                format!(
+                    "Saved, but these folders weren't found on this computer: {}. \
+                     Check them under Your drives, Edit folders.{}",
+                    missing.join(", "),
+                    if summary.incomplete {
+                        " Some files were also skipped because they were open or couldn't be read."
+                    } else {
+                        ""
+                    }
+                ),
+            )
+        } else if summary.incomplete {
             (
                 RunStatus::Partial,
                 "Saved, but some files were skipped because they were open or couldn't be read. Close other apps and back up again."
@@ -292,6 +304,8 @@ pub async fn run_backup(
                 "The drive was unplugged during the backup. Plug it in and back up again."
             } else if err.to_string() == crate::restic::WRONG_PASSPHRASE {
                 crate::restic::WRONG_PASSPHRASE
+            } else if err.to_string() == NO_FOLDERS {
+                NO_FOLDERS
             } else {
                 "The backup didn't finish. Plug the drive in again and click Back up now. If it keeps failing, open the log files from Advanced."
             };
@@ -320,13 +334,23 @@ pub async fn run_backup(
     }
 }
 
-fn expand_sources(config: &AgentConfig, drive_id: &str) -> anyhow::Result<Vec<PathBuf>> {
-    // Paths are only used for restic; never surface them in logs or UI.
-    Ok(config
-        .backup_sources_for_drive(drive_id)
-        .iter()
-        .map(|source| expand_home(&source.path))
-        .collect())
+const NO_FOLDERS: &str = "None of the folders to back up were found on this computer. \
+     Choose them under Your drives, Edit folders.";
+
+/// Folders that exist (for restic) and the labels of those that don't (for the user).
+/// Paths are only used for restic; never surface them in logs or UI.
+fn split_sources(sources: &[BackupSource]) -> (Vec<PathBuf>, Vec<String>) {
+    let mut found = Vec::new();
+    let mut missing = Vec::new();
+    for source in sources {
+        let path = expand_home(&source.path);
+        if path.exists() {
+            found.push(path);
+        } else {
+            missing.push(source.label.clone());
+        }
+    }
+    (found, missing)
 }
 
 /// `~/x` → `<home>/x` (UI shows and accepts home-relative paths on every OS).
@@ -387,4 +411,24 @@ fn now_epoch() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_folders_are_named_not_backed_up() {
+        let dir = std::env::temp_dir();
+        let src = |label: &str, path: &str| BackupSource {
+            label: label.into(),
+            path: path.into(),
+        };
+        let (found, missing) = split_sources(&[
+            src("Temp", dir.to_str().unwrap()),
+            src("Pictures", "/no/such/aegis/folder"),
+        ]);
+        assert_eq!(found, vec![dir]);
+        assert_eq!(missing, vec!["Pictures".to_string()]);
+    }
 }

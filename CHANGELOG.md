@@ -19,6 +19,7 @@
 - Erasing a drive asks with a red **Erase drive** button that names the drive. "Forget and erase" erases first, so a failed erase leaves the drive listed.
 - Error messages for opening, erasing and updating say what to do next. A failed update can be tried again.
 - A backup's name is just **Name** everywhere; **Rename** sits with each drive.
+- A backup folder that was moved or deleted no longer looks like "files were open": the backup saves the rest and names the missing folders.
 - Only the signed updater offers updates; the separate "Download" bar is gone.
 - Keyboard and screen readers: drive cards open with the keyboard, focus isn't lost while lists refresh, and dialogs block the page behind them. Better contrast in the light theme.
 

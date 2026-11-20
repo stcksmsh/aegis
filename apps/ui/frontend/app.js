@@ -394,7 +394,7 @@ async function confirmModal() {
       return;
     }
     if (value !== discontinueDrivePending.drive_label) {
-      modalError.textContent = "That name doesn't match. Type the drive name exactly to confirm.";
+      modalError.textContent = "That name doesn't match. Type the name exactly as shown.";
       return;
     }
     modalError.textContent = "";
@@ -433,7 +433,7 @@ async function confirmModal() {
       return;
     }
     if (!value) {
-      modalError.textContent = "Enter a drive name.";
+      modalError.textContent = "Enter a name.";
       return;
     }
     modalError.textContent = "";
@@ -448,7 +448,7 @@ async function confirmModal() {
         await fetchStatus();
       } else {
         const text = await res.text();
-        modalError.textContent = text && text.trim() ? text.trim() : "Couldn't rename the drive. Please try again.";
+        modalError.textContent = text && text.trim() ? text.trim() : "Couldn't change the name. Please try again.";
       }
     } catch (err) {
       modalError.textContent = "Something went wrong. Please try again.";
@@ -822,13 +822,13 @@ function renderBackupTargets(trustedDrives, status) {
     renameBtn.className = "btn ghost";
     renameBtn.textContent = "Rename";
     renameBtn.disabled = !canEdit;
-    renameBtn.title = !d.is_connected ? "Connect this drive to rename" : isDrivingBackingUp ? "Backup in progress" : "";
+    renameBtn.title = !d.is_connected ? "Connect this drive to change its name" : isDrivingBackingUp ? "Backup in progress" : "";
     renameBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!canEdit) return;
       openModal({
-        title: "Rename drive",
-        body: "Change the name Aegis uses for this drive. This doesn't rename the drive itself.",
+        title: "Rename",
+        body: "Change the name Aegis shows for this backup. The drive itself isn't renamed.",
         mode: "rename-drive",
         drive_id: d.drive_id,
         drive_label: d.label || "",
@@ -869,7 +869,7 @@ function renderBackupTargets(trustedDrives, status) {
           "This computer stops backing up to this drive and forgets its saved passphrase. " +
           "The backups on the drive are kept, and other computers can keep using it.\n\n" +
           "Handing the drive over to someone else? Also delete any copies of the backed-up files " +
-          "that should not stay on this computer.\n\nType the name to confirm:",
+          "that should not stay on this computer.\n\nType its name to confirm:",
         mode: "discontinue",
         drive_id: d.drive_id,
         drive_label: d.label || "",

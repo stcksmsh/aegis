@@ -48,7 +48,7 @@ ol {{ padding-left: 20px; }}
 <button onclick="window.print()">Print</button>
 <h1>Aegis backup – passphrase sheet</h1>
 <table>
-<tr><td>Backup name / Naziv bekapa</td><td><b>{label}</b></td></tr>
+<tr><td>Name / Naziv</td><td><b>{label}</b></td></tr>
 <tr><td>Drive / Disk</td><td>{drive}</td></tr>
 <tr><td>Backup ID</td><td><code>{id}</code></td></tr>
 <tr><td>Printed / Odštampano</td><td>{created}</td></tr>

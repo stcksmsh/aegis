@@ -956,14 +956,14 @@ async fn discontinue_drive(
     if expected.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            "This drive has no name, so it can't be forgotten here.".to_string(),
+            "This backup has no name, so it can't be forgotten here.".to_string(),
         ));
     }
     let confirmed = req.confirm_label.trim();
     if confirmed != expected {
         return Err((
             StatusCode::BAD_REQUEST,
-            "Confirmation does not match. Type the drive name exactly to confirm.".to_string(),
+            "That name doesn't match. Type the name exactly as shown.".to_string(),
         ));
     }
     let drive_id = req.drive_id.clone();
@@ -1053,7 +1053,7 @@ async fn update_drive(
             .ok_or_else(|| {
                 (
                     StatusCode::BAD_REQUEST,
-                    "Please enter a drive name using letters and numbers.".to_string(),
+                    "Please enter a name using letters and numbers.".to_string(),
                 )
             })?;
         if guard.config.label_exists(&new_label, Some(&req.drive_id)) {

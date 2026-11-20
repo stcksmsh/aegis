@@ -163,6 +163,26 @@ def main():
     print("  drive:", drive)
     assert drive["connected"] and drive["trusted"], drive
 
+    step("second backup on the same drive needs explicit consent")
+    other = {"mount_path": mount, "label": "E2E other", "passphrase": PASS + "-2",
+             "remember_passphrase": False, "paranoid_mode": False}
+    call("POST", "/drives/setup", other, expect=409)
+    other_id = call("POST", "/drives/setup", {**other, "new_instance": True})["drive_id"]
+    assert other_id != drive_id
+    with open(os.path.join(mount, ".aegis", "drive.json")) as f:
+        marker = json.load(f)
+    assert marker["drive_format"] == 2 and len(marker["instances"]) == 2, marker
+    assert sorted(call("GET", "/status")["drive"]["instance_ids"]) == sorted([drive_id, other_id])
+    call("POST", "/backup/run", {"drive_id": other_id, "passphrase": PASS + "-2"})
+    wait_for("second backup", lambda: not call("GET", "/status")["running"], 300)
+    assert call("GET", "/status")["last_run"]["status"] == "Success"
+    snaps = call("POST", "/snapshots", {"drive_id": drive_id, "passphrase": PASS})["snapshots"]
+    assert len(snaps) == 1, "backups of the two instances must not mix"
+
+    step("passphrase finds its own backup")
+    again = call("POST", "/drives/setup", {**other, "label": "E2E again", "passphrase": PASS})
+    assert again["drive_id"] == drive_id, again
+
     if eject:
         step("eject")
         call("POST", "/drives/eject", {"mount_path": mount})

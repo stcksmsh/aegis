@@ -2,6 +2,7 @@ use crate::retention::RetentionPolicy;
 use anyhow::Context;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -50,10 +51,16 @@ pub struct TrustedDrive {
     /// If set, backup only these sources to this drive; otherwise use global backup_sources.
     #[serde(default)]
     pub backup_sources: Option<Vec<BackupSource>>,
+    /// Fields written by a newer Aegis; kept as-is on save.
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
+    /// Config schema version; see COMPATIBILITY.md. Missing = 1.
+    #[serde(default = "config_version_one")]
+    pub config_version: u32,
     pub trusted_drives: HashMap<String, TrustedDrive>,
     pub backup_sources: Vec<BackupSource>,
     #[serde(default)]
@@ -73,6 +80,16 @@ pub struct AgentConfig {
     /// While a trusted drive stays plugged in, back up again after this many hours. 0 = off.
     #[serde(default)]
     pub backup_interval_hours: u32,
+    /// Fields written by a newer Aegis; kept as-is on save.
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+/// Newest config schema this build writes.
+pub const CONFIG_VERSION: u32 = 1;
+
+fn config_version_one() -> u32 {
+    1
 }
 
 pub(crate) fn default_reminder_days() -> u32 {
@@ -82,6 +99,7 @@ pub(crate) fn default_reminder_days() -> u32 {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
+            config_version: CONFIG_VERSION,
             trusted_drives: HashMap::new(),
             backup_sources: vec![
                 BackupSource {
@@ -117,6 +135,7 @@ impl Default for AgentConfig {
             restic_path: None,
             reminder_days: default_reminder_days(),
             backup_interval_hours: 0,
+            extra: Map::new(),
         }
     }
 }
@@ -264,6 +283,29 @@ mod tests {
     }
 
     #[test]
+    fn unknown_fields_survive_round_trip() {
+        let mut v = serde_json::to_value(AgentConfig::default()).unwrap();
+        v["future_setting"] = Value::from("x");
+        v["trusted_drives"]["d1"] = serde_json::json!({
+            "drive_id": "d1", "label": null, "repository_path": ".aegis/repo",
+            "repository_id": null, "last_seen_epoch": null, "future_drive_field": 7
+        });
+        let cfg: AgentConfig = serde_json::from_value(v).unwrap();
+        let out = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(out["future_setting"], "x");
+        assert_eq!(out["trusted_drives"]["d1"]["future_drive_field"], 7);
+        assert_eq!(out["config_version"], CONFIG_VERSION);
+    }
+
+    #[test]
+    fn old_config_without_version_loads_as_v1() {
+        let mut v = serde_json::to_value(AgentConfig::default()).unwrap();
+        v.as_object_mut().unwrap().remove("config_version");
+        let cfg: AgentConfig = serde_json::from_value(v).unwrap();
+        assert_eq!(cfg.config_version, 1);
+    }
+
+    #[test]
     fn repository_path_for_unknown_drive() {
         let config = AgentConfig::default();
         assert_eq!(
@@ -286,6 +328,7 @@ mod tests {
                 last_backup_epoch: None,
                 last_backup_snapshot_id: None,
                 backup_sources: None,
+                extra: Map::new(),
             },
         );
         let path = config

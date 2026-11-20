@@ -672,6 +672,7 @@ async fn setup_drive(
         last_backup_epoch: None,
         last_backup_snapshot_id: None,
         backup_sources,
+        extra: Default::default(),
     };
     guard
         .config

@@ -181,4 +181,14 @@ jobs:
         shell: bash
         run: |
           target/release/aegis-agent > "$RUNNER_TEMP/agent.log" 2>&1 &
+          agent_pid=$!
           python tests/e2e.py "$DRIVE" $E2E_ARGS || { echo "::group::agent log"; cat "$RUNNER_TEMP/agent.log"; echo "::endgroup::"; exit 1; }
+          kill "$agent_pid"; wait "$agent_pid" || true
+
+      # Runs on the drive e2e.py left behind (adds a separate backup next to it).
+      # Starts and stops its own agents, so the agent above must be stopped first.
+      - name: Run handover E2E
+        shell: bash
+        run: |
+          [ "$RUNNER_OS" = "macOS" ] && hdiutil attach "$RUNNER_TEMP/drive.dmg"
+          python tests/e2e_handover.py target/release/aegis-agent "$DRIVE"

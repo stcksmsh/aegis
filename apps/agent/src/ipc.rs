@@ -2,7 +2,10 @@ use crate::backup::run_backup;
 use crate::config::sanitize_label;
 use crate::config::{AgentConfig, BackupSource, TrustedDrive};
 use crate::devices;
-use crate::drive::{read_marker, write_marker, DriveMarker};
+use crate::drive::{
+    create_instance, ensure_writable_format, open_or_migrate, read_instance, read_marker,
+    register_instance, write_marker, DriveMarker,
+};
 use crate::keychain;
 use crate::logging::Redact;
 use crate::recovery::export_recovery_kit;
@@ -133,6 +136,9 @@ struct SetupDriveRequest {
     passphrase: String,
     remember_passphrase: bool,
     paranoid_mode: bool,
+    /// Create a separate backup when the passphrase opens none of the drive's existing ones.
+    #[serde(default)]
+    new_instance: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -394,7 +400,6 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
         reminder_days: config.reminder_days,
         backup_interval_hours: config.backup_interval_hours,
     };
-    let current_drive_id = guard.drive_status.drive_id.as_ref();
     let trusted_drives: Vec<TrustedDriveSummary> = config
         .trusted_drives
         .iter()
@@ -402,7 +407,7 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
             let label = d.label.clone().unwrap_or_else(|| {
                 format!("drive-{}", d.drive_id.chars().take(8).collect::<String>())
             });
-            let is_connected = current_drive_id == Some(id) && guard.drive_status.connected;
+            let is_connected = guard.drive_status.has_instance(id);
             let sources = config.backup_sources_for_drive(id);
             let backup_source_labels = sources.iter().map(|s| s.label.clone()).collect();
             let backup_sources = sources;
@@ -569,94 +574,67 @@ async fn setup_drive(
         })?
     };
 
-    debug!("setup drive: reading/writing marker at mount_path");
-    let mut marker = read_marker(&mount_path).map_err(|e| {
-        tracing::error!(
-            "setup drive: marker read failed path={} error={}",
-            req.mount_path,
-            e
-        );
+    let internal = |what: &str, e: anyhow::Error| {
+        tracing::error!("setup drive: {} failed error={}", what, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("marker read failed: {}", e),
+            format!("Couldn't prepare the drive ({what}). Check that it isn't full or read-only."),
         )
-    })?;
-    let marker = match marker.take() {
-        Some(marker) => {
-            debug!(
-                "setup drive: found existing marker drive_id={}",
-                marker.drive_id
-            );
-            marker
-        }
+    };
+
+    debug!("setup drive: opening marker (migrating format 1 if needed)");
+    let marker = match open_or_migrate(&mount_path).map_err(|e| internal("read", e))? {
+        Some(marker) => marker,
         None => {
             let marker = DriveMarker::new(Some(final_label.clone()));
-            write_marker(&mount_path, &marker).map_err(|e| {
-                tracing::error!(
-                    "setup drive: marker write failed path={} error={}",
-                    req.mount_path,
-                    e
-                );
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("marker write failed: {}", e),
-                )
-            })?;
-            debug!("setup drive: wrote new marker drive_id={}", marker.drive_id);
+            write_marker(&mount_path, &marker).map_err(|e| internal("write", e))?;
             marker
         }
     };
+    ensure_writable_format(&marker).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
-    let repo_rel = ".aegis/repo".to_string();
-    let repo_path = mount_path.join(&repo_rel);
-    debug!(
-        "setup drive: creating repo dir path={}",
-        repo_path.display()
-    );
-    std::fs::create_dir_all(&repo_path).map_err(|e| {
-        tracing::error!(
-            "setup drive: repo create_dir_all failed path={} error={}",
-            repo_path.display(),
-            e
-        );
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("repo create failed: {}", e),
-        )
-    })?;
+    // Find the instance this passphrase opens; restic itself checks the passphrase.
+    let mut found = None;
+    for id in &marker.instances {
+        let Ok(meta) = read_instance(&mount_path, id) else {
+            continue;
+        };
+        let repo = mount_path.join(&meta.repo_path);
+        if !repo.join("config").exists() {
+            continue;
+        }
+        match restic.repository_id(&repo, &req.passphrase).await {
+            Ok(repo_id) => {
+                found = Some((meta, repo_id));
+                break;
+            }
+            Err(e) => debug!("setup drive: instance {} not opened: {}", id, e),
+        }
+    }
 
-    let repo_id = if repo_path.join("config").exists() {
-        debug!("setup drive: existing repo config found, checking passphrase");
-        restic
-            .repository_id(&repo_path, &req.passphrase)
-            .await
-            .map_err(|e| {
-                tracing::error!("setup drive: repository_id failed error={}", e);
-                restic_err(
-                    e,
-                    "This drive has existing Aegis backups that could not be opened.",
-                )
-            })?
-    } else {
-        debug!(
-            "setup drive: initializing new restic repo path={}",
-            repo_path.display()
-        );
-        restic
-            .init_repo(&repo_path, &req.passphrase)
-            .await
-            .map_err(|e| {
-                tracing::error!("setup drive: init_repo failed error={}", e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("failed to init repo: {}", e),
-                )
-            })?
+    let (meta, repo_id) = match found {
+        Some(hit) => hit,
+        None if marker.instances.is_empty() || req.new_instance => {
+            debug!("setup drive: creating new instance");
+            let (meta, repo) = create_instance(&mount_path).map_err(|e| internal("create", e))?;
+            let repo_id = restic
+                .init_repo(&repo, &req.passphrase)
+                .await
+                .map_err(|e| internal("initialize", e))?;
+            register_instance(&mount_path, &meta.instance_id)
+                .map_err(|e| internal("register", e))?;
+            (meta, repo_id)
+        }
+        None => {
+            return Err((
+                StatusCode::CONFLICT,
+                "This passphrase doesn't open any backup on this drive. Check it and try again, \
+                 or create a separate new backup on this drive."
+                    .to_string(),
+            ))
+        }
     };
-
-    let mut updated_marker = marker.clone();
-    updated_marker.repository_id = Some(repo_id.clone());
-    let _ = write_marker(&mount_path, &updated_marker);
+    let instance_id = meta.instance_id.clone();
 
     let mut guard = state.write().await;
     guard.config.remember_passphrase = req.remember_passphrase;
@@ -666,7 +644,7 @@ async fn setup_drive(
     let trusted = TrustedDrive {
         drive_id: marker.drive_id.clone(),
         label: Some(final_label.clone()),
-        repository_path: repo_rel,
+        repository_path: meta.repo_path,
         repository_id: Some(repo_id.clone()),
         last_seen_epoch: None,
         last_backup_epoch: None,
@@ -677,7 +655,7 @@ async fn setup_drive(
     guard
         .config
         .trusted_drives
-        .insert(marker.drive_id.clone(), trusted);
+        .insert(instance_id.clone(), trusted);
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -689,7 +667,10 @@ async fn setup_drive(
     let mount_str = mount_path.to_string_lossy().to_string();
     guard.drive_status.connected = true;
     guard.drive_status.trusted = true;
-    guard.drive_status.drive_id = Some(marker.drive_id.clone());
+    guard.drive_status.drive_id = Some(instance_id.clone());
+    if !guard.drive_status.instance_ids.contains(&instance_id) {
+        guard.drive_status.instance_ids.push(instance_id.clone());
+    }
     guard.drive_status.label = Some(final_label);
     guard.drive_status.mount_path = Some(mount_str.clone());
     if let Some(device) = crate::usb::resolve_device_for_mount(&mount_path) {
@@ -697,19 +678,20 @@ async fn setup_drive(
     }
 
     if guard.config.remember_passphrase {
-        if let Err(err) = keychain::store_passphrase(&marker.drive_id, &req.passphrase) {
+        if let Err(err) = keychain::store_passphrase(&instance_id, &req.passphrase) {
             error!("Keychain store failed: {}", Redact::new(err));
         }
     }
 
     drop(guard);
     tracing::info!(
-        "setup drive: success drive_id={} repository_id={}",
+        "setup drive: success drive_id={} instance_id={} repository_id={}",
         marker.drive_id,
+        instance_id,
         repo_id
     );
     Ok(Json(SetupDriveResponse {
-        drive_id: marker.drive_id,
+        drive_id: instance_id,
         repository_id: repo_id,
     }))
 }
@@ -750,12 +732,24 @@ async fn discontinue_drive(
     }
     let drive_id = req.drive_id.clone();
     let devnode_to_wipe: Option<String> = if req.wipe {
-        if guard.drive_status.drive_id.as_deref() != Some(&drive_id)
-            || guard.drive_status.devnode.is_none()
-        {
+        if !guard.drive_status.has_instance(&drive_id) || guard.drive_status.devnode.is_none() {
             return Err((
                 StatusCode::BAD_REQUEST,
                 "Drive must be connected to wipe. Plug in the drive and try again.".to_string(),
+            ));
+        }
+        let others = guard
+            .drive_status
+            .mount_path
+            .as_ref()
+            .and_then(|m| read_marker(FsPath::new(m)).ok().flatten())
+            .is_some_and(|m| m.instances.iter().any(|i| i != &drive_id));
+        if others {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "This drive also holds other backups, so it can't be wiped. \
+                 Remove it without wiping instead."
+                    .to_string(),
             ));
         }
         guard.drive_status.devnode.clone()
@@ -763,6 +757,11 @@ async fn discontinue_drive(
         None
     };
     guard.config.trusted_drives.remove(&drive_id);
+    guard.drive_status.instance_ids.retain(|i| i != &drive_id);
+    guard.drive_status.trusted = !guard.drive_status.instance_ids.is_empty();
+    if guard.drive_status.drive_id.as_deref() == Some(drive_id.as_str()) {
+        guard.drive_status.drive_id = guard.drive_status.instance_ids.first().cloned();
+    }
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -783,9 +782,7 @@ async fn discontinue_drive(
         }
         let mut guard = state.write().await;
         guard.drive_status.connected = false;
-        guard.drive_status.trusted = false;
-        guard.drive_status.drive_id = None;
-        guard.drive_status.label = None;
+        guard.drive_status.clear_drive();
         guard.drive_status.mount_path = None;
         guard.drive_status.devnode = None;
     }
@@ -827,12 +824,17 @@ async fn update_drive(
         if let Some(drive) = guard.config.trusted_drives.get_mut(&req.drive_id) {
             drive.label = Some(new_label.clone());
         }
-        if guard.drive_status.drive_id.as_deref() == Some(req.drive_id.as_str()) {
-            guard.drive_status.label = Some(new_label.clone());
+        if guard.drive_status.has_instance(&req.drive_id) {
+            if guard.drive_status.drive_id.as_deref() == Some(req.drive_id.as_str()) {
+                guard.drive_status.label = Some(new_label.clone());
+            }
             if let Some(ref mount_path_str) = guard.drive_status.mount_path {
                 let mount_path = PathBuf::from(mount_path_str.clone());
                 drop(guard);
-                if let Ok(Some(mut marker)) = read_marker(&mount_path) {
+                // The drive's own name is public; only rename it if it holds a single backup.
+                if let Ok(Some(mut marker)) =
+                    read_marker(&mount_path).map(|m| m.filter(|m| m.instances.len() <= 1))
+                {
                     marker.label = Some(new_label);
                     let _ = write_marker(&mount_path, &marker);
                 }
@@ -922,12 +924,12 @@ async fn start_backup(
             ));
         }
     }
-    let Some(drive) = config.trusted_drives.get(&req.drive_id) else {
+    if !config.trusted_drives.contains_key(&req.drive_id) {
         return Err((
             StatusCode::BAD_REQUEST,
             "This drive isn't set up in Aegis on this computer.".to_string(),
         ));
-    };
+    }
     let passphrase = resolve_passphrase(&config, &req.drive_id, req.passphrase)?;
     let mount_path = ensure_mounted_drive(&state, &req.drive_id).await?;
 
@@ -936,7 +938,7 @@ async fn start_backup(
         guard.running_drive_ids.insert(req.drive_id.clone());
     }
     let state_clone = state.clone();
-    let drive_id = drive.drive_id.clone();
+    let drive_id = req.drive_id.clone();
     let mount = PathBuf::from(mount_path);
     tokio::spawn(async move {
         let result = run_backup(state_clone.clone(), drive_id.clone(), mount, passphrase).await;
@@ -1322,7 +1324,7 @@ async fn ensure_mounted_drive(
             "Plug in your Aegis drive first.".to_string(),
         ));
     }
-    if guard.drive_status.drive_id.as_deref() != Some(drive_id) {
+    if !guard.drive_status.has_instance(drive_id) {
         return Err((
             StatusCode::BAD_REQUEST,
             "A different drive is plugged in. Plug in the right Aegis drive.".to_string(),

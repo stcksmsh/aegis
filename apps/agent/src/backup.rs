@@ -1,5 +1,4 @@
 use crate::config::AgentConfig;
-use crate::drive::{read_marker, write_marker};
 use crate::logging::Redact;
 use crate::notifications;
 use crate::restic::Restic;
@@ -74,10 +73,6 @@ pub async fn run_backup(
             let repo_id = restic.init_repo(&repo_path, &passphrase).await?;
             repo_initialized = true;
             update_repo_id(&state, &drive_id, &repo_id).await?;
-            if let Ok(Some(mut marker)) = read_marker(&mount_path) {
-                marker.repository_id = Some(repo_id.clone());
-                let _ = write_marker(&mount_path, &marker);
-            }
         }
 
         if !repo_initialized {
@@ -222,8 +217,7 @@ pub async fn run_backup(
 
         let drive_connected = {
             let guard = state.read().await;
-            guard.drive_status.connected
-                && guard.drive_status.drive_id.as_deref() == Some(&drive_id)
+            guard.drive_status.has_instance(&drive_id)
         };
         if !drive_connected {
             interrupted = true;
@@ -284,8 +278,7 @@ pub async fn run_backup(
         Err(err) => {
             let drive_connected = {
                 let guard = state.read().await;
-                guard.drive_status.connected
-                    && guard.drive_status.drive_id.as_deref() == Some(&drive_id)
+                guard.drive_status.has_instance(&drive_id)
             };
             let interrupted = !drive_connected;
             let message = if interrupted {

@@ -1,5 +1,5 @@
 use crate::backup::run_backup;
-use crate::drive::read_marker;
+use crate::drive::{open_or_migrate, read_marker, DriveMarker, DRIVE_FORMAT};
 use crate::keychain;
 use crate::logging::Redact;
 use crate::state::{RunPhase, RunResult, RunStatus, SharedState};
@@ -292,45 +292,62 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
         info!("USB device present but not mounted: {}", devnode.display());
         let mut guard = state.write().await;
         guard.drive_status.connected = true;
-        guard.drive_status.trusted = false;
-        guard.drive_status.drive_id = None;
-        guard.drive_status.label = None;
+        guard.drive_status.clear_drive();
         guard.drive_status.mount_path = None;
         guard.drive_status.devnode = Some(devnode.to_string_lossy().to_string());
         return Ok(());
     };
     debug!("USB device mounted at {}", mount_path.display());
 
-    let marker = read_marker(&mount_path)?;
+    let marker = match open_or_migrate(&mount_path) {
+        Ok(m) => m,
+        Err(err) => {
+            // Read-only or damaged drive: fall back to the marker as-is.
+            warn!("drive format migration failed: {}", Redact::new(err));
+            read_marker(&mount_path)?
+        }
+    };
     if let Some(marker) = marker {
-        let trusted = {
+        let instance_ids = {
             let guard = state.read().await;
-            guard.config.trusted_drives.contains_key(&marker.drive_id)
+            trusted_instances(&guard.config, &marker)
         };
+        let trusted = !instance_ids.is_empty();
         debug!(
-            "USB handle_added: devnode={} drive_id={} trusted={}",
+            "USB handle_added: devnode={} drive_id={} trusted_instances={}",
             devnode.display(),
             marker.drive_id,
-            trusted
+            instance_ids.len()
         );
 
         {
             let mut guard = state.write().await;
+            let label = instance_ids
+                .first()
+                .and_then(|id| guard.config.trusted_drives.get(id))
+                .and_then(|d| d.label.clone())
+                .or_else(|| marker.label.clone());
             guard.drive_status.connected = true;
             guard.drive_status.trusted = trusted;
-            guard.drive_status.drive_id = Some(marker.drive_id.clone());
-            guard.drive_status.label = marker.label.clone();
+            guard.drive_status.drive_id =
+                Some(instance_ids.first().unwrap_or(&marker.drive_id).clone());
+            guard.drive_status.instance_ids = instance_ids.clone();
+            guard.drive_status.label = label;
             guard.drive_status.mount_path = Some(mount_path.to_string_lossy().to_string());
             guard.drive_status.devnode = Some(devnode.to_string_lossy().to_string());
+            for id in &instance_ids {
+                guard.config.update_last_seen(id);
+            }
             if trusted {
-                guard.config.update_last_seen(&marker.drive_id);
                 let _ = guard.config.save();
             }
         }
 
         if trusted {
             crate::notifications::notify_trusted_device(marker.label.as_deref().unwrap_or("drive"));
-            attempt_auto_backup(state, &marker.drive_id, &mount_path).await;
+            for id in &instance_ids {
+                attempt_auto_backup(state, id, &mount_path).await;
+            }
         }
     } else {
         debug!(
@@ -340,9 +357,7 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
         );
         let mut guard = state.write().await;
         guard.drive_status.connected = true;
-        guard.drive_status.trusted = false;
-        guard.drive_status.drive_id = None;
-        guard.drive_status.label = None;
+        guard.drive_status.clear_drive();
         guard.drive_status.mount_path = Some(mount_path.to_string_lossy().to_string());
         guard.drive_status.devnode = Some(devnode.to_string_lossy().to_string());
     }
@@ -350,10 +365,27 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
     Ok(())
 }
 
+/// Instances on this drive that this computer backs up to, sorted for a stable order.
+/// Empty for drives written by a newer Aegis (never touched until updated).
+fn trusted_instances(config: &crate::config::AgentConfig, marker: &DriveMarker) -> Vec<String> {
+    if marker.drive_format > DRIVE_FORMAT {
+        warn!("drive was set up by a newer Aegis; ignoring until updated");
+        return Vec::new();
+    }
+    let mut ids: Vec<String> = config
+        .trusted_drives
+        .iter()
+        .filter(|(_, d)| d.drive_id == marker.drive_id)
+        .map(|(id, _)| id.clone())
+        .collect();
+    ids.sort();
+    ids
+}
+
 async fn handle_removed(state: &SharedState, devnode: &Path) -> anyhow::Result<()> {
-    let was_drive_id = {
+    let was_ids = {
         let guard = state.read().await;
-        let id = guard.drive_status.drive_id.clone();
+        let ids = guard.drive_status.instance_ids.clone();
         if let Some(mount_path) = &guard.drive_status.mount_path {
             if let Some(device) = resolve_device_for_mount(Path::new(mount_path)) {
                 if device != devnode {
@@ -365,23 +397,21 @@ async fn handle_removed(state: &SharedState, devnode: &Path) -> anyhow::Result<(
                 }
             }
         }
-        id
+        ids
     };
     debug!(
-        "USB handle_removed: devnode={} drive_id={:?} clearing drive_status",
+        "USB handle_removed: devnode={} instances={:?} clearing drive_status",
         devnode.display(),
-        was_drive_id
+        was_ids
     );
 
     let mut guard = state.write().await;
     guard.drive_status.connected = false;
-    guard.drive_status.trusted = false;
-    guard.drive_status.drive_id = None;
-    guard.drive_status.label = None;
+    guard.drive_status.clear_drive();
     guard.drive_status.mount_path = None;
     guard.drive_status.devnode = None;
 
-    if let Some(ref id) = was_drive_id {
+    for id in &was_ids {
         if let Some(cancel) = guard.running_cancel_tokens.remove(id) {
             cancel.cancel();
         }
@@ -713,18 +743,14 @@ pub(crate) async fn run_periodic_checks(state: SharedState) {
 
 async fn check_reminders_and_intervals(state: &SharedState) {
     let now = now_epoch();
-    let (config, connected_drive_id, mount_path) = {
+    let (config, drive_status) = {
         let guard = state.read().await;
-        (
-            guard.config.clone(),
-            guard.drive_status.drive_id.clone(),
-            guard.drive_status.mount_path.clone(),
-        )
+        (guard.config.clone(), guard.drive_status.clone())
     };
+    let mount_path = drive_status.mount_path.clone();
 
     for (drive_id, drive) in &config.trusted_drives {
-        let is_connected =
-            connected_drive_id.as_deref() == Some(drive_id.as_str()) && mount_path.is_some();
+        let is_connected = drive_status.has_instance(drive_id) && mount_path.is_some();
         if is_connected {
             if let Some(mount) = &mount_path {
                 if interval_due(now, drive.last_backup_epoch, config.backup_interval_hours) {

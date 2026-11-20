@@ -245,6 +245,9 @@
               <p class="backup-progress-text muted" id="backup-progress-text" aria-live="polite"></p>
             </div>
             <p class="muted drive-detect-message">Waiting for drive…</p>
+            <label class="field-row instance-picker-row hidden">Backup on this drive:
+              <select class="instance-picker"></select>
+            </label>
             <p class="muted hidden" id="dashboard-drive-space"></p>
 
             <div class="backup-targets" id="backup-targets-section">
@@ -271,6 +274,9 @@
           <div class="panel">
             <h1>Restore</h1>
             <p class="lead">Choose a backup and restore it to a new folder. Aegis never overwrites your existing files.</p>
+            <label class="field-row instance-picker-row hidden">Backup on this drive:
+              <select class="instance-picker"></select>
+            </label>
             <div class="field-row">
               <button class="btn secondary" id="load-snapshots">Show backups</button>
               <span class="muted" id="snapshot-info">Backups are encrypted. Passphrase required.</span>

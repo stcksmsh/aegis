@@ -422,7 +422,46 @@ function formatGB(bytes) {
   return (bytes / (1024 * 1024 * 1024)).toFixed(1);
 }
 
+// A drive can hold several backups (e.g. one per company). The UI acts on one at a time:
+// the one picked here, else the agent's default (status.drive.drive_id).
+let pickedInstanceId = null;
+
+function applyPickedInstance(status) {
+  const ids = status?.drive?.instance_ids || [];
+  const trusted = status?.trusted_drives || [];
+  if (pickedInstanceId && ids.includes(pickedInstanceId)) {
+    status.drive.drive_id = pickedInstanceId;
+    const t = trusted.find((d) => d.drive_id === pickedInstanceId);
+    if (t) status.drive.label = t.label;
+  }
+  document.querySelectorAll(".instance-picker-row").forEach((row) => {
+    row.classList.toggle("hidden", ids.length < 2);
+  });
+  document.querySelectorAll(".instance-picker").forEach((sel) => {
+    const want = ids.join(",");
+    if (sel.dataset.ids !== want) {
+      sel.dataset.ids = want;
+      sel.replaceChildren(
+        ...ids.map((id) => {
+          const opt = document.createElement("option");
+          opt.value = id;
+          opt.textContent = trusted.find((d) => d.drive_id === id)?.label || id.slice(0, 8);
+          return opt;
+        })
+      );
+    }
+    if (status?.drive?.drive_id) sel.value = status.drive.drive_id;
+  });
+}
+
+document.addEventListener("change", (e) => {
+  if (!e.target.classList?.contains("instance-picker")) return;
+  pickedInstanceId = e.target.value;
+  if (currentStatus) renderStatus(currentStatus);
+});
+
 function renderStatus(status) {
+  applyPickedInstance(status);
   const summaryText = document.getElementById("dashboard-summary-text");
   const summaryVerify = document.getElementById("dashboard-summary-verify");
   const driveDetectEls = document.querySelectorAll(".drive-detect-message");
@@ -1462,6 +1501,30 @@ async function saveConfig() {
   }
 }
 
+// POST /drives/setup. If the drive already has backups that this passphrase doesn't open,
+// ask before creating a separate one, so a typo never silently starts a new backup.
+// Returns null if the user declined.
+async function postDriveSetup(payload) {
+  const send = (p) =>
+    fetch(`${API}/drives/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+  const res = await send(payload);
+  if (res.status !== 409) return res;
+  hideLoadingOverlay();
+  const ok = await uiConfirm(
+    "This drive already has backups, but this passphrase doesn't open any of them.\n\n" +
+      "If you mistyped it, choose Cancel and try again.\n" +
+      "Choose OK only if you want a separate new backup on this drive, protected by this passphrase.",
+    "Create a separate backup?"
+  );
+  if (!ok) return null;
+  showLoadingOverlay("Setting up drive…");
+  return send({ ...payload, new_instance: true });
+}
+
 async function setupDriveWithMount(mountPath) {
   if (!mountPath) {
     uiAlert("Drive detected but not open yet. Please open or format it first.");
@@ -1489,11 +1552,8 @@ async function setupDriveWithMount(mountPath) {
     paranoid_mode: document.getElementById("paranoid-mode").checked,
   };
 
-  const res = await fetch(`${API}/drives/setup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const res = await postDriveSetup(payload);
+  if (!res) return;
 
   if (res.ok) {
     const data = await res.json();
@@ -1501,6 +1561,7 @@ async function setupDriveWithMount(mountPath) {
     if (currentStatus?.drive) {
       currentStatus.drive.trusted = true;
       currentStatus.drive.drive_id = data.drive_id;
+      pickedInstanceId = data.drive_id;
       currentStatus.drive.label = currentStatus.drive.label || payload.label;
     }
     renderStatus(currentStatus);
@@ -1640,11 +1701,8 @@ async function setupDriveFromSelectionForAddDrive() {
     };
 
     showLoadingOverlay("Setting up drive…");
-    const res = await fetch(`${API}/drives/setup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const res = await postDriveSetup(payload);
+    if (!res) return;
 
     if (res.ok) {
       const data = await res.json();
@@ -1652,6 +1710,7 @@ async function setupDriveFromSelectionForAddDrive() {
       if (currentStatus?.drive) {
         currentStatus.drive.trusted = true;
         currentStatus.drive.drive_id = data.drive_id;
+        pickedInstanceId = data.drive_id;
         currentStatus.drive.label = currentStatus.drive.label || payload.label;
       }
       renderStatus(currentStatus);

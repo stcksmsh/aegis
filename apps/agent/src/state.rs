@@ -56,7 +56,12 @@ pub struct RunResult {
 pub struct DriveStatus {
     pub connected: bool,
     pub trusted: bool,
+    /// Trusted: the first backup instance on this drive known to this computer (config key).
+    /// Untrusted: the drive's own id from its marker, if any.
     pub drive_id: Option<String>,
+    /// All instances on the connected drive that this computer backs up to (config keys).
+    #[serde(default)]
+    pub instance_ids: Vec<String>,
     pub label: Option<String>,
     pub mount_path: Option<String>,
     pub devnode: Option<String>,
@@ -98,6 +103,7 @@ impl AgentRuntimeState {
                 connected: false,
                 trusted: false,
                 drive_id: None,
+                instance_ids: Vec::new(),
                 label: None,
                 mount_path: None,
                 devnode: None,
@@ -112,6 +118,21 @@ impl AgentRuntimeState {
             restore_cancel_token: None,
             reminder_last_sent: HashMap::new(),
         }
+    }
+}
+
+impl DriveStatus {
+    /// True if the drive holding this instance (config key) is plugged in.
+    pub fn has_instance(&self, id: &str) -> bool {
+        self.connected && self.instance_ids.iter().any(|i| i == id)
+    }
+
+    /// Forget the connected drive (unplugged, wiped, or unknown).
+    pub fn clear_drive(&mut self) {
+        self.trusted = false;
+        self.drive_id = None;
+        self.instance_ids.clear();
+        self.label = None;
     }
 }
 

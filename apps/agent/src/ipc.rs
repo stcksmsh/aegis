@@ -715,12 +715,6 @@ async fn setup_drive(
         let final_label = sanitize_label(&raw_label)
             .or_else(|| sanitize_label(&default_drive_label(config)))
             .unwrap_or_else(|| "backup".to_string());
-        if config.label_exists(&final_label, None) {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                "A drive with this name already exists.".to_string(),
-            ));
-        }
         let sources = req
             .backup_sources
             .clone()
@@ -764,6 +758,26 @@ async fn setup_drive(
         }
     };
     ensure_writable_format(&marker).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    // A typed name used by a backup on another drive: refuse before creating anything here.
+    if let Some(typed) = req.label.as_deref().and_then(sanitize_label) {
+        let clash = state
+            .read()
+            .await
+            .config
+            .trusted_drives
+            .iter()
+            .any(|(id, d)| {
+                !marker.instances.contains(id)
+                    && d.label.as_deref().map(str::trim).map(str::to_lowercase)
+                        == Some(typed.trim().to_lowercase())
+            });
+        if clash {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Another backup already uses this name. Choose a different name.".to_string(),
+            ));
+        }
+    }
 
     // Find the instance this passphrase opens; restic itself checks the passphrase.
     let mut found = None;
@@ -808,6 +822,40 @@ async fn setup_drive(
         }
     };
     let instance_id = meta.instance_id.clone();
+
+    // Setting up a backup this computer already knows (e.g. after reinstalling the drive list)
+    // keeps its name and history unless a new name was typed.
+    let known = {
+        state
+            .read()
+            .await
+            .config
+            .trusted_drives
+            .get(&instance_id)
+            .cloned()
+    };
+    let typed_label = req
+        .label
+        .as_deref()
+        .and_then(sanitize_label)
+        .filter(|l| !l.trim().is_empty());
+    let final_label = match (&known, typed_label) {
+        (_, Some(typed)) => typed,
+        (Some(k), None) => k.label.clone().unwrap_or(final_label),
+        (None, None) => final_label,
+    };
+    if state
+        .read()
+        .await
+        .config
+        .label_exists(&final_label, Some(&instance_id))
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Another backup already uses this name. Choose a different name.".to_string(),
+        ));
+    }
+
     let previous = if existing {
         let repo = mount_path.join(&meta.repo_path);
         restic
@@ -829,11 +877,14 @@ async fn setup_drive(
         label: Some(final_label.clone()),
         repository_path: meta.repo_path,
         repository_id: Some(repo_id.clone()),
-        last_seen_epoch: None,
-        last_backup_epoch: None,
-        last_backup_snapshot_id: None,
-        backup_sources,
-        extra: Default::default(),
+        last_seen_epoch: known.as_ref().and_then(|k| k.last_seen_epoch),
+        last_backup_epoch: known.as_ref().and_then(|k| k.last_backup_epoch),
+        last_backup_snapshot_id: known
+            .as_ref()
+            .and_then(|k| k.last_backup_snapshot_id.clone()),
+        backup_sources: backup_sources
+            .or_else(|| known.as_ref().and_then(|k| k.backup_sources.clone())),
+        extra: known.map(|k| k.extra).unwrap_or_default(),
     };
     guard
         .config
@@ -1003,7 +1054,7 @@ async fn update_drive(
         if guard.config.label_exists(&new_label, Some(&req.drive_id)) {
             return Err((
                 StatusCode::BAD_REQUEST,
-                "A drive with this name already exists.".to_string(),
+                "Another backup already uses this name. Choose a different name.".to_string(),
             ));
         }
         if let Some(drive) = guard.config.trusted_drives.get_mut(&req.drive_id) {

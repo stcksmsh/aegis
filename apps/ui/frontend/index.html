@@ -89,57 +89,53 @@
                   </div>
                 </div>
                 <label class="checkbox">
-                  <input id="remember-passphrase" type="checkbox" checked /> Remember on this computer (secure storage)
+                  <input id="remember-passphrase" type="checkbox" checked /> Remember my passphrase on this computer (needed for automatic backups)
                 </label>
                 <label class="checkbox">
-                  <input id="paranoid-mode" type="checkbox" /> Always ask for my passphrase (Paranoid Mode)
+                  <input id="paranoid-mode" type="checkbox" /> Ask for my passphrase every time (more private; no automatic backups)
                 </label>
               </div>
 
               <div class="step-card wizard-step hidden" data-step="2">
                 <div class="step-label">Step 3</div>
                 <h2>Connect your USB drive</h2>
-                <p class="muted">Select a drive below. You can open it, or erase &amp; set it up for Aegis.</p>
+                <p class="muted">Plug in the USB drive you want to back up to and choose it below.</p>
                 <div class="drive-detect drive-detect-message">Waiting for drive…</div>
                 <div class="device-panel">
                   <div class="device-panel-header">
                     <div class="device-panel-title">Available drives</div>
-                    <div class="device-panel-subtitle" id="device-help">
-                      Select a removable drive or insert a new one.
-                    </div>
-                    <div class="device-panel-subtitle" id="device-updated">Last updated: —</div>
+                    <div class="device-panel-subtitle" id="device-help">Plug in a USB drive.</div>
                     <div class="device-panel-subtitle" id="device-status"></div>
                   </div>
                   <div class="preflight" id="preflight">
-                    <div class="preflight-item" id="preflight-restic">Backup engine: checking…</div>
-                    <div class="preflight-item" id="preflight-udisks">Drive tools: checking…</div>
-                    <div class="preflight-item" id="preflight-exfat">Drive formatting: checking…</div>
+                    <div class="preflight-item hidden" id="preflight-restic"></div>
+                    <div class="preflight-item hidden" id="preflight-udisks"></div>
+                    <div class="preflight-item hidden" id="preflight-exfat"></div>
                   </div>
-                  <div id="device-empty" class="muted hidden">No removable drives detected.</div>
+                  <div id="device-empty" class="muted hidden">No USB drive found yet. Plug one in; it shows up here within a few seconds.</div>
                   <div id="device-list" class="device-list"></div>
                 </div>
                 <div class="field">
-                  <label for="drive-label">Drive label (optional)</label>
+                  <label for="drive-label">Name for this backup (optional)</label>
                   <input id="drive-label" type="text" placeholder="Work Backup" />
                 </div>
                 <div class="device-actions">
                   <button class="btn secondary" id="mount-drive" type="button">Open drive</button>
-                  <button class="btn primary" id="setup-drive" type="button">Use this drive</button>
                 </div>
                 <div class="device-danger">
                   <label class="checkbox">
-                    <input id="erase-option" type="checkbox" /> Erase &amp; format as exFAT (this deletes everything on the drive)
+                    <input id="erase-option" type="checkbox" /> Erase this drive and prepare it for Aegis (deletes everything on it)
                   </label>
                   <label class="field hidden" id="erase-phrase-field">
-                    <span>Type ERASE to confirm formatting</span>
-                    <input id="erase-phrase" type="text" placeholder="ERASE" />
+                    <span>Type ERASE to confirm</span>
+                    <input id="erase-phrase" type="text" aria-label="Type ERASE to confirm" />
                   </label>
                 </div>
               </div>
 
               <div class="step-card wizard-step hidden" data-step="3">
                 <div class="step-label">Step 4</div>
-                <h2>Summary</h2>
+                <h2>What happens next</h2>
                 <ul class="summary" id="wizard-summary"></ul>
               </div>
             </div>
@@ -149,7 +145,7 @@
                 <button class="btn ghost" id="wizard-skip">Skip for now</button>
               </div>
               <div class="wizard-actions-right">
-                <button class="btn secondary" id="wizard-next">Next</button>
+                <button class="btn primary" id="wizard-next">Next</button>
                 <button class="btn primary hidden" id="run-first-backup">Run first backup now</button>
               </div>
             </div>
@@ -165,21 +161,20 @@
             <div class="device-panel">
               <div class="device-panel-header">
                 <div class="device-panel-title">Available drives</div>
-                <div class="device-panel-subtitle" id="setup-drive-help">Select a removable drive or insert a new one.</div>
-                <div class="device-panel-subtitle" id="setup-drive-updated">Last updated: —</div>
+                <div class="device-panel-subtitle" id="setup-drive-help">Plug in a USB drive.</div>
                 <div class="device-panel-subtitle" id="setup-drive-status"></div>
               </div>
               <div class="preflight" id="setup-drive-preflight">
-                <div class="preflight-item" id="setup-drive-preflight-restic">Backup engine: checking…</div>
-                <div class="preflight-item" id="setup-drive-preflight-udisks">Drive tools: checking…</div>
-                <div class="preflight-item" id="setup-drive-preflight-exfat">Drive formatting: checking…</div>
+                <div class="preflight-item hidden" id="setup-drive-preflight-restic"></div>
+                <div class="preflight-item hidden" id="setup-drive-preflight-udisks"></div>
+                <div class="preflight-item hidden" id="setup-drive-preflight-exfat"></div>
               </div>
-              <div id="setup-drive-device-empty" class="muted hidden">No removable drives detected.</div>
+              <div id="setup-drive-device-empty" class="muted hidden">No USB drive found yet. Plug one in; it shows up here within a few seconds.</div>
               <div id="setup-drive-device-list" class="device-list"></div>
             </div>
             <div class="field">
-              <label for="setup-drive-label">Drive label (optional)</label>
-              <input id="setup-drive-label" type="text" placeholder="Leave empty for auto name (e.g. backup-abc123)" />
+              <label for="setup-drive-label">Name for this backup (optional)</label>
+              <input id="setup-drive-label" type="text" placeholder="e.g. Work Backup" />
             </div>
             <h2 class="step-label" style="margin-top: 20px;">What to back up to this drive</h2>
             <p class="muted">Choose which folders to back up when this drive is connected. Different drives can have different backup sets.</p>
@@ -195,19 +190,6 @@
               <button class="btn secondary" id="setup-drive-add-custom" type="button">Add</button>
             </div>
             <ul id="setup-drive-custom-list" class="chip-list"></ul>
-            <div class="device-actions">
-              <button class="btn secondary" id="setup-drive-mount" type="button">Open drive</button>
-              <button class="btn primary" id="setup-drive-setup-btn" type="button">Set up this drive</button>
-            </div>
-            <div class="device-danger">
-              <label class="checkbox">
-                <input id="setup-drive-erase-option" type="checkbox" /> Erase &amp; format as exFAT (this deletes everything on the drive)
-              </label>
-              <label class="field hidden" id="setup-drive-erase-phrase-field">
-                <span>Type ERASE to confirm formatting</span>
-                <input id="setup-drive-erase-phrase" type="text" placeholder="ERASE" />
-              </label>
-            </div>
             <h2 class="step-label" style="margin-top: 24px;">Passphrase for this drive</h2>
             <p class="muted">Your passphrase encrypts the backup. Aegis never stores it on the USB drive.</p>
             <p class="callout">Write your passphrase down and keep it somewhere safe, away from the drive. If you forget it, nobody can open your backups, not even Aegis. There is no reset.</p>
@@ -230,6 +212,19 @@
                 <input id="setup-drive-passphrase-confirm" type="password" placeholder="Re-enter passphrase" autocomplete="new-password" />
                 <button type="button" class="password-toggle" data-toggle-for="setup-drive-passphrase-confirm" aria-label="Show passphrase">Show</button>
               </div>
+            </div>
+            <div class="device-danger">
+              <label class="checkbox">
+                <input id="setup-drive-erase-option" type="checkbox" /> Erase this drive and prepare it for Aegis (deletes everything on it)
+              </label>
+              <label class="field hidden" id="setup-drive-erase-phrase-field">
+                <span>Type ERASE to confirm</span>
+                <input id="setup-drive-erase-phrase" type="text" aria-label="Type ERASE to confirm" />
+              </label>
+            </div>
+            <div class="device-actions">
+              <button class="btn secondary" id="setup-drive-mount" type="button">Open drive</button>
+              <button class="btn primary" id="setup-drive-setup-btn" type="button">Set up this drive</button>
             </div>
           </div>
         </section>
@@ -311,10 +306,11 @@
             <h1>Settings</h1>
             <div class="field">
               <label for="exclude-patterns">Skip these files or folders</label>
-              <input id="exclude-patterns" type="text" placeholder=".cache, node_modules" />
+              <input id="exclude-patterns" type="text" aria-describedby="exclude-help" />
+              <p class="muted" id="exclude-help">Names separated by commas, e.g. "Downloads, *.tmp" (* means any text). Aegis already skips temporary and system files.</p>
             </div>
             <label class="checkbox">
-              <input id="quick-verify" type="checkbox" checked /> Quick verify after backup
+              <input id="quick-verify" type="checkbox" checked /> Quickly check each backup after it's made
             </label>
             <label class="checkbox">
               <input id="auto-backup" type="checkbox" checked /> Back up automatically when your Aegis drive is plugged in
@@ -336,7 +332,7 @@
               <input id="reminder-days" type="number" min="0" placeholder="7" />
             </div>
             <div class="field">
-              <label for="backup-interval-hours">While the drive stays plugged in, back up again every N hours (0 = only when plugged in)</label>
+              <label for="backup-interval-hours">While the drive stays plugged in, back up again every this many hours (0 = only when plugged in)</label>
               <input id="backup-interval-hours" type="number" min="0" placeholder="0" />
             </div>
             <div class="save-row">
@@ -351,35 +347,36 @@
             <h1>Advanced</h1>
             <div class="field-row">
               <label class="checkbox">
-                <input id="deep-verify" type="checkbox" /> Deep verification (slower)
+                <input id="deep-verify" type="checkbox" /> Check backups thoroughly (much slower)
               </label>
             </div>
             <div class="field">
-              <label for="include-patterns">Only include files matching (advanced)</label>
-              <input id="include-patterns" type="text" placeholder="Photos/**, *.docx" />
+              <label for="include-patterns">Only back up files like these</label>
+              <input id="include-patterns" type="text" aria-describedby="include-help" />
+              <p class="muted" id="include-help">Leave empty to back up everything in your folders. Example: "*.docx, *.pdf".</p>
             </div>
             <div class="field">
               <h2 class="step-label" style="margin-top: 0;">Clean up old backups</h2>
               <p class="muted">Aegis can automatically remove older backups to save space, while keeping a spread of recent, daily, weekly, monthly and yearly copies.</p>
               <div class="retention-grid">
                 <div class="field">
-                  <label for="keep-last">Keep the last N backups</label>
+                  <label for="keep-last">Always keep this many newest backups</label>
                   <input id="keep-last" type="number" min="0" placeholder="0" />
                 </div>
                 <div class="field">
-                  <label for="keep-daily">Keep one per day, for N days</label>
+                  <label for="keep-daily">Keep one backup per day, for this many days</label>
                   <input id="keep-daily" type="number" min="0" placeholder="0" />
                 </div>
                 <div class="field">
-                  <label for="keep-weekly">Keep one per week, for N weeks</label>
+                  <label for="keep-weekly">Keep one backup per week, for this many weeks</label>
                   <input id="keep-weekly" type="number" min="0" placeholder="0" />
                 </div>
                 <div class="field">
-                  <label for="keep-monthly">Keep one per month, for N months</label>
+                  <label for="keep-monthly">Keep one backup per month, for this many months</label>
                   <input id="keep-monthly" type="number" min="0" placeholder="0" />
                 </div>
                 <div class="field">
-                  <label for="keep-yearly">Keep one per year, for N years</label>
+                  <label for="keep-yearly">Keep one backup per year, for this many years</label>
                   <input id="keep-yearly" type="number" min="0" placeholder="0" />
                 </div>
               </div>
@@ -392,12 +389,13 @@
               <span class="muted" id="advanced-saved" role="status"></span>
             </div>
             <div class="field">
-              <label for="recovery-destination">Recovery kit</label>
+              <label for="recovery-destination">Save drive details (optional)</label>
+              <p class="muted">Saves a short note about where your backup is on the drive, to keep with your papers. It contains no passphrase. To get files back without Aegis, use the AEGIS-RESTORE folder on the drive.</p>
               <div class="field-row">
                 <input id="recovery-destination" type="text" placeholder="Folder location" />
                 <button class="btn ghost" id="recovery-browse" type="button">Browse…</button>
               </div>
-              <button class="btn secondary" id="export-recovery">Export recovery kit</button>
+              <button class="btn secondary" id="export-recovery">Save drive details</button>
             </div>
           </div>
         </section>

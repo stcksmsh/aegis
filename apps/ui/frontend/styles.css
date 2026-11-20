@@ -150,8 +150,6 @@ a {
 }
 
 main {
-  max-height: calc(100vh - 180px);
-  overflow-y: auto;
   padding-right: 6px;
 }
 
@@ -1132,7 +1130,7 @@ body.setup-loading .device-danger {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 700px) {
   .top-bar {
     flex-direction: column;
     align-items: flex-start;
@@ -1148,9 +1146,6 @@ body.setup-loading .device-danger {
   }
   .panel {
     padding: 24px;
-  }
-  main {
-    max-height: calc(100vh - 150px);
   }
 }
 
@@ -1234,4 +1229,9 @@ body.setup-loading .device-danger {
 .field-title {
   font-weight: 600;
   margin: 0 0 6px;
+}
+
+/* The wizard shows "Step N of 4" once, above the cards. */
+.wizard-step .step-label {
+  display: none;
 }

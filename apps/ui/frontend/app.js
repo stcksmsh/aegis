@@ -71,7 +71,6 @@ function setSetupButtonsDisabled(disabled) {
     "setup-drive-passphrase-confirm",
     "setup-drive-label",
     "mount-drive",
-    "setup-drive",
     "erase-option",
     "erase-phrase",
     "drive-label",
@@ -196,7 +195,7 @@ function renderBanner(status) {
     return;
   }
   if (status && !status.restic_available) {
-    setBanner("warn", "Backup engine missing — please reinstall Aegis.");
+    setBanner("warn", "Aegis is missing a part it needs. Please reinstall Aegis.");
     return;
   }
   if (status?.running && status?.last_run?.started_epoch) {
@@ -618,9 +617,9 @@ function renderStatus(status) {
       ? `${status.drive.label || "Drive"} connected — ready to back up`
       : `${status.drive.label || "Drive"} connected`;
   } else if (!status.drive.mount_path) {
-    driveDetectText = "Drive detected — select a drive below";
+    driveDetectText = "A USB drive is plugged in.";
   } else {
-    driveDetectText = "Drive detected — not set up yet. Go to Add drive to set it up.";
+    driveDetectText = "A USB drive is plugged in that Aegis doesn't use yet.";
   }
   driveDetectEls.forEach((el) => { el.textContent = driveDetectText; });
 
@@ -1035,20 +1034,19 @@ function renderDeviceListInto(listEl, emptyEl, helpEl, updatedEl, radioName) {
   const help = helpEl || document.getElementById("setup-drive-help");
   const updated = updatedEl || document.getElementById("setup-drive-updated");
   listEl.innerHTML = "";
-  if (updated) updated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
 
   if (!deviceList.length) {
     if (empty) empty.classList.remove("hidden");
-    if (help) help.textContent = "Insert a removable drive to continue.";
+    if (help) help.textContent = "Plug in a USB drive.";
     return false;
   }
   if (empty) empty.classList.add("hidden");
-  if (help) help.textContent = "Select a drive below to open or set up.";
+  if (help) help.textContent = "Choose the drive to back up to.";
 
   let hasSelection = false;
   deviceList.forEach((device) => {
-    const deviceTitle = device.model || "Removable drive";
-    const deviceMeta = `${device.size} • ${device.path}`;
+    const deviceTitle = `${device.model || "USB drive"} (${device.size})`;
+    const deviceMeta = device.removable ? "" : "This computer's own drive";
     const card = document.createElement("div");
     card.className = "device-card";
     const header = document.createElement("div");
@@ -1074,9 +1072,10 @@ function renderDeviceListInto(listEl, emptyEl, helpEl, updatedEl, radioName) {
           _wholeDisk: true,
         }];
 
-    partsToShow.forEach((part) => {
+    const severalParts = partsToShow.length > 1;
+    partsToShow.forEach((part, partIndex) => {
       const mountpoint = part.mountpoints?.[0] || "";
-      const subtitle = `${part.path} • ${part.size}`;
+      const subtitle = severalParts ? part.size : "";
       const isWholeDisk = !!part._wholeDisk;
       const row = document.createElement("label");
       row.className = "partition-row";
@@ -1106,9 +1105,11 @@ function renderDeviceListInto(listEl, emptyEl, helpEl, updatedEl, radioName) {
       details.className = "partition-details";
       const titleEl = document.createElement("div");
       titleEl.className = "partition-title";
-      titleEl.textContent = isWholeDisk
-        ? "Whole drive (needs setup)"
-        : (device.removable ? `Drive section ${part.name}` : "System drive (not usable for backups)");
+      titleEl.textContent = !device.removable
+        ? "Can't be used for backups"
+        : severalParts
+        ? `Part ${partIndex + 1} of this drive`
+        : "Whole drive";
       const sub = document.createElement("div");
       sub.className = "partition-subtitle";
       sub.textContent = subtitle;
@@ -1117,19 +1118,12 @@ function renderDeviceListInto(listEl, emptyEl, helpEl, updatedEl, radioName) {
       const status = document.createElement("div");
       status.className = "partition-status";
       if (!device.removable) {
-        status.textContent = "Not selectable";
-        status.classList.add("warn");
-      } else if (isWholeDisk) {
-        status.textContent = "Erase & format this drive to set it up for Aegis.";
+        status.textContent = "";
+      } else if (isWholeDisk || !part.fstype) {
+        status.textContent = "Needs erasing before Aegis can use it";
         status.classList.add("warn");
       } else {
-        const fstype = part.fstype || "Unformatted";
-        status.textContent = mountpoint
-          ? `Open at ${mountpoint} • ${fstype}`
-          : `Not open • ${fstype}`;
-        if (!part.fstype) {
-          status.classList.add("warn");
-        }
+        status.textContent = mountpoint ? "Ready to use" : "Not opened yet";
       }
       row.appendChild(input);
       row.appendChild(details);
@@ -1178,37 +1172,25 @@ function renderDevices() {
   updateSetupDriveActions();
 }
 
+// Shows only what's missing, with what to do about it.
 function renderPreflight() {
-  const restic = document.getElementById("preflight-restic");
-  const udisks = document.getElementById("preflight-udisks");
-  const exfat = document.getElementById("preflight-exfat");
-  if (restic) {
-    restic.textContent = preflight.restic ? "Backup engine: ready" : "Backup engine: missing";
-    restic.className = `preflight-item ${preflight.restic ? "ok" : "warn"}`;
-  }
-  if (udisks) {
-    udisks.textContent = preflight.can_mount ? "Drive tools: ready" : "Drive tools: unavailable";
-    udisks.className = `preflight-item ${preflight.can_mount ? "ok" : "warn"}`;
-  }
-  if (exfat) {
-    exfat.textContent = preflight.can_format ? "Drive formatting: ready" : "Drive formatting: unavailable";
-    exfat.className = `preflight-item ${preflight.can_format ? "ok" : "warn"}`;
-  }
-  const setupRestic = document.getElementById("setup-drive-preflight-restic");
-  const setupUdisks = document.getElementById("setup-drive-preflight-udisks");
-  const setupExfat = document.getElementById("setup-drive-preflight-exfat");
-  if (setupRestic) {
-    setupRestic.textContent = preflight.restic ? "Backup engine: ready" : "Backup engine: missing";
-    setupRestic.className = `preflight-item ${preflight.restic ? "ok" : "warn"}`;
-  }
-  if (setupUdisks) {
-    setupUdisks.textContent = preflight.can_mount ? "Drive tools: ready" : "Drive tools: unavailable";
-    setupUdisks.className = `preflight-item ${preflight.can_mount ? "ok" : "warn"}`;
-  }
-  if (setupExfat) {
-    setupExfat.textContent = preflight.can_format ? "Drive formatting: ready" : "Drive formatting: unavailable";
-    setupExfat.className = `preflight-item ${preflight.can_format ? "ok" : "warn"}`;
-  }
+  const problems = {
+    restic: preflight.restic ? "" : "Aegis is missing a part it needs. Please reinstall Aegis.",
+    udisks: preflight.can_mount
+      ? ""
+      : "Aegis can't open drives by itself on this computer. Open the drive in your file manager first, then come back.",
+    exfat: preflight.can_format
+      ? ""
+      : "Aegis can't erase drives on this computer. You can still use a drive that already works in your file manager.",
+  };
+  Object.entries(problems).forEach(([key, text]) => {
+    [`preflight-${key}`, `setup-drive-preflight-${key}`].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text;
+      el.className = `preflight-item warn${text ? "" : " hidden"}`;
+    });
+  });
   const wipeOptions = document.querySelectorAll(".wipe-option");
   wipeOptions.forEach((el) => el.classList.toggle("hidden", !preflight.can_wipe));
 }
@@ -1238,13 +1220,13 @@ function updateSetupDriveActions() {
   if (status) {
     let message = "";
     if (!agentOnline) message = "Not connected to Aegis.";
-    else if (!hasSelection) message = "Select a drive to continue.";
-    else if (wantsErase && !canFormat) message = "Aegis can't format drives on this computer.";
+    else if (!hasSelection) message = "Choose a drive to continue.";
+    else if (wantsErase && !canFormat) message = "Aegis can't erase drives on this computer.";
     else if (!mounted && !canMount) message = "Aegis can't open drives on this computer.";
-    else if (!canSetup) message = "Backup engine missing — please reinstall Aegis.";
-    else if (!mounted && !wantsErase) message = "Open the drive, or turn on erase & format.";
+    else if (!canSetup) message = "Aegis is missing a part it needs. Please reinstall Aegis.";
+    else if (!mounted && !wantsErase) message = "Click Open drive, or tick \"Erase this drive\".";
     else if (wantsErase && (erasePhrase?.value || "").trim() !== "ERASE") {
-      message = 'Type "ERASE" to confirm formatting.';
+      message = 'Type ERASE in the box to confirm erasing.';
     } else message = "Ready to set up this drive.";
     status.textContent = message;
   }
@@ -1273,9 +1255,9 @@ function updateDeviceActions() {
   if (mountButton) {
     mountButton.disabled = !hasSelection || !hasFilesystem;
     mountButton.title = !hasSelection
-      ? "Select a drive to open."
+      ? "Choose a drive to open."
       : !hasFilesystem
-      ? "This drive isn't formatted yet. Use erase & format first."
+      ? "Tick \"Erase this drive\" first."
       : mounted
       ? "Already open."
       : !canMount
@@ -1285,15 +1267,15 @@ function updateDeviceActions() {
   if (setupButton) {
     setupButton.disabled = !hasSelection;
     setupButton.title = !hasSelection
-      ? "Select a drive to continue."
+      ? "Choose a drive to continue."
       : !canSetup
-      ? "Backup engine missing — please reinstall Aegis."
+      ? "Aegis is missing a part it needs. Please reinstall Aegis."
       : !hasFilesystem && !wantsErase
-      ? "This drive isn't formatted yet. Enable erase & format."
+      ? "Tick \"Erase this drive\" first."
       : !mounted && !canMount
       ? "Aegis can't open drives on this computer."
       : wantsErase && !canFormat
-      ? "Aegis can't format drives on this computer."
+      ? "Aegis can't erase drives on this computer."
       : "Set up this drive.";
   }
 
@@ -1302,17 +1284,17 @@ function updateDeviceActions() {
     if (!agentOnline) {
       message = "Not connected to Aegis.";
     } else if (!hasSelection) {
-      message = "Select a drive to continue.";
+      message = "Choose a drive to continue.";
     } else if (wantsErase && !canFormat) {
-      message = "Aegis can't format drives on this computer.";
+      message = "Aegis can't erase drives on this computer.";
     } else if (!mounted && !canMount) {
       message = "Aegis can't open drives on this computer.";
     } else if (!canSetup) {
-      message = "Backup engine missing — please reinstall Aegis.";
+      message = "Aegis is missing a part it needs. Please reinstall Aegis.";
     } else if (!mounted && !wantsErase) {
-      message = "Open the drive, or turn on erase & format.";
+      message = "Click Open drive, or tick \"Erase this drive\".";
     } else if (wantsErase && (erasePhrase?.value || "").trim() !== "ERASE") {
-      message = 'Type "ERASE" to confirm formatting.';
+      message = 'Type ERASE in the box to confirm erasing.';
     } else {
       message = "Ready to set up this drive.";
     }
@@ -1379,7 +1361,10 @@ function renderWizard() {
     wizardProgress.textContent = `Step ${wizardStep + 1} of ${wizardSteps.length}`;
   }
   if (wizardBack) wizardBack.disabled = wizardStep === 0;
-  if (wizardNext) wizardNext.classList.toggle("hidden", wizardStep === wizardSteps.length - 1);
+  if (wizardNext) {
+    wizardNext.classList.toggle("hidden", wizardStep === wizardSteps.length - 1);
+    wizardNext.textContent = wizardStep === 2 ? "Set up this drive" : "Next";
+  }
   if (wizardFinish) wizardFinish.classList.toggle("hidden", wizardStep !== wizardSteps.length - 1);
 
   if (wizardStep === wizardSteps.length - 1) {
@@ -1545,16 +1530,17 @@ function updateWizardSummary(status) {
   if (!summary) return;
   summary.innerHTML = "";
   const sources = buildBackupSources();
+  const remember = !!document.getElementById("remember-passphrase")?.checked;
+  const auto = !!status.config?.auto_backup_on_insert && remember;
   const summaryItems = [
-    `Sources: ${sources.map((s) => s.label).join(", ") || "None"}`,
-    `Quick verify: ${document.getElementById("quick-verify")?.checked ? "On" : "Off"}`,
-    `Automatic backup: ${document.getElementById("auto-backup")?.checked ? "On" : "Off"}`,
-    status.restic_available ? "Backup engine ready" : "Backup engine missing",
-    status.drive.connected
-      ? status.drive.mount_path
-        ? "Drive detected"
-        : "Drive detected — select it below to continue"
-      : "Waiting for drive",
+    `Aegis backs up: ${sources.map((s) => s.label).join(", ") || "nothing yet (add folders under Your drives)"}.`,
+    auto
+      ? "Backups start by themselves whenever you plug in this drive."
+      : "Plug in the drive and click Back up now to make a backup.",
+    remember
+      ? "Your passphrase is remembered on this computer."
+      : "Aegis asks for your passphrase every time.",
+    "To get files back, use Restore. Without Aegis, use the AEGIS-RESTORE folder on the drive.",
   ];
   summaryItems.forEach((item) => {
     const li = document.createElement("li");
@@ -1787,14 +1773,15 @@ async function postDriveSetup(payload) {
   return send({ ...payload, new_instance: true });
 }
 
+// Returns true only when the drive was set up.
 async function setupDriveWithMount(mountPath) {
   if (!mountPath) {
-    uiAlert("Drive detected but not open yet. Please open or format it first.");
-    return;
+    uiAlert("The drive isn't open yet. Click Open drive, or tick \"Erase this drive\".");
+    return false;
   }
   if (!currentStatus?.restic_available) {
-    uiAlert("Backup engine missing — please reinstall Aegis.");
-    return;
+    uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
+    return false;
   }
 
   const passphrase = document.getElementById("passphrase").value;
@@ -1802,7 +1789,7 @@ async function setupDriveWithMount(mountPath) {
   const passphraseError = checkNewPassphrase(passphrase, confirm);
   if (passphraseError) {
     uiAlert(passphraseError);
-    return;
+    return false;
   }
 
   const payload = {
@@ -1815,7 +1802,7 @@ async function setupDriveWithMount(mountPath) {
   };
 
   const res = await postDriveSetup(payload);
-  if (!res) return;
+  if (!res) return false;
 
   if (res.ok) {
     const data = await res.json();
@@ -1829,17 +1816,14 @@ async function setupDriveWithMount(mountPath) {
     }
     renderStatus(currentStatus);
     clearPassphraseFields("passphrase", "passphrase-confirm");
-  } else {
-    const detail = await res.text();
-    uiAlert(
-      detail && detail.trim() ? detail.trim() : "Drive setup failed. Check the passphrase and try again.",
-      "Setup failed"
-    );
+    return true;
   }
-}
-
-async function setupDrive() {
-  await setupDriveFromSelection();
+  const detail = await res.text();
+  uiAlert(
+    detail && detail.trim() ? detail.trim() : "Drive setup failed. Check the passphrase and try again.",
+    "Setup failed"
+  );
+  return false;
 }
 
 function formatErrorMessage(detail, forFormat) {
@@ -1854,11 +1838,11 @@ async function setupDriveFromSelectionForAddDrive() {
   try {
     const selection = getSelectedPartition();
     if (!selection) {
-      uiAlert("Select a drive first.");
+      uiAlert("Choose a drive first.");
       return;
     }
     if (!preflight.restic) {
-      uiAlert("Backup engine missing — please reinstall Aegis.");
+      uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
       return;
     }
     const passphrase = document.getElementById("setup-drive-passphrase")?.value ?? "";
@@ -1880,13 +1864,13 @@ async function setupDriveFromSelectionForAddDrive() {
       const canFormat = preflight.can_format;
       if (!canFormat) {
         uiAlert(
-          "Aegis can't format drives on this computer. Format it as exFAT using your system's disk tool, then try again."
+          "Aegis can't erase drives on this computer. Erase it with your computer's disk tool (choose \"exFAT\"), then try again."
         );
         return;
       }
       const confirmErase = (erasePhrase?.value || "").trim();
       if (confirmErase !== "ERASE") {
-        uiAlert('Type "ERASE" to confirm formatting.');
+        uiAlert('Type ERASE in the box to confirm erasing.');
         return;
       }
       const confirmMsg = wasWholeDisk
@@ -1901,7 +1885,7 @@ async function setupDriveFromSelectionForAddDrive() {
 
     try {
       if (shouldErase) {
-        showLoadingOverlay("Formatting drive…");
+        showLoadingOverlay("Erasing drive…");
         const res = await fetch(`${API}/drives/format`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1927,7 +1911,7 @@ async function setupDriveFromSelectionForAddDrive() {
       }
 
       if (!selection.partition.fstype && !shouldErase) {
-        await uiAlert("This drive isn't formatted. Enable erase & format to continue.");
+        await uiAlert("This drive needs erasing first. Tick \"Erase this drive\".");
         return;
       }
 
@@ -1999,7 +1983,7 @@ async function mountSelectedPartition() {
   try {
     const selection = getSelectedPartition();
     if (!selection) {
-      uiAlert("Select a drive first.");
+      uiAlert("Choose a drive first.");
       return;
     }
     if (!preflight.can_mount) {
@@ -2032,11 +2016,11 @@ async function setupDriveFromSelection() {
   try {
     const selection = getSelectedPartition();
     if (!selection) {
-      uiAlert("Select a drive first.");
+      uiAlert("Choose a drive first.");
       return false;
     }
     if (!preflight.restic) {
-      uiAlert("Backup engine missing — please reinstall Aegis.");
+      uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
       return false;
     }
     const eraseOption = document.getElementById("erase-option");
@@ -2051,13 +2035,13 @@ async function setupDriveFromSelection() {
       const canFormat = preflight.can_format;
       if (!canFormat) {
         uiAlert(
-          "Aegis can't format drives on this computer. Format it as exFAT using your system's disk tool, then try again."
+          "Aegis can't erase drives on this computer. Erase it with your computer's disk tool (choose \"exFAT\"), then try again."
         );
         return false;
       }
       const confirm = (erasePhrase?.value || "").trim();
       if (confirm !== "ERASE") {
-        uiAlert('Type "ERASE" to confirm formatting.');
+        uiAlert('Type ERASE in the box to confirm erasing.');
         return false;
       }
       const confirmMsg = wasWholeDisk
@@ -2072,7 +2056,7 @@ async function setupDriveFromSelection() {
 
     try {
       if (shouldErase) {
-        showLoadingOverlay("Formatting drive…");
+        showLoadingOverlay("Erasing drive…");
         const res = await fetch(`${API}/drives/format`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2098,7 +2082,7 @@ async function setupDriveFromSelection() {
       }
 
       if (!selection.partition.fstype && !shouldErase) {
-        await uiAlert("This drive isn't formatted. Enable erase & format to continue.");
+        await uiAlert("This drive needs erasing first. Tick \"Erase this drive\".");
         return false;
       }
 
@@ -2125,8 +2109,7 @@ async function setupDriveFromSelection() {
       }
 
       showLoadingOverlay("Setting up drive…");
-      await setupDriveWithMount(mountPath);
-      return true;
+      return await setupDriveWithMount(mountPath);
     } finally {
       hideLoadingOverlay();
     }
@@ -2144,7 +2127,7 @@ async function startBackup() {
     return;
   }
   if (!currentStatus?.restic_available) {
-    uiAlert("Backup engine missing — please reinstall Aegis.");
+    uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
     return;
   }
 
@@ -2166,7 +2149,7 @@ async function loadSnapshots() {
     return;
   }
   if (!currentStatus?.restic_available) {
-    uiAlert("Backup engine missing — please reinstall Aegis.");
+    uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
     return;
   }
   const result = await postWithPassphrase(
@@ -2351,7 +2334,7 @@ async function runRestore(includePaths, confirmMessage) {
     return;
   }
   if (!currentStatus?.restic_available) {
-    uiAlert("Backup engine missing — please reinstall Aegis.");
+    uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
     return;
   }
   const target = document.getElementById("restore-target").value;
@@ -2463,12 +2446,12 @@ async function ejectDrive() {
 
 async function exportRecoveryKit() {
   if (!currentStatus?.drive?.drive_id) {
-    uiAlert("Connect your Aegis drive to export a recovery kit.");
+    uiAlert("Plug in your Aegis drive first.");
     return;
   }
   const destination = document.getElementById("recovery-destination").value.trim();
   if (!destination) {
-    uiAlert("Choose a folder for the Recovery Kit.");
+    uiAlert("Choose a folder to save the drive details in.");
     return;
   }
   const res = await fetch(`${API}/recovery-kit`, {
@@ -2482,7 +2465,7 @@ async function exportRecoveryKit() {
   if (res.ok) {
     showToast("Drive details saved. Keep them somewhere safe.");
   } else {
-    uiAlert("Couldn't create the recovery kit. Please try again.");
+    uiAlert("Couldn't save the drive details. Check that the folder exists and try again.");
   }
 }
 
@@ -2541,16 +2524,6 @@ function setupListeners() {
     });
   });
 
-  const setupDriveBtn = document.getElementById("setup-drive");
-  if (setupDriveBtn) {
-    setupDriveBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      console.info("[click] use this drive");
-      setupDrive();
-    });
-  } else {
-    console.warn("[init] setup-drive button not found");
-  }
   const mountDrive = document.getElementById("mount-drive");
   if (mountDrive)
     mountDrive.addEventListener("click", (event) => {

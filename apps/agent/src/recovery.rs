@@ -39,20 +39,17 @@ pub fn export_recovery_kit(
 }
 
 fn default_instructions() -> String {
-    let mut text = String::new();
-    text.push_str("Aegis Recovery Kit\n\n");
-    text.push_str("This kit lets you restore backups on a new machine.\n");
-    text.push_str("You will need:\n");
-    text.push_str("- The USB drive containing the Aegis repository\n");
-    text.push_str("- Your passphrase (Aegis never stores it on the drive)\n\n");
-    text.push_str("Steps:\n");
-    text.push_str("1) Install Aegis or restic on the new machine.\n");
-    text.push_str("2) Locate the repository path from recovery.json.\n");
-    text.push_str("3) Use the passphrase to unlock and restore.\n\n");
-    text.push_str("Notes:\n");
-    text.push_str("- This kit contains no secrets.\n");
-    text.push_str("- If you enabled Paranoid Mode, the passphrase is never stored anywhere.\n");
-    text
+    "Aegis drive details\n\n\
+     This note says where your backup is on your Aegis USB drive. It contains no passphrase.\n\n\
+     To get your files back on any computer:\n\
+     1) Plug in the Aegis drive.\n\
+     2) Open the AEGIS-RESTORE folder on the drive and follow README.txt (or install Aegis\n   \
+     and use Restore).\n\
+     3) Type your passphrase when asked.\n\n\
+     If you chose \"Ask for my passphrase every time\", the passphrase is stored nowhere: keep\n\
+     your written copy safe.\n\n\
+     For technical help: recovery.json next to this file lists the backup's location on the drive.\n"
+        .to_string()
 }
 
 fn now_epoch() -> u64 {

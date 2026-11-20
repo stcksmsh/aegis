@@ -11,6 +11,15 @@ use which::which;
 #[derive(Debug, Clone)]
 pub struct Restic {
     binary: PathBuf,
+    /// Recorded on every snapshot; retention only ever prunes this computer's snapshots.
+    host: String,
+}
+
+/// This computer's name, as restic would record it.
+fn host_name() -> String {
+    sysinfo::System::host_name()
+        .filter(|h| !h.trim().is_empty())
+        .unwrap_or_else(|| "aegis".to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,6 +116,7 @@ impl Restic {
         if let Some(path) = override_path {
             return Ok(Self {
                 binary: PathBuf::from(path),
+                host: host_name(),
             });
         }
 
@@ -117,13 +127,19 @@ impl Restic {
                 // Named aegis-restic so the Linux .deb doesn't clash with a distro restic package.
                 let sidecar = dir.join(format!("aegis-restic{}", std::env::consts::EXE_SUFFIX));
                 if sidecar.exists() {
-                    return Ok(Self { binary: sidecar });
+                    return Ok(Self {
+                        binary: sidecar,
+                        host: host_name(),
+                    });
                 }
             }
         }
 
         let which_path = which("restic").context("restic not found in PATH")?;
-        Ok(Self { binary: which_path })
+        Ok(Self {
+            binary: which_path,
+            host: host_name(),
+        })
     }
 
     pub async fn init_repo(&self, repo: &Path, passphrase: &str) -> anyhow::Result<String> {
@@ -155,7 +171,11 @@ impl Restic {
         progress_tx: mpsc::Sender<BackupProgressReport>,
         cancel: CancellationToken,
     ) -> anyhow::Result<BackupSummary> {
-        let mut args = vec!["backup".to_string(), "--json".to_string()];
+        let mut args = vec![
+            "backup".to_string(),
+            "--json".to_string(),
+            format!("--host={}", self.host),
+        ];
         for include in includes {
             args.push("--include".to_string());
             args.push(include.clone());
@@ -341,7 +361,14 @@ impl Restic {
         if retention_args.is_empty() {
             return Ok(());
         }
-        let mut args = vec!["forget".to_string(), "--prune".to_string()];
+        // Only this computer's snapshots, kept per (host, folders) group: after a handover
+        // the other computer's history is never pruned from here.
+        let mut args = vec![
+            "forget".to_string(),
+            "--prune".to_string(),
+            format!("--host={}", self.host),
+            "--group-by=host,paths".to_string(),
+        ];
         args.extend(retention_args.iter().cloned());
         self.run_capture(repo, passphrase, &args).await?;
         Ok(())
@@ -730,5 +757,71 @@ mod tests {
         let parsed: ResticStatusLine = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.percent_done, None);
         assert_eq!(parsed.files_done, None);
+    }
+
+    /// Bundled restic (fetched by scripts/fetch-restic.sh, as in CI) or one on PATH.
+    fn test_restic() -> Option<PathBuf> {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui/src-tauri/binaries");
+        std::fs::read_dir(dir)
+            .ok()
+            .and_then(|rd| {
+                rd.flatten().map(|e| e.path()).find(|p| {
+                    p.file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with("aegis-restic-"))
+                })
+            })
+            .or_else(|| which("restic").ok())
+    }
+
+    #[tokio::test]
+    async fn retention_never_prunes_another_computers_snapshots() {
+        let Some(binary) = test_restic() else {
+            eprintln!("skipping: no restic binary (run scripts/fetch-restic.sh)");
+            return;
+        };
+        let work = std::env::temp_dir().join(format!("aegis-retention-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&work);
+        let (repo, src) = (work.join("repo"), work.join("src"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("f.txt"), "x").unwrap();
+        let pass = "retention-test-pass";
+        let as_host = |host: &str| Restic {
+            binary: binary.clone(),
+            host: host.to_string(),
+        };
+
+        as_host("laptop").init_repo(&repo, pass).await.unwrap();
+        for host in ["laptop", "laptop", "laptop", "office", "office"] {
+            let (tx, rx) = mpsc::channel(1);
+            drop(rx);
+            as_host(host)
+                .backup_with_progress(
+                    &repo,
+                    pass,
+                    std::slice::from_ref(&src),
+                    &[],
+                    &[],
+                    tx,
+                    CancellationToken::new(),
+                )
+                .await
+                .unwrap();
+        }
+        let keep_one = ["--keep-last".to_string(), "1".to_string()];
+        as_host("laptop")
+            .forget_prune(&repo, pass, &keep_one)
+            .await
+            .unwrap();
+
+        let snaps = as_host("laptop").snapshots(&repo, pass).await.unwrap();
+        let count = |h: &str| {
+            snaps
+                .iter()
+                .filter(|s| s.hostname.as_deref() == Some(h))
+                .count()
+        };
+        assert_eq!(count("laptop"), 1);
+        assert_eq!(count("office"), 2);
+        let _ = std::fs::remove_dir_all(&work);
     }
 }

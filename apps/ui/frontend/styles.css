@@ -1,5 +1,6 @@
 :root {
   color-scheme: dark;
+  accent-color: var(--accent); /* checkboxes and radios in Aegis colors, not the system's */
   --bg: #0f1317;
   --bg-soft: #141a20;
   --bg-grad-1: #1a2430;

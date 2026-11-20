@@ -1182,3 +1182,22 @@ body.setup-loading .device-danger {
   padding: 10px 12px;
   margin: 8px 0;
 }
+
+.save-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.choice-group {
+  border: 0;
+  padding: 0;
+  margin: 12px 0;
+}
+
+.choice-group legend {
+  font-weight: 600;
+  margin-bottom: 6px;
+}

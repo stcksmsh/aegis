@@ -69,8 +69,6 @@ function setSetupButtonsDisabled(disabled) {
     "setup-drive-erase-phrase",
     "setup-drive-passphrase",
     "setup-drive-passphrase-confirm",
-    "setup-drive-remember",
-    "setup-drive-paranoid",
     "setup-drive-label",
     "mount-drive",
     "setup-drive",
@@ -118,7 +116,25 @@ function clearBanner() {
 
 function setDisabled(id, disabled) {
   const el = document.getElementById(id);
-  if (el) el.disabled = disabled;
+  if (el) el.disabled = disabled || el.dataset.busy === "1";
+}
+
+// Disables a button and shows what's happening until `fn` finishes (no double clicks).
+async function withBusy(id, busyText, fn) {
+  const button = document.getElementById(id);
+  if (!button || button.dataset.busy === "1") return;
+  const text = button.textContent;
+  button.dataset.busy = "1";
+  button.disabled = true;
+  button.textContent = busyText;
+  try {
+    return await fn();
+  } finally {
+    delete button.dataset.busy;
+    button.disabled = false;
+    button.textContent = text;
+    if (currentStatus) updateActionState(currentStatus);
+  }
 }
 
 function updateActionState(status) {
@@ -1223,8 +1239,13 @@ function applyFirstRunMode(status) {
   if (topNav) topNav.classList.toggle("hidden", inWizard);
 }
 
+// Settings forms are filled from the saved config once, and again after each save, never
+// on the regular status refresh (that would throw away what the user is typing).
+let configFormsFilled = false;
+
 function syncConfigUI(status) {
-  if (!status?.config) return;
+  if (!status?.config || configFormsFilled) return;
+  configFormsFilled = true;
   const config = status.config;
   const excludeField = document.getElementById("exclude-patterns");
   const includeField = document.getElementById("include-patterns");
@@ -1248,6 +1269,17 @@ function syncConfigUI(status) {
   if (paranoid) paranoid.checked = !!config.paranoid_mode;
   if (reminderDays) reminderDays.value = config.reminder_days ?? 7;
   if (backupIntervalHours) backupIntervalHours.value = config.backup_interval_hours ?? 0;
+  const settingsRemember = document.getElementById("settings-remember");
+  const settingsAsk = document.getElementById("settings-ask");
+  if (settingsRemember) settingsRemember.checked = !!config.remember_passphrase;
+  if (settingsAsk) settingsAsk.checked = !config.remember_passphrase;
+  const retention = config.retention || {};
+  const retentionEnabled = document.getElementById("retention-enabled");
+  if (retentionEnabled) retentionEnabled.checked = !!retention.enabled;
+  ["keep_last", "keep_daily", "keep_weekly", "keep_monthly", "keep_yearly"].forEach((key) => {
+    const input = document.getElementById(key.replace("_", "-"));
+    if (input) input.value = retention[key] ?? 0;
+  });
   if (status.first_run && remember && paranoid && !remember.checked && !paranoid.checked) {
     remember.checked = true;
   }
@@ -1529,55 +1561,85 @@ function renderCustomSources() {
   });
 }
 
-async function saveConfig() {
-  const retentionEnabled = document.getElementById("retention-enabled").checked;
-  const retention = {
-    enabled: retentionEnabled,
-    keep_last: parseInt(document.getElementById("keep-last").value || "0", 10),
-    keep_daily: parseInt(document.getElementById("keep-daily").value || "0", 10),
-    keep_weekly: parseInt(document.getElementById("keep-weekly").value || "0", 10),
-    keep_monthly: parseInt(document.getElementById("keep-monthly").value || "0", 10),
-    keep_yearly: parseInt(document.getElementById("keep-yearly").value || "0", 10),
-    min_snapshots: 3,
-  };
-
-  const excludeRaw = document.getElementById("exclude-patterns").value || "";
-  const excludePatterns = excludeRaw
+function splitList(id) {
+  return (document.getElementById(id)?.value || "")
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
+}
 
-  const includeRaw = document.getElementById("include-patterns")?.value || "";
-  const includePatterns = includeRaw
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
+// Blank or invalid number field: leave the saved value as it is.
+function numberField(id) {
+  const raw = document.getElementById(id)?.value ?? "";
+  const n = parseInt(raw, 10);
+  return raw.trim() === "" || Number.isNaN(n) || n < 0 ? undefined : n;
+}
 
-  const payload = {
-    backup_sources: buildBackupSources(),
-    include_patterns: includePatterns,
-    exclude_patterns: excludePatterns,
-    retention,
+function settingsPayload() {
+  const remember = !!document.getElementById("settings-remember")?.checked;
+  return {
+    exclude_patterns: splitList("exclude-patterns"),
     quick_verify: document.getElementById("quick-verify").checked,
-    deep_verify: document.getElementById("deep-verify").checked,
     auto_backup_on_insert: document.getElementById("auto-backup").checked,
+    remember_passphrase: remember,
+    paranoid_mode: !remember,
+    reminder_days: numberField("reminder-days"),
+    backup_interval_hours: numberField("backup-interval-hours"),
+  };
+}
+
+function advancedPayload() {
+  const saved = currentStatus?.config?.retention || {};
+  const keep = (id, key) => numberField(id) ?? saved[key] ?? 0;
+  return {
+    include_patterns: splitList("include-patterns"),
+    deep_verify: document.getElementById("deep-verify").checked,
+    retention: {
+      enabled: document.getElementById("retention-enabled").checked,
+      keep_last: keep("keep-last", "keep_last"),
+      keep_daily: keep("keep-daily", "keep_daily"),
+      keep_weekly: keep("keep-weekly", "keep_weekly"),
+      keep_monthly: keep("keep-monthly", "keep_monthly"),
+      keep_yearly: keep("keep-yearly", "keep_yearly"),
+      min_snapshots: saved.min_snapshots ?? 3,
+    },
+  };
+}
+
+// First-run wizard: folders and passphrase choice.
+function wizardPayload() {
+  return {
+    backup_sources: buildBackupSources(),
     remember_passphrase: document.getElementById("remember-passphrase").checked,
     paranoid_mode: document.getElementById("paranoid-mode").checked,
-    reminder_days: parseInt(document.getElementById("reminder-days")?.value || "0", 10),
-    backup_interval_hours: parseInt(document.getElementById("backup-interval-hours")?.value || "0", 10),
   };
+}
 
-  const res = await fetch(`${API}/config`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (res.ok) {
+// Saves only the given settings; the agent keeps everything else. Returns true on success.
+async function saveConfig(payload, savedNoteId) {
+  try {
+    const res = await fetch(`${API}/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      uiAlert((await res.text()).trim() || "Couldn't save settings. Please try again.");
+      return false;
+    }
     currentStatus = await res.json();
+    if (currentStatus.config?.paranoid_mode) sessionPassphrase = null;
+    configFormsFilled = false;
     renderStatus(currentStatus);
-  } else {
-    uiAlert("Could not save settings.");
+    const note = savedNoteId && document.getElementById(savedNoteId);
+    if (note) {
+      note.textContent = "Saved.";
+      setTimeout(() => { note.textContent = ""; }, 4000);
+    }
+    return true;
+  } catch (_) {
+    uiAlert("Can't connect to Aegis right now. Try restarting the app.");
+    return false;
   }
 }
 
@@ -1671,7 +1733,7 @@ async function setupDriveWithMount(mountPath) {
 
   if (res.ok) {
     const data = await res.json();
-    await saveConfig();
+    await saveConfig(wizardPayload());
     if (currentStatus?.drive) {
       currentStatus.drive.trusted = true;
       currentStatus.drive.drive_id = data.drive_id;
@@ -1811,8 +1873,9 @@ async function setupDriveFromSelectionForAddDrive() {
       label: labelRaw || null,
       backup_sources: buildSetupDriveBackupSources(),
       passphrase,
-      remember_passphrase: !!document.getElementById("setup-drive-remember")?.checked,
-      paranoid_mode: !!document.getElementById("setup-drive-paranoid")?.checked,
+      // Keep this computer's passphrase choice (Settings), don't change it per drive.
+      remember_passphrase: !!currentStatus?.config?.remember_passphrase,
+      paranoid_mode: !!currentStatus?.config?.paranoid_mode,
     };
 
     showLoadingOverlay("Setting up drive…");
@@ -2500,8 +2563,7 @@ function setupListeners() {
     if (field) field.classList.toggle("hidden", !eraseOption.checked);
   }
   document.getElementById("run-first-backup").addEventListener("click", async () => {
-    await saveConfig();
-    await startBackup();
+    if (await saveConfig(wizardPayload())) await startBackup();
   });
   if (wizardBack) wizardBack.addEventListener("click", goWizardBack);
   if (wizardNext)
@@ -2518,18 +2580,30 @@ function setupListeners() {
       applyFirstRunMode(currentStatus);
     });
 
-  document.getElementById("backup-now").addEventListener("click", startBackup);
+  document.getElementById("backup-now").addEventListener("click", () =>
+    withBusy("backup-now", "Starting…", startBackup)
+  );
   document.getElementById("restore-btn").addEventListener("click", () => showView("restore"));
-  document.getElementById("eject-btn").addEventListener("click", ejectDrive);
+  document.getElementById("eject-btn").addEventListener("click", () =>
+    withBusy("eject-btn", "Ejecting…", ejectDrive)
+  );
 
-  document.getElementById("load-snapshots").addEventListener("click", loadSnapshots);
+  document.getElementById("load-snapshots").addEventListener("click", () =>
+    withBusy("load-snapshots", "Loading backups…", loadSnapshots)
+  );
   document.getElementById("restore-run").addEventListener("click", restoreSnapshot);
   document.getElementById("restore-selected-run").addEventListener("click", restoreSelected);
 
-  document.getElementById("save-settings").addEventListener("click", saveConfig);
+  document.getElementById("save-settings").addEventListener("click", () =>
+    withBusy("save-settings", "Saving…", () => saveConfig(settingsPayload(), "settings-saved"))
+  );
   initAutostartToggle();
-  document.getElementById("save-advanced").addEventListener("click", saveConfig);
-  document.getElementById("export-recovery").addEventListener("click", exportRecoveryKit);
+  document.getElementById("save-advanced").addEventListener("click", () =>
+    withBusy("save-advanced", "Saving…", () => saveConfig(advancedPayload(), "advanced-saved"))
+  );
+  document.getElementById("export-recovery").addEventListener("click", () =>
+    withBusy("export-recovery", "Saving…", exportRecoveryKit)
+  );
 
   const remember = document.getElementById("remember-passphrase");
   const paranoid = document.getElementById("paranoid-mode");
@@ -2579,7 +2653,9 @@ function setupListeners() {
   if (editFoldersCancel) {
     editFoldersCancel.addEventListener("click", closeEditFoldersModal);
   }
-  if (editFoldersSave) editFoldersSave.addEventListener("click", saveEditFolders);
+  if (editFoldersSave) {
+    editFoldersSave.addEventListener("click", () => withBusy("edit-folders-save", "Saving…", saveEditFolders));
+  }
   const editFoldersOverlay = document.getElementById("edit-folders-overlay");
   if (editFoldersOverlay) {
     editFoldersOverlay.addEventListener("click", (event) => {

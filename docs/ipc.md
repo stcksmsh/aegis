@@ -63,6 +63,9 @@ Request:
 }
 ```
 
+Every field is optional: only the fields sent are changed. The status `config` includes the full
+`retention` policy.
+
 `reminder_days` (0 = off): notify once per day if a trusted drive hasn't backed up in this many
 days and isn't connected. `backup_interval_hours` (0 = off): while a trusted drive stays plugged
 in, back it up again automatically once this many hours have passed since its last backup.

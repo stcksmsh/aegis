@@ -100,7 +100,7 @@ struct ConfigSummary {
     backup_sources: Vec<String>,
     include_patterns: Vec<String>,
     exclude_patterns: Vec<String>,
-    retention_enabled: bool,
+    retention: crate::retention::RetentionPolicy,
     quick_verify: bool,
     deep_verify: bool,
     auto_backup_on_insert: bool,
@@ -111,21 +111,51 @@ struct ConfigSummary {
     update_policy: crate::config::UpdatePolicy,
 }
 
-#[derive(Debug, Deserialize)]
+/// Partial update: each settings page sends only its own fields; missing ones are kept.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
 struct ConfigUpdateRequest {
-    backup_sources: Vec<BackupSource>,
-    include_patterns: Vec<String>,
-    exclude_patterns: Vec<String>,
-    retention: crate::retention::RetentionPolicy,
-    quick_verify: bool,
-    deep_verify: bool,
-    auto_backup_on_insert: bool,
-    remember_passphrase: bool,
-    paranoid_mode: bool,
-    #[serde(default = "crate::config::default_reminder_days")]
-    reminder_days: u32,
-    #[serde(default)]
-    backup_interval_hours: u32,
+    backup_sources: Option<Vec<BackupSource>>,
+    include_patterns: Option<Vec<String>>,
+    exclude_patterns: Option<Vec<String>>,
+    retention: Option<crate::retention::RetentionPolicy>,
+    quick_verify: Option<bool>,
+    deep_verify: Option<bool>,
+    auto_backup_on_insert: Option<bool>,
+    remember_passphrase: Option<bool>,
+    paranoid_mode: Option<bool>,
+    reminder_days: Option<u32>,
+    backup_interval_hours: Option<u32>,
+}
+
+impl ConfigUpdateRequest {
+    fn apply(self, config: &mut crate::config::AgentConfig) {
+        if let Some(sources) = self.backup_sources {
+            config.backup_sources = sources
+                .into_iter()
+                .map(|s| BackupSource {
+                    label: sanitize_label(&s.label).unwrap_or_else(|| "Source".to_string()),
+                    path: s.path,
+                })
+                .collect();
+        }
+        macro_rules! set {
+            ($($field:ident),*) => { $(if let Some(v) = self.$field { config.$field = v; })* };
+        }
+        set!(
+            include_patterns,
+            exclude_patterns,
+            retention,
+            quick_verify,
+            deep_verify,
+            auto_backup_on_insert,
+            remember_passphrase,
+            paranoid_mode,
+            reminder_days,
+            backup_interval_hours
+        );
+        config.enforce_security_invariants();
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -540,7 +570,7 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
             .collect(),
         include_patterns: config.include_patterns.clone(),
         exclude_patterns: config.exclude_patterns.clone(),
-        retention_enabled: config.retention.enabled,
+        retention: config.retention.clone(),
         quick_verify: config.quick_verify,
         deep_verify: config.deep_verify,
         auto_backup_on_insert: config.auto_backup_on_insert,
@@ -598,25 +628,7 @@ async fn update_config(
     Json(req): Json<ConfigUpdateRequest>,
 ) -> Result<Json<StatusResponse>, (StatusCode, String)> {
     let mut guard = state.write().await;
-    guard.config.backup_sources = req
-        .backup_sources
-        .into_iter()
-        .map(|s| BackupSource {
-            label: sanitize_label(&s.label).unwrap_or_else(|| "Source".to_string()),
-            path: s.path,
-        })
-        .collect();
-    guard.config.include_patterns = req.include_patterns;
-    guard.config.exclude_patterns = req.exclude_patterns;
-    guard.config.retention = req.retention;
-    guard.config.quick_verify = req.quick_verify;
-    guard.config.deep_verify = req.deep_verify;
-    guard.config.auto_backup_on_insert = req.auto_backup_on_insert;
-    guard.config.remember_passphrase = req.remember_passphrase;
-    guard.config.paranoid_mode = req.paranoid_mode;
-    guard.config.reminder_days = req.reminder_days;
-    guard.config.backup_interval_hours = req.backup_interval_hours;
-    guard.config.enforce_security_invariants();
+    req.apply(&mut guard.config);
 
     if guard.config.paranoid_mode {
         for drive_id in guard.config.trusted_drives.keys() {
@@ -1564,6 +1576,25 @@ fn resolve_passphrase(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn config_update_keeps_fields_it_does_not_send() {
+        let mut config = crate::config::AgentConfig::default();
+        config.retention.enabled = true;
+        config.retention.keep_last = 5;
+        config.remember_passphrase = true;
+        let req: super::ConfigUpdateRequest = serde_json::from_value(
+            serde_json::json!({"quick_verify": false, "paranoid_mode": true}),
+        )
+        .unwrap();
+        req.apply(&mut config);
+        assert!(!config.quick_verify);
+        assert!(config.retention.enabled && config.retention.keep_last == 5);
+        assert!(
+            config.paranoid_mode && !config.remember_passphrase,
+            "invariants still enforced"
+        );
+    }
+
     #[tokio::test]
     async fn update_hold_waits_for_backups_and_blocks_new_ones() {
         use super::*;

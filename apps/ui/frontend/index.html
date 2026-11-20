@@ -231,12 +231,6 @@
                 <button type="button" class="password-toggle" data-toggle-for="setup-drive-passphrase-confirm" aria-label="Show passphrase">Show</button>
               </div>
             </div>
-            <label class="checkbox">
-              <input id="setup-drive-remember" type="checkbox" checked /> Remember on this computer (secure storage)
-            </label>
-            <label class="checkbox">
-              <input id="setup-drive-paranoid" type="checkbox" /> Always ask for my passphrase (Paranoid Mode)
-            </label>
           </div>
         </section>
 
@@ -323,6 +317,15 @@
             <label class="checkbox">
               <input id="autostart" type="checkbox" /> Start Aegis when I log in (needed for automatic backups)
             </label>
+            <fieldset class="field choice-group">
+              <legend>Your passphrase</legend>
+              <label class="checkbox">
+                <input type="radio" name="passphrase-mode" id="settings-remember" /> Remember my passphrase on this computer (needed for automatic backups)
+              </label>
+              <label class="checkbox">
+                <input type="radio" name="passphrase-mode" id="settings-ask" /> Ask for my passphrase every time (more private; no automatic backups)
+              </label>
+            </fieldset>
             <div class="field">
               <label for="reminder-days">Remind me to back up after this many days (0 = never)</label>
               <input id="reminder-days" type="number" min="0" placeholder="7" />
@@ -331,7 +334,10 @@
               <label for="backup-interval-hours">While the drive stays plugged in, back up again every N hours (0 = only when plugged in)</label>
               <input id="backup-interval-hours" type="number" min="0" placeholder="0" />
             </div>
-            <button class="btn primary" id="save-settings">Save settings</button>
+            <div class="save-row">
+              <button class="btn primary" id="save-settings">Save settings</button>
+              <span class="muted" id="settings-saved" role="status"></span>
+            </div>
           </div>
         </section>
 
@@ -376,7 +382,10 @@
                 <input id="retention-enabled" type="checkbox" /> Automatically delete old backups based on these settings
               </label>
             </div>
-            <button class="btn primary" id="save-advanced">Save advanced</button>
+            <div class="save-row">
+              <button class="btn primary" id="save-advanced">Save</button>
+              <span class="muted" id="advanced-saved" role="status"></span>
+            </div>
             <div class="field">
               <label for="recovery-destination">Recovery kit</label>
               <input id="recovery-destination" type="text" placeholder="Folder location" />

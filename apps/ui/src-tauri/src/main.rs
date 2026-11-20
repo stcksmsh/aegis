@@ -49,25 +49,6 @@ fn open_in_file_manager(path: &std::path::Path) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Only our own release page; never arbitrary URLs from the webview.
-#[tauri::command]
-fn open_url(url: String) -> Result<(), String> {
-    if !url.starts_with("https://github.com/stcksmsh/aegis/") {
-        return Err("URL not allowed".into());
-    }
-    #[cfg(target_os = "linux")]
-    let mut cmd = std::process::Command::new("xdg-open");
-    #[cfg(target_os = "macos")]
-    let mut cmd = std::process::Command::new("open");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut c = std::process::Command::new("rundll32");
-        c.arg("url.dll,FileProtocolHandler");
-        c
-    };
-    cmd.arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
-}
-
 /// Tray status line, updated by the frontend whenever it polls agent status.
 struct TrayStatus(MenuItem<tauri::Wry>);
 
@@ -214,7 +195,6 @@ fn main() {
             get_autostart,
             set_autostart,
             open_logs,
-            open_url,
             set_tray_status,
             updater::install_update
         ])

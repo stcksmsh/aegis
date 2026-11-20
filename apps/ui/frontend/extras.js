@@ -1,9 +1,8 @@
-// Desktop-shell extras: tray status + "Back up now", update check, open logs.
+// Desktop-shell extras: tray status + "Back up now", version line, open logs.
 (() => {
   const tauri = window.__TAURI__;
   const invoke = tauri?.core?.invoke;
   if (!invoke) return;
-  const REPO = "stcksmsh/aegis";
 
   function ago(epoch) {
     if (!epoch) return "never";
@@ -34,29 +33,6 @@
 
   tauri.event?.listen("tray-backup", () => document.getElementById("backup-now")?.click());
 
-  // Newer release on GitHub → banner with download link. Silent on any failure (offline etc.).
-  async function checkForUpdate() {
-    try {
-      const current = await tauri.app.getVersion();
-      const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
-      if (!res.ok) return;
-      const latest = (await res.json()).tag_name?.replace(/^v/, "");
-      if (!latest || !isNewer(latest, current)) return;
-      const bar = document.createElement("div");
-      bar.className = "status-banner update-banner";
-      bar.append(`Aegis ${latest} is available (you have ${current}). `);
-      const link = document.createElement("button");
-      link.className = "btn secondary";
-      link.textContent = "Download";
-      link.addEventListener("click", () =>
-        invoke("open_url", { url: `https://github.com/${REPO}/releases/latest` })
-      );
-      bar.append(link);
-      document.querySelector("main")?.before(bar);
-    } catch (_) {}
-  }
-  checkForUpdate();
-
   // Version line at the bottom of Settings, for bug reports.
   tauri.app.getVersion().then((v) => {
     const panel = document.querySelector("#settings .panel");
@@ -80,12 +56,3 @@
   }
 })();
 
-// Numeric semver compare: "0.10.0" > "0.9.1".
-function isNewer(a, b) {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
-  }
-  return false;
-}

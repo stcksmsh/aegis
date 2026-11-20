@@ -3,8 +3,8 @@ use crate::config::sanitize_label;
 use crate::config::{AgentConfig, BackupSource, TrustedDrive};
 use crate::devices;
 use crate::drive::{
-    create_instance, ensure_writable_format, open_or_migrate, read_instance, read_marker,
-    register_instance, write_marker, DriveMarker,
+    create_instance, ensure_writable_format, read_instance, read_marker, register_instance,
+    write_marker, DriveMarker,
 };
 use crate::keychain;
 use crate::logging::Redact;
@@ -108,6 +108,7 @@ struct ConfigSummary {
     paranoid_mode: bool,
     reminder_days: u32,
     backup_interval_hours: u32,
+    update_policy: crate::config::UpdatePolicy,
 }
 
 #[derive(Debug, Deserialize)]
@@ -269,6 +270,46 @@ struct MountResponse {
     mount_path: String,
 }
 
+/// Undoes the `migrations` count taken by a request handler, on every return path.
+struct BusyGuard(SharedState);
+
+impl Drop for BusyGuard {
+    fn drop(&mut self) {
+        let state = self.0.clone();
+        tokio::spawn(async move { state.write().await.migrations -= 1 });
+    }
+}
+
+fn updating() -> (StatusCode, String) {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Aegis is installing an update. Try again in a minute.".to_string(),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct MaintenanceRequest {
+    hold: bool,
+}
+
+/// The app takes a hold before installing an update and releases it if the install fails.
+/// Taking it fails while a backup, restore or drive migration runs; while held, none can start.
+async fn maintenance(
+    State(state): State<SharedState>,
+    Json(req): Json<MaintenanceRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let mut guard = state.write().await;
+    if req.hold && guard.is_busy() {
+        return Err((
+            StatusCode::CONFLICT,
+            "A backup or restore is running.".to_string(),
+        ));
+    }
+    guard.update_hold = req.hold;
+    tracing::info!("update hold: {}", req.hold);
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[derive(Debug, Deserialize)]
 struct SheetRequest {
     drive_id: String,
@@ -420,6 +461,7 @@ pub async fn serve(listener: tokio::net::TcpListener, state: SharedState) -> any
         .route("/v1/drives/discontinue", post(discontinue_drive))
         .route("/v1/drives/update", post(update_drive))
         .route("/v1/drives/passphrase-sheet", post(passphrase_sheet))
+        .route("/v1/maintenance", post(maintenance))
         .with_state(state)
         .layer(cors)
         .layer(axum::middleware::from_fn(check_host));
@@ -506,6 +548,7 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
         paranoid_mode: config.paranoid_mode,
         reminder_days: config.reminder_days,
         backup_interval_hours: config.backup_interval_hours,
+        update_policy: config.update_policy,
     };
     let trusted_drives: Vec<TrustedDriveSummary> = config
         .trusted_drives
@@ -602,6 +645,15 @@ async fn setup_drive(
         req.label.is_some(),
         req.backup_sources.as_ref().map(|v| v.len()).unwrap_or(0)
     );
+    // Setup writes to the drive (marker, new repo): counts as busy so an update waits for it.
+    let _busy = {
+        let mut guard = state.write().await;
+        if guard.update_hold {
+            return Err(updating());
+        }
+        guard.migrations += 1;
+        BusyGuard(state.clone())
+    };
     let mount_path = PathBuf::from(&req.mount_path);
     if !mount_path.exists() {
         tracing::warn!(
@@ -690,7 +742,10 @@ async fn setup_drive(
     };
 
     debug!("setup drive: opening marker (migrating format 1 if needed)");
-    let marker = match open_or_migrate(&mount_path).map_err(|e| internal("read", e))? {
+    let marker = match crate::usb::open_drive(&state, &mount_path)
+        .await
+        .map_err(|e| internal("read", e))?
+    {
         Some(marker) => marker,
         None => {
             let marker = DriveMarker::new(Some(final_label.clone()));
@@ -1055,6 +1110,9 @@ async fn start_backup(
 
     {
         let mut guard = state.write().await;
+        if guard.update_hold {
+            return Err(updating());
+        }
         guard.running_drive_ids.insert(req.drive_id.clone());
     }
     let state_clone = state.clone();
@@ -1237,6 +1295,9 @@ async fn restore_snapshot(
     let cancel = CancellationToken::new();
     {
         let mut guard = state.write().await;
+        if guard.update_hold {
+            return Err(updating());
+        }
         guard.restore_drive_id = Some(req.drive_id.clone());
         guard.restore_cancel_token = Some(cancel.clone());
     }
@@ -1506,6 +1567,52 @@ fn resolve_passphrase(
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn update_hold_waits_for_backups_and_blocks_new_ones() {
+        use super::*;
+        let state: SharedState = std::sync::Arc::new(tokio::sync::RwLock::new(
+            crate::state::AgentRuntimeState::new(AgentConfig::default(), None),
+        ));
+        let hold =
+            |h: bool| maintenance(State(state.clone()), Json(MaintenanceRequest { hold: h }));
+
+        state.write().await.running_drive_ids.insert("d1".into());
+        assert_eq!(hold(true).await.unwrap_err().0, StatusCode::CONFLICT);
+        state.write().await.running_drive_ids.clear();
+
+        state.write().await.migrations = 1;
+        assert!(hold(true).await.is_err(), "migration in progress");
+        state.write().await.migrations = 0;
+
+        // A connected, set-up drive, so start_backup gets as far as the hold check.
+        {
+            let mut g = state.write().await;
+            let drive: TrustedDrive = serde_json::from_value(serde_json::json!({
+                "drive_id": "p1", "label": "D", "repository_path": ".aegis/repo",
+                "repository_id": null, "last_seen_epoch": null
+            }))
+            .unwrap();
+            g.config.trusted_drives.insert("d1".into(), drive);
+            g.drive_status.connected = true;
+            g.drive_status.trusted = true;
+            g.drive_status.instance_ids = vec!["d1".into()];
+            g.drive_status.mount_path = Some(std::env::temp_dir().to_string_lossy().into());
+        }
+        assert!(hold(true).await.is_ok());
+        let backup = start_backup(
+            State(state.clone()),
+            Json(BackupRequest {
+                drive_id: "d1".into(),
+                passphrase: Some("x".into()),
+            }),
+        )
+        .await;
+        assert_eq!(backup.unwrap_err(), updating());
+        assert!(state.read().await.running_drive_ids.is_empty());
+        assert!(hold(false).await.is_ok());
+        assert!(!state.read().await.update_hold);
+    }
+
     #[test]
     fn ymd_from_days() {
         assert_eq!(super::ymd(0), "1970-01-01");

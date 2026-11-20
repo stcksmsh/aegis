@@ -30,12 +30,18 @@ Response fields:
 Response fields:
 - `first_run`: boolean
 - `drive`: connected/trusted status + mount path; when connected and trusted also includes
-  `free_bytes` and `total_bytes` (bytes free/total on that drive's mount, if known)
+  `free_bytes` and `total_bytes` (bytes free/total on that drive's mount, if known).
+  `instance_ids` lists the backups on the connected drive that this computer uses; `drive_id`
+  is the first of them (or the drive's own id when none is set up here).
 - `last_run`: last run summary; `drive_almost_full` is true if the drive had under 10% free
   space after this run
 - `running`: boolean
 - `restic_available`: boolean
-- `config`: summary flags, including `reminder_days` and `backup_interval_hours`
+- `config`: summary flags, including `reminder_days`, `backup_interval_hours` and
+  `update_policy` (`"security" | "all" | "off"`)
+
+Note: every `drive_id` in requests is a backup id ("instance", see COMPATIBILITY.md). For drives
+set up before 1.0 it equals the drive's own id.
 
 ## Update Config
 `POST /v1/config`
@@ -71,17 +77,28 @@ Request:
   "label": "Aegis Backup",
   "passphrase": "...",
   "remember_passphrase": false,
-  "paranoid_mode": false
+  "paranoid_mode": false,
+  "new_instance": false
 }
 ```
+
+The passphrase is tried against every backup on the drive. If one opens, this computer uses it.
+If the drive has backups but none opens, the response is `409` unless `new_instance` is true
+(then a separate backup is created).
 
 Response:
 ```
 {
   "drive_id": "...",
-  "repository_id": "..."
+  "repository_id": "...",
+  "existing": true,
+  "previous_computers": [
+    {"host": "laptop", "folders": ["/home/k/Firma"], "last_backup": "2026-11-20T10:00:00Z"}
+  ]
 }
 ```
+`existing` is true when an existing backup was opened (e.g. handover to a new computer);
+`previous_computers` lists the newest backup of each computer that used it.
 
 ## Start Backup
 `POST /v1/backup/run`
@@ -213,3 +230,18 @@ Response:
 ```
 {"status": "ejected"}
 ```
+
+## Passphrase Sheet
+`POST /v1/drives/passphrase-sheet`
+
+Writes a printable page (backup name, blank for the passphrase, restore steps) to the temp
+folder. Contains no secrets.
+
+Request: `{"drive_id": "..."}` → Response: `{"path": "/tmp/aegis-passphrase-sheet-1a2b3c4d.html"}`
+
+## Maintenance Hold
+`POST /v1/maintenance`
+
+Used by the app before installing an update. `{"hold": true}` fails with `409` while a backup,
+restore or drive migration runs; once held, new ones are refused with `503` and drives are not
+migrated. `{"hold": false}` releases it. Response: `204`.

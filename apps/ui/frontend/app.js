@@ -149,6 +149,28 @@ function updateActionState(status) {
   updateSetupDriveActions();
 }
 
+// The app announces an update it won't install by itself (newer version, not a fix for this
+// one); the user installs it with one click. Never shown in a browser without Tauri.
+window.__TAURI__?.event?.listen("update-available", (event) => {
+  const banner = document.getElementById("update-banner");
+  document.getElementById("update-banner-text").textContent =
+    `Aegis ${event.payload} is available.`;
+  banner.classList.remove("hidden");
+});
+document.getElementById("update-install")?.addEventListener("click", async () => {
+  const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
+  const button = document.getElementById("update-install");
+  button.disabled = true;
+  button.textContent = "Installing…";
+  try {
+    await invoke("install_update"); // restarts Aegis on success
+  } catch (err) {
+    uiAlert(String(err), "Update not installed");
+    button.disabled = false;
+    button.textContent = "Install and restart";
+  }
+});
+
 const BACKUP_STUCK_THRESHOLD_SEC = 30 * 60; // 30 minutes
 
 function renderBanner(status) {

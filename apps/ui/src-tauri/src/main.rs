@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod updater;
+
 use std::path::PathBuf;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
@@ -203,6 +205,7 @@ fn main() {
             Some(vec![MINIMIZED_ARG]),
         ))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             select_folder,
             open_path,
@@ -212,7 +215,8 @@ fn main() {
             set_autostart,
             open_logs,
             open_url,
-            set_tray_status
+            set_tray_status,
+            updater::install_update
         ])
         .setup(|app| {
             // Embedded agent: if the port is taken, a standalone agent service is already running; use it.
@@ -227,6 +231,7 @@ fn main() {
                 }
             });
             default_autostart_once(app.handle());
+            updater::spawn(app.handle().clone());
             let tray_ok = match build_tray(app.handle()) {
                 Ok(()) => true,
                 Err(err) => {

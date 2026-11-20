@@ -299,7 +299,7 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
     };
     debug!("USB device mounted at {}", mount_path.display());
 
-    let marker = match open_or_migrate(&mount_path) {
+    let marker = match open_drive(state, &mount_path).await {
         Ok(m) => m,
         Err(err) => {
             // Read-only or damaged drive: fall back to the marker as-is.
@@ -363,6 +363,24 @@ async fn handle_added(state: &SharedState, devnode: &Path) -> anyhow::Result<()>
     }
 
     Ok(())
+}
+
+/// Reads the drive marker, upgrading an old drive format first. While an update installs,
+/// the marker is only read (a migration must not be cut short by the app restarting).
+pub(crate) async fn open_drive(
+    state: &SharedState,
+    root: &Path,
+) -> anyhow::Result<Option<DriveMarker>> {
+    {
+        let mut guard = state.write().await;
+        if guard.update_hold {
+            return read_marker(root);
+        }
+        guard.migrations += 1;
+    }
+    let result = open_or_migrate(root);
+    state.write().await.migrations -= 1;
+    result
 }
 
 /// Instances on this drive that this computer backs up to, sorted for a stable order.
@@ -484,6 +502,10 @@ async fn start_backup_if_eligible(state: &SharedState, drive_id: &str, mount_pat
 
     {
         let mut guard = state.write().await;
+        if guard.update_hold {
+            debug!("update installing; skipping automatic backup");
+            return;
+        }
         guard.running_drive_ids.insert(drive_id.to_string());
     }
     let state_clone = state.clone();

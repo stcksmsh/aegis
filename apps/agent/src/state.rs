@@ -97,6 +97,12 @@ pub struct AgentRuntimeState {
     /// Bundled restic programs for the restore kit on drives (see kit.rs).
     #[serde(skip)]
     pub kit_dir: Option<PathBuf>,
+    /// Set while the app installs an update: no new backup, restore or drive migration starts.
+    #[serde(skip)]
+    pub update_hold: bool,
+    /// Drive format migrations in progress.
+    #[serde(skip)]
+    pub migrations: u32,
 }
 
 impl AgentRuntimeState {
@@ -122,7 +128,14 @@ impl AgentRuntimeState {
             restore_cancel_token: None,
             reminder_last_sent: HashMap::new(),
             kit_dir,
+            update_hold: false,
+            migrations: 0,
         }
+    }
+
+    /// A backup, restore or drive migration is running (an update must wait).
+    pub fn is_busy(&self) -> bool {
+        !self.running_drive_ids.is_empty() || self.restore_drive_id.is_some() || self.migrations > 0
     }
 }
 

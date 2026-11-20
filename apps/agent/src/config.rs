@@ -80,9 +80,24 @@ pub struct AgentConfig {
     /// While a trusted drive stays plugged in, back up again after this many hours. 0 = off.
     #[serde(default)]
     pub backup_interval_hours: u32,
+    /// Which app updates install by themselves (no settings UI yet; edit config.json).
+    #[serde(default)]
+    pub update_policy: UpdatePolicy,
     /// Fields written by a newer Aegis; kept as-is on save.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdatePolicy {
+    /// Fixes for this version, plus newer versions flagged as security updates.
+    #[default]
+    Security,
+    /// Every update within the same major version.
+    All,
+    /// Never install automatically.
+    Off,
 }
 
 /// Newest config schema this build writes.
@@ -135,6 +150,7 @@ impl Default for AgentConfig {
             restic_path: None,
             reminder_days: default_reminder_days(),
             backup_interval_hours: 0,
+            update_policy: UpdatePolicy::Security,
             extra: Map::new(),
         }
     }

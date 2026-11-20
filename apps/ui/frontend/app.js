@@ -48,15 +48,24 @@ const browseFolder = document.getElementById("browse-folder");
 const loadingOverlay = document.getElementById("loading-overlay");
 const loadingMessage = document.getElementById("loading-message");
 
+// While a dialog or the loading overlay is up, the page behind can't be focused or clicked.
+function setBackgroundInert(on) {
+  document.querySelectorAll("#app > :not(#modal-overlay)").forEach((el) => {
+    el.toggleAttribute("inert", on);
+  });
+}
+
 function showLoadingOverlay(message) {
   if (loadingMessage) loadingMessage.textContent = message || "Working…";
   if (loadingOverlay) loadingOverlay.classList.remove("hidden");
+  setBackgroundInert(true);
   document.body.classList.add("setup-loading");
   setSetupButtonsDisabled(true);
 }
 
 function hideLoadingOverlay() {
   if (loadingOverlay) loadingOverlay.classList.add("hidden");
+  if (modalOverlay.classList.contains("hidden")) setBackgroundInert(false);
   document.body.classList.remove("setup-loading");
   setSetupButtonsDisabled(false);
 }
@@ -208,7 +217,7 @@ function renderBanner(status) {
   clearBanner();
 }
 
-function openModal({ title, body, mode, drive_id, drive_label }) {
+function openModal({ title, body, mode, drive_id, drive_label, confirmText, danger, focusCancel }) {
   return new Promise((resolve) => {
     modalResolve = resolve;
     modalMode = mode;
@@ -242,7 +251,7 @@ function openModal({ title, body, mode, drive_id, drive_label }) {
       modalConfirm.textContent = "OK";
       modalCancel.classList.add("hidden");
     } else if (mode === "confirm") {
-      modalConfirm.textContent = "Confirm";
+      modalConfirm.textContent = confirmText || "Confirm";
       modalCancel.classList.remove("hidden");
     } else if (mode === "discontinue") {
       modalConfirm.textContent = "Forget";
@@ -255,7 +264,11 @@ function openModal({ title, body, mode, drive_id, drive_label }) {
       modalCancel.classList.remove("hidden");
     }
 
+    // Risky actions use a red button, and Enter/Space start on Cancel.
+    modalConfirm.classList.toggle("danger", !!danger || mode === "discontinue");
+    modalConfirm.classList.toggle("primary", !danger && mode !== "discontinue");
     modalOpenerElement = document.activeElement;
+    setBackgroundInert(true);
     modalOverlay.classList.remove("hidden");
     setTimeout(() => {
       if (needsPassphrase) {
@@ -264,6 +277,8 @@ function openModal({ title, body, mode, drive_id, drive_label }) {
         discontinueInput.focus();
       } else if (needsRename && renameInput) {
         renameInput.focus();
+      } else if (focusCancel) {
+        modalCancel.focus();
       } else {
         modalConfirm.focus();
       }
@@ -295,8 +310,8 @@ function uiAlert(message, title = "Notice") {
   return openModal({ title, body: message, mode: "alert" });
 }
 
-function uiConfirm(message, title = "Confirm") {
-  return openModal({ title, body: message, mode: "confirm" });
+function uiConfirm(message, title = "Confirm", options = {}) {
+  return openModal({ title, body: message, mode: "confirm", ...options });
 }
 
 let passphrasePrompt = null;
@@ -349,6 +364,7 @@ async function postWithPassphrase(path, payload, promptMessage, { verifies = tru
 
 function closeModal(value) {
   modalOverlay.classList.add("hidden");
+  setBackgroundInert(false);
   const opener = modalOpenerElement;
   modalOpenerElement = null;
   if (opener && typeof opener.focus === "function") setTimeout(() => opener.focus(), 0);
@@ -707,6 +723,10 @@ function renderBackupTargets(trustedDrives, status) {
   const list = document.getElementById("backup-targets-list");
   const empty = document.getElementById("backup-targets-empty");
   if (!list || !empty) return;
+  // Rebuild only when something shown changed, so keyboard focus isn't lost every refresh.
+  const key = JSON.stringify([trustedDrives, status?.running_drive_ids, status?.backup_progress]);
+  if (list.dataset.key === key) return;
+  list.dataset.key = key;
   const runningDriveIds = new Set((status && status.running_drive_ids) || []);
   const progressMap = (status && status.backup_progress && typeof status.backup_progress === "object") ? status.backup_progress : {};
   const expandedIds = new Set(
@@ -732,8 +752,10 @@ function renderBackupTargets(trustedDrives, status) {
       row.classList.add("expanded");
     }
 
-    const header = document.createElement("div");
+    const header = document.createElement("button");
+    header.type = "button";
     header.className = "backup-target-header";
+    header.setAttribute("aria-expanded", String(expandedIds.has(d.drive_id)));
     const top = document.createElement("div");
     top.className = "backup-target-top";
     const name = document.createElement("div");
@@ -858,7 +880,9 @@ function renderBackupTargets(trustedDrives, status) {
 
     header.addEventListener("click", () => {
       expanded.classList.toggle("hidden");
-      row.classList.toggle("expanded", !expanded.classList.contains("hidden"));
+      const open = !expanded.classList.contains("hidden");
+      row.classList.toggle("expanded", open);
+      header.setAttribute("aria-expanded", String(open));
     });
     list.appendChild(row);
   });
@@ -1150,12 +1174,17 @@ function renderDeviceListInto(listEl, emptyEl, helpEl, updatedEl, radioName) {
   return true;
 }
 
+let renderedDevicesKey = null;
+
 function renderDevices() {
   const list = document.getElementById("device-list");
   const empty = document.getElementById("device-empty");
   const help = document.getElementById("device-help");
   const updated = document.getElementById("device-updated");
   if (!list || !empty) return;
+  const key = JSON.stringify(deviceList);
+  if (key === renderedDevicesKey) return;
+  renderedDevicesKey = key;
   partitionIndex = new Map();
   renderDeviceListInto(list, empty, help, updated, "device-partition");
   const setupList = document.getElementById("setup-drive-device-list");
@@ -1765,8 +1794,9 @@ async function postDriveSetup(payload) {
   const ok = await uiConfirm(
     "This drive already has backups, but this passphrase doesn't open any of them.\n\n" +
       "If you mistyped it, choose Cancel and try again.\n" +
-      "Choose OK only if you want a separate new backup on this drive, protected by this passphrase.",
-    "Create a separate backup?"
+      'Choose "Create separate backup" only if you want a separate new backup on this drive, protected by this passphrase.',
+    "Create a separate backup?",
+    { confirmText: "Create separate backup", focusCancel: true }
   );
   if (!ok) return null;
   showLoadingOverlay("Setting up drive…");
@@ -1829,7 +1859,7 @@ async function setupDriveWithMount(mountPath) {
 function formatErrorMessage(detail, forFormat) {
   const lower = (detail || "").toLowerCase();
   if (lower.includes("authorization") || lower.includes("not authorized")) {
-    return "Your computer will ask for your password to allow this.";
+    return "Aegis needs your computer's password to do this. Try again and enter it when your computer asks.";
   }
   return detail && detail.trim() ? detail.trim() : (forFormat ? "Formatting failed." : "Something went wrong. Please try again.");
 }
@@ -1873,10 +1903,10 @@ async function setupDriveFromSelectionForAddDrive() {
         uiAlert('Type ERASE in the box to confirm erasing.');
         return;
       }
-      const confirmMsg = wasWholeDisk
-        ? "This will erase the whole drive and set it up fresh. Continue?"
-        : "This will erase all data on the selected drive. Continue?";
-      if (!(await uiConfirm(confirmMsg))) {
+      const confirmMsg =
+        `Erase "${selection.device.model || "USB drive"} (${selection.device.size})"? ` +
+        "Everything on it will be deleted. This can't be undone.";
+      if (!(await uiConfirm(confirmMsg, "Erase drive", { confirmText: "Erase drive", danger: true, focusCancel: true }))) {
         return;
       }
     }
@@ -1999,8 +2029,8 @@ async function mountSelectedPartition() {
       const detail = await res.text();
       uiAlert(
         detail === "authorization required"
-          ? "Your computer will ask for your password to allow this."
-          : "Couldn't open the drive. Check permissions and try again."
+          ? "Aegis needs your computer's password to do this. Try again and enter it when your computer asks."
+          : detail.trim() || "Couldn't open the drive. Unplug it, plug it back in, and try again."
       );
       return;
     }
@@ -2044,10 +2074,10 @@ async function setupDriveFromSelection() {
         uiAlert('Type ERASE in the box to confirm erasing.');
         return false;
       }
-      const confirmMsg = wasWholeDisk
-        ? "This will erase the whole drive and set it up fresh. Continue?"
-        : "This will erase all data on the selected drive. Continue?";
-      if (!(await uiConfirm(confirmMsg))) {
+      const confirmMsg =
+        `Erase "${selection.device.model || "USB drive"} (${selection.device.size})"? ` +
+        "Everything on it will be deleted. This can't be undone.";
+      if (!(await uiConfirm(confirmMsg, "Erase drive", { confirmText: "Erase drive", danger: true, focusCancel: true }))) {
         return false;
       }
     }

@@ -283,9 +283,9 @@
             <div class="snapshot-list" id="snapshot-list"></div>
             <div class="muted" id="snapshot-summary"></div>
             <div class="browse-section hidden" id="browse-section">
-              <label>Get back just some files (optional)</label>
+              <p class="field-title">Get back just some files (optional)</p>
               <p class="muted">Check the files or folders you want. Leave everything unchecked to get the whole backup.</p>
-              <ul class="browse-list" id="browse-tree" role="tree" aria-label="Backup contents"></ul>
+              <ul class="browse-list" id="browse-tree" aria-label="Backup contents"></ul>
             </div>
             <div class="field">
               <label for="restore-target">Restore to folder</label>
@@ -402,7 +402,7 @@
       </main>
 
       <div id="modal-overlay" class="modal hidden">
-        <div class="modal-card">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-body">
           <h2 id="modal-title">Secure prompt</h2>
           <p id="modal-body" class="muted"></p>
           <div class="field" id="modal-field">
@@ -413,18 +413,18 @@
             </div>
           </div>
           <div class="field hidden" id="modal-discontinue-field">
-            <label id="modal-discontinue-label">Type the drive name to confirm</label>
+            <label id="modal-discontinue-label" for="modal-discontinue-input">Type the name to confirm</label>
             <input id="modal-discontinue-input" type="text" placeholder="" />
             <label class="checkbox-label wipe-option">
               <input type="checkbox" id="modal-discontinue-wipe" />
-              Also erase all data on the drive so it can't be recovered. Drive must be connected, and it must not hold other backups.
+              Also erase everything on the drive so nobody can recover it. The drive must be plugged in and must not hold other backups.
             </label>
           </div>
           <div class="field hidden" id="modal-rename-field">
-            <label>Drive name (just for Aegis)</label>
+            <label for="modal-rename-input">Name (only shown in Aegis)</label>
             <input id="modal-rename-input" type="text" placeholder="e.g. My backup" />
           </div>
-          <div id="modal-error" class="muted"></div>
+          <div id="modal-error" role="alert"></div>
           <div class="actions">
             <button class="btn secondary" id="modal-cancel">Cancel</button>
             <button class="btn primary" id="modal-confirm">Continue</button>
@@ -434,7 +434,7 @@
     </div>
 
     <div id="edit-folders-overlay" class="modal hidden">
-      <div class="modal-card" style="max-width: 28rem;">
+      <div class="modal-card" style="max-width: 28rem;" role="dialog" aria-modal="true" aria-labelledby="edit-folders-title">
         <h2 id="edit-folders-title">Edit folders</h2>
         <p class="muted">Choose which folders to back up to this drive.</p>
         <div class="checkbox" style="margin-top: 12px;">
@@ -454,7 +454,7 @@
           <div id="edit-folders-custom-list"></div>
           <button type="button" class="btn ghost" id="edit-folders-add">Add folder</button>
         </div>
-        <div id="edit-folders-error" class="muted" style="margin-top: 8px;"></div>
+        <div id="edit-folders-error" role="alert" style="margin-top: 8px;"></div>
         <div class="actions" style="margin-top: 16px;">
           <button type="button" class="btn secondary" id="edit-folders-cancel">Cancel</button>
           <button type="button" class="btn primary" id="edit-folders-save">Save</button>

@@ -956,7 +956,7 @@ async fn discontinue_drive(
     if expected.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            "This drive has no name, so it can't be removed this way.".to_string(),
+            "This drive has no name, so it can't be forgotten here.".to_string(),
         ));
     }
     let confirmed = req.confirm_label.trim();
@@ -971,7 +971,7 @@ async fn discontinue_drive(
         if !guard.drive_status.has_instance(&drive_id) || guard.drive_status.devnode.is_none() {
             return Err((
                 StatusCode::BAD_REQUEST,
-                "Drive must be connected to wipe. Plug in the drive and try again.".to_string(),
+                "Plug in the drive to erase it, then try again.".to_string(),
             ));
         }
         let others = guard
@@ -983,8 +983,8 @@ async fn discontinue_drive(
         if others {
             return Err((
                 StatusCode::BAD_REQUEST,
-                "This drive also holds other backups, so it can't be wiped. \
-                 Remove it without wiping instead."
+                "This drive also holds other backups, so it can't be erased. \
+                 Forget it without erasing instead."
                     .to_string(),
             ));
         }
@@ -992,6 +992,27 @@ async fn discontinue_drive(
     } else {
         None
     };
+    // Erase first: if that fails, the drive stays on the list and the user can try again.
+    if let Some(devnode) = devnode_to_wipe {
+        drop(guard);
+        if let Err(e) = devices::unmount_partition(&devnode) {
+            tracing::warn!("discontinue wipe: unmount failed: {}", e);
+        }
+        if let Err(e) = devices::secure_wipe_block_device(&devnode) {
+            tracing::error!("discontinue wipe failed: {}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Couldn't erase the drive, so it wasn't forgotten. Unplug it, plug it back in, \
+                 and try again, or forget it without erasing."
+                    .to_string(),
+            ));
+        }
+        guard = state.write().await;
+        guard.drive_status.connected = false;
+        guard.drive_status.clear_drive();
+        guard.drive_status.mount_path = None;
+        guard.drive_status.devnode = None;
+    }
     guard.config.trusted_drives.remove(&drive_id);
     guard.drive_status.instance_ids.retain(|i| i != &drive_id);
     guard.drive_status.trusted = !guard.drive_status.instance_ids.is_empty();
@@ -1006,22 +1027,6 @@ async fn discontinue_drive(
     })?;
     drop(guard);
     let _ = keychain::delete_passphrase(&drive_id);
-    if let Some(devnode) = devnode_to_wipe {
-        if let Err(e) = devices::unmount_partition(&devnode) {
-            tracing::warn!("discontinue wipe: unmount failed: {}", e);
-        }
-        if let Err(e) = devices::secure_wipe_block_device(&devnode) {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Secure wipe failed: {}", e),
-            ));
-        }
-        let mut guard = state.write().await;
-        guard.drive_status.connected = false;
-        guard.drive_status.clear_drive();
-        guard.drive_status.mount_path = None;
-        guard.drive_status.devnode = None;
-    }
     Ok(get_status(State(state)).await)
 }
 
@@ -1115,7 +1120,10 @@ async fn mount_drive(
         {
             return (StatusCode::FORBIDDEN, "authorization required".to_string());
         }
-        (StatusCode::INTERNAL_SERVER_ERROR, msg)
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't open the drive. Unplug it, plug it back in, and try again.".to_string(),
+        )
     })?;
     tracing::info!(
         "mount drive: success devnode={} mount_path={}",
@@ -1138,7 +1146,12 @@ async fn format_drive(
         {
             return (StatusCode::FORBIDDEN, "authorization required".to_string());
         }
-        (StatusCode::INTERNAL_SERVER_ERROR, msg)
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't erase the drive. Unplug it, plug it back in, and try again. If it still \
+             fails, erase it with your computer's disk tool and choose \"exFAT\"."
+                .to_string(),
+        )
     })?;
     tracing::info!("format drive: success devnode={}", req.devnode);
     Ok(Json(FormatResponse {

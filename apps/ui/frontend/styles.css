@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #0f1317;
   --bg-soft: #141a20;
   --bg-grad-1: #1a2430;
@@ -44,6 +45,7 @@
 
 @media (prefers-color-scheme: light) {
   :root {
+    color-scheme: light;
     --bg: #f4f6f9;
     --bg-soft: #eef1f6;
     --bg-grad-1: #eef3fb;
@@ -53,7 +55,7 @@
     --panel-strong: #f0f3f8;
     --panel-grad-1: rgba(255, 255, 255, 0.97);
     --panel-grad-2: rgba(244, 247, 251, 0.97);
-    --accent: #1f9d74;
+    --accent: #167a5a;
     --accent-2: #2564d6;
     --on-accent: #ffffff;
     --text: #131a22;
@@ -76,7 +78,7 @@
     --danger-bg: rgba(200, 40, 40, 0.06);
     --danger-border: rgba(200, 40, 40, 0.28);
     --danger-text: #b32424;
-    --success-text: #1c8a52;
+    --success-text: #177a48;
     --focus-ring: #1657b8;
     --shadow: 0 20px 50px rgba(30, 41, 59, 0.12);
     --orb-opacity: 0.14;
@@ -1234,4 +1236,30 @@ body.setup-loading .device-danger {
 /* The wizard shows "Step N of 4" once, above the cards. */
 .wizard-step .step-label {
   display: none;
+}
+
+/* Destructive confirm buttons (erase, forget). */
+.btn.danger {
+  background: var(--danger-text);
+  color: var(--panel);
+}
+
+#modal-error,
+#edit-folders-error {
+  color: var(--alert-text);
+}
+
+/* Drive card header is a button (keyboard + screen readers). */
+button.backup-target-header {
+  all: unset;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+button.backup-target-header:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
 }

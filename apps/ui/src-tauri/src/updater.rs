@@ -161,11 +161,11 @@ async fn install_when_idle(app: &AppHandle, update: Update) -> anyhow::Result<()
         tracing::info!("updater: backup or restore running; retrying later");
         tokio::time::sleep(BUSY_RETRY).await;
     }
-    install(app, update).await
+    install(app, &update).await
 }
 
 /// Agent hold must already be taken. Restarts the app on success.
-async fn install(app: &AppHandle, update: Update) -> anyhow::Result<()> {
+async fn install(app: &AppHandle, update: &Update) -> anyhow::Result<()> {
     match update.download_and_install(|_, _| {}, || {}).await {
         Ok(()) => {
             tracing::info!("updater: installed {}; restarting", update.version);
@@ -185,11 +185,27 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
     let Some(update) = pending else {
         return Err("No update is waiting.".into());
     };
-    if !hold(true).await.map_err(|e| e.to_string())? {
-        *app.state::<Pending>().0.lock().unwrap() = Some(update);
-        return Err("A backup or restore is running. Try again when it's done.".into());
+    const FAILED: &str = "The update couldn't be installed. Aegis will try again later.";
+    let keep = |update| *app.state::<Pending>().0.lock().unwrap() = Some(update);
+    match hold(true).await {
+        Ok(true) => {}
+        Ok(false) => {
+            keep(update);
+            return Err("A backup or restore is running. Try again when it's done.".into());
+        }
+        Err(e) => {
+            tracing::error!("updater: hold failed: {e}");
+            keep(update);
+            return Err(FAILED.into());
+        }
     }
-    install(&app, update).await.map_err(|e| e.to_string())
+    if let Err(e) = install(&app, &update).await {
+        tracing::error!("updater: install failed: {e}");
+        // Keep it, so "Install and restart" can be tried again.
+        keep(update);
+        return Err(FAILED.into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]

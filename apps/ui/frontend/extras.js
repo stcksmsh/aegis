@@ -72,7 +72,7 @@
     const field = document.createElement("div");
     field.className = "field";
     field.innerHTML =
-      '<label>Having problems?</label><button class="btn secondary" type="button">Open log files</button>';
+      '<p class="field-title">Having problems?</p><button class="btn secondary" type="button">Open log files</button>';
     field.querySelector("button").addEventListener("click", () =>
       invoke("open_logs").catch(() => {})
     );

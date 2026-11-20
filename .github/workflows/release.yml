@@ -41,6 +41,16 @@ jobs:
             exit 1
           fi
 
+      # A release without the updater key could never update itself: fail early.
+      - name: Check updater signing is set up
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          [ -n "$KEY" ] || { echo "Secret TAURI_SIGNING_PRIVATE_KEY is not set" >&2; exit 1; }
+          pubkey="$(jq -r '.plugins.updater.pubkey // ""' apps/ui/src-tauri/tauri.conf.json)"
+          [ -n "$pubkey" ] || { echo "plugins.updater.pubkey in tauri.conf.json is empty" >&2; exit 1; }
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:

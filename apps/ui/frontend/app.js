@@ -238,6 +238,7 @@ function openModal({ title, body, mode, drive_id, drive_label, confirmText, dang
     if (discontinueInput) {
       discontinueInput.value = "";
       discontinueInput.placeholder = drive_label || "";
+      document.getElementById("modal-discontinue-label").textContent = `Type "${drive_label}" to confirm`;
     }
     if (discontinueWipe) discontinueWipe.checked = false;
     const renameField = document.getElementById("modal-rename-field");
@@ -872,7 +873,7 @@ function renderBackupTargets(trustedDrives, status) {
           "This computer stops backing up to this drive and forgets its saved passphrase. " +
           "The backups on the drive are kept, and other computers can keep using it.\n\n" +
           "Handing the drive over to someone else? Also delete any copies of the backed-up files " +
-          "that should not stay on this computer.\n\nType its name to confirm:",
+          "that should not stay on this computer.",
         mode: "discontinue",
         drive_id: d.drive_id,
         drive_label: d.label || "",

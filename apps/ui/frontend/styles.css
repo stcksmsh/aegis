@@ -1266,5 +1266,5 @@ button.backup-target-header {
 
 button.backup-target-header:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 4px;
+  outline-offset: -3px; /* inside: the card clips anything outside */
 }

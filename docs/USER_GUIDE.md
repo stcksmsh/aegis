@@ -70,13 +70,27 @@ If you only lost a few files or one folder, you don't need to restore everything
 
 ### On a new or reinstalled computer
 
-Install Aegis, plug in the drive, choose **Add drive**, pick the drive and type your **original passphrase**. Aegis recognizes the existing backups. Then use **Restore**.
+Install Aegis, plug in the drive, choose **Add drive**, pick the drive and type your **original passphrase**. Aegis finds the backup that this passphrase opens. Then use **Restore**.
 
-## 5. Recovery kit
+### Several backups on one drive
 
-Settings → **Export recovery kit** saves a small note describing where your backups live on the drive. It contains no passwords. Keep a copy somewhere other than the drive (email to yourself, print it).
+One drive can hold separate backups, for example one per company. Each has its own passphrase, and each passphrase opens only its own backup.
 
-Your backups are standard [restic](https://restic.net) repositories. Even without Aegis, anyone technical can restore them with restic and your passphrase.
+To add another one, choose **Add drive** on a drive that already has backups and type a **new** passphrase. Aegis asks before it creates a separate backup, so a mistyped passphrase never starts a new one by accident. If this computer backs up to more than one of them, pick the one you want under **Backup on this drive** on the dashboard and on the Restore page.
+
+## 5. Restoring without Aegis
+
+After each backup, Aegis keeps a folder called **AEGIS-RESTORE** on the drive up to date. It lets you get your files back on any Windows, Mac or Linux computer, even one without Aegis:
+
+1. Open **AEGIS-RESTORE** on the drive and read **README.txt** (in Serbian: **PROCITAJ.txt**).
+2. Double-click **restore-windows.bat** (Windows) or **restore-mac.command** (Mac). On Linux, run `bash restore-linux.sh`.
+3. Type your passphrase and press Enter twice.
+
+Your files go into a new folder on the Desktop called "Aegis restore" followed by the date. Nothing on the computer is overwritten.
+
+Settings → **Export recovery kit** also saves a small note describing where your backups live on the drive. It contains no passwords.
+
+Your backups are standard [restic](https://restic.net) repositories, so anyone technical can also restore them with restic and your passphrase.
 
 ## 6. Settings explained
 

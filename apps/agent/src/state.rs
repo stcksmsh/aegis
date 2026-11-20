@@ -1,6 +1,7 @@
 use crate::config::AgentConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -93,10 +94,13 @@ pub struct AgentRuntimeState {
     /// Epoch seconds a reminder notification was last sent for a drive (key = drive_id); avoids spamming.
     #[serde(skip)]
     pub reminder_last_sent: HashMap<String, u64>,
+    /// Bundled restic programs for the restore kit on drives (see kit.rs).
+    #[serde(skip)]
+    pub kit_dir: Option<PathBuf>,
 }
 
 impl AgentRuntimeState {
-    pub fn new(config: AgentConfig) -> Self {
+    pub fn new(config: AgentConfig, kit_dir: Option<PathBuf>) -> Self {
         Self {
             config,
             drive_status: DriveStatus {
@@ -117,6 +121,7 @@ impl AgentRuntimeState {
             restore_drive_id: None,
             restore_cancel_token: None,
             reminder_last_sent: HashMap::new(),
+            kit_dir,
         }
     }
 }

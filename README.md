@@ -59,6 +59,7 @@ Full walkthrough: **[User Guide](docs/USER_GUIDE.md)** · all docs: **[docs/](do
 
 ```bash
 bash scripts/fetch-restic.sh x86_64-unknown-linux-gnu   # bundled restic (your target triple)
+bash scripts/fetch-restore-kit.sh                         # restore kit copied onto drives
 cargo run -p aegis-ui                                    # desktop app with embedded agent
 ```
 

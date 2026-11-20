@@ -1,0 +1,56 @@
+AEGIS DISK ZA REZERVNE KOPIJE - KAKO DA VRATITE SVOJE FAJLOVE
+=============================================================
+
+Na ovom disku su šifrovane rezervne kopije (bekapi) koje je napravio Aegis.
+Niko ne može da ih otvori bez lozinke. Lozinku čuvajte zapisanu na papiru,
+na sigurnom mestu, odvojeno od ovog diska.
+
+NAJLAKŠI NAČIN (Aegis je instaliran)
+------------------------------------
+Uključite disk, otvorite Aegis, idite na "Restore" i pratite korake.
+
+BEZ AEGIS-A (na bilo kom računaru)
+----------------------------------
+Sve što je potrebno nalazi se u ovom folderu. Fajlovi se vraćaju u NOVI folder
+na radnoj površini (Desktop) pod imenom "Aegis restore <datum>". Ništa na
+računaru se ne briše niti prepisuje.
+
+Windows:
+  1. Otvorite ovaj folder (AEGIS-RESTORE) na disku.
+  2. Dvaput kliknite na "restore-windows.bat".
+     Ako Windows prikaže "Windows protected your PC", kliknite "More info",
+     pa "Run anyway".
+  3. Upišite lozinku i pritisnite Enter.
+  4. Pritisnite Enter da vratite najnoviji bekap (ili upišite ID starijeg).
+
+Mac:
+  1. Otvorite ovaj folder (AEGIS-RESTORE) na disku.
+  2. Dvaput kliknite na "restore-mac.command".
+     Ako Mac odbije da ga otvori: kliknite desnim tasterom (ili Control + klik)
+     na fajl, izaberite "Open", pa ponovo "Open".
+  3. Upišite lozinku i pritisnite Enter. Dok kucate ništa se ne prikazuje; to je normalno.
+  4. Pritisnite Enter da vratite najnoviji bekap (ili upišite ID starijeg).
+
+Linux:
+  1. Otvorite terminal u ovom folderu (AEGIS-RESTORE) na disku.
+  2. Pokrenite:  bash restore-linux.sh
+  3. Upišite lozinku i pritisnite Enter, pa ponovo Enter za najnoviji bekap.
+
+Ako su na jednom disku bekapi više firmi ili računara, lozinka određuje koji
+dobijate: svaka lozinka otvara samo svoj bekap.
+
+ŠTA SE NALAZI U OVOM FOLDERU
+----------------------------
+  restore-windows.bat, restore-windows.ps1   vraćanje na Windows-u
+  restore-mac.command                        vraćanje na Mac-u
+  restore-linux.sh                           vraćanje na Linux-u
+  restic/                                    program za vraćanje (restic, otvorenog koda,
+                                             https://restic.net) za sve vrste računara,
+                                             sa SHA256SUMS za proveru fajlova
+  README.txt                                 ova uputstva na engleskom
+  kit.json                                   verzija ovog foldera (Aegis je ažurira)
+
+Ne brišite skriveni folder ".aegis" na ovom disku: u njemu su bekapi.
+
+Za stručnjake: bekapi su standardni restic repozitorijumi u .aegis/repo i
+.aegis/instances/<id>/repo. Može ih pročitati bilo koji restic 0.14 ili noviji.

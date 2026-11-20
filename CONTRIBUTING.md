@@ -6,6 +6,7 @@
 - Linux: `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libudev-dev patchelf pkg-config`
 - macOS: Xcode command line tools. Windows: MSVC build tools + WebView2 (preinstalled on Win 10/11).
 - restic for local dev: `bash scripts/fetch-restic.sh <target-triple>` (e.g. `x86_64-unknown-linux-gnu`) — downloads the pinned, checksum-verified binary where the app build expects it. Or install restic on `PATH`.
+- Restore kit for drives: `bash scripts/fetch-restore-kit.sh` — restic for every OS (pinned SHA256 in `scripts/restic.sha256`); the app build needs it.
 
 ## Run
 

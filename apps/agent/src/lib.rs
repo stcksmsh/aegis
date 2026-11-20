@@ -7,6 +7,7 @@ mod devices;
 mod drive;
 mod ipc;
 mod keychain;
+mod kit;
 mod logging;
 mod notifications;
 mod recovery;
@@ -30,13 +31,14 @@ use tracing::{error, info, warn};
 
 /// Start IPC server + USB watcher; runs until either task exits.
 /// Fails fast if the API port is taken (e.g. agent service already running).
-pub async fn run() -> anyhow::Result<()> {
+/// `kit_dir`: bundled restic programs copied onto drives as the restore kit, if available.
+pub async fn run(kit_dir: Option<std::path::PathBuf>) -> anyhow::Result<()> {
     info!("Aegis agent starting");
     let config = AgentConfig::load().context("load config")?;
     if Restic::resolve(config.restic_path.as_deref()).is_err() {
         warn!("Restic not available; backups will fail until restic is installed or bundled.");
     }
-    let state: SharedState = Arc::new(RwLock::new(AgentRuntimeState::new(config)));
+    let state: SharedState = Arc::new(RwLock::new(AgentRuntimeState::new(config, kit_dir)));
     let listener = tokio::net::TcpListener::bind(API_ADDR)
         .await
         .with_context(|| format!("bind {}", API_ADDR))?;

@@ -70,7 +70,9 @@ jobs:
 
       - name: Fetch bundled restic
         shell: bash
-        run: bash scripts/fetch-restic.sh ${{ matrix.target }}
+        run: |
+          bash scripts/fetch-restic.sh ${{ matrix.target }}
+          bash scripts/fetch-restore-kit.sh
 
       - name: Clippy (workspace)
         run: cargo clippy --workspace -- -D warnings
@@ -137,6 +139,8 @@ jobs:
         run: |
           cargo build -p aegis-agent --release
           bash scripts/fetch-restic.sh ${{ matrix.target }}
+          bash scripts/fetch-restore-kit.sh
+          cp -r apps/ui/src-tauri/restore-kit target/release/
           ext=""; [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
           cp apps/ui/src-tauri/binaries/aegis-restic-${{ matrix.target }}$ext target/release/aegis-restic$ext
 

@@ -193,13 +193,6 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 fn main() {
     // Guard must live for the whole process so file logs flush.
     let _log_guard = aegis_agent::init_logging();
-    // Embedded agent: if the port is taken, a standalone agent service is already running; use it.
-    tauri::async_runtime::spawn(async {
-        if let Err(err) = aegis_agent::run().await {
-            eprintln!("Embedded agent not started: {:#}", err);
-        }
-    });
-
     tauri::Builder::default()
         // Must be first: a second launch just focuses the running window.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -222,6 +215,17 @@ fn main() {
             set_tray_status
         ])
         .setup(|app| {
+            // Embedded agent: if the port is taken, a standalone agent service is already running; use it.
+            let kit_dir = app
+                .path()
+                .resource_dir()
+                .ok()
+                .map(|d| d.join("restore-kit"));
+            tauri::async_runtime::spawn(async move {
+                if let Err(err) = aegis_agent::run(kit_dir).await {
+                    eprintln!("Embedded agent not started: {:#}", err);
+                }
+            });
             default_autostart_once(app.handle());
             let tray_ok = match build_tray(app.handle()) {
                 Ok(()) => true,

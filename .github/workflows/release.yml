@@ -70,7 +70,9 @@ jobs:
 
       - name: Fetch bundled restic
         shell: bash
-        run: bash scripts/fetch-restic.sh ${{ matrix.target }}
+        run: |
+          bash scripts/fetch-restic.sh ${{ matrix.target }}
+          bash scripts/fetch-restore-kit.sh
 
       - uses: tauri-apps/tauri-action@v0
         env:

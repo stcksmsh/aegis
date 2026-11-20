@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error};
+use tracing::{debug, error, info, warn};
 
 pub async fn run_backup(
     state: SharedState,
@@ -253,6 +253,17 @@ pub async fn run_backup(
     match outcome {
         Ok(mut result) => {
             if result.status == RunStatus::Success {
+                let kit_assets = state.read().await.kit_dir.clone();
+                let root = mount_path.clone();
+                let kit = tokio::task::spawn_blocking(move || {
+                    crate::kit::refresh(&root, kit_assets.as_deref())
+                })
+                .await;
+                match kit {
+                    Ok(Ok(true)) => info!("restore kit on drive updated"),
+                    Ok(Err(err)) => warn!("restore kit update failed: {}", Redact::new(err)),
+                    _ => {}
+                }
                 if let Some((free, total)) = crate::usb::disk_space_for_mount(&mount_path) {
                     if total > 0 && free < total / 10 {
                         result.drive_almost_full = true;

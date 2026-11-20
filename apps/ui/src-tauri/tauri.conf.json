@@ -42,6 +42,9 @@
     "externalBin": [
       "binaries/aegis-restic"
     ],
+    "resources": [
+      "restore-kit/*"
+    ],
     "macOS": {
       "signingIdentity": "-"
     }

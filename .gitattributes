@@ -1,0 +1,3 @@
+# Restore kit files are embedded byte-for-byte; kit.rs adds CRLF where Windows needs it.
+apps/agent/kit/* text eol=lf
+apps/agent/kit/*.bat text eol=crlf

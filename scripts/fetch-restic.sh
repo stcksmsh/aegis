@@ -6,7 +6,7 @@
 # Usage: scripts/fetch-restic.sh <rust-target-triple>
 set -euo pipefail
 
-# Bump deliberately; checksum verified against the release's SHA256SUMS.
+# Bump deliberately, together with the pinned checksums in scripts/restic.sha256.
 RESTIC_VERSION=0.19.1
 
 triple="${1:?usage: fetch-restic.sh <target-triple>}"
@@ -40,16 +40,14 @@ trap 'rm -rf "$work_dir"' EXIT
 asset_name="restic_${RESTIC_VERSION}_${asset_os_arch}.${ext}"
 base_url="https://github.com/restic/restic/releases/download/v${RESTIC_VERSION}"
 download_url="$base_url/$asset_name"
-sums_url="$base_url/SHA256SUMS"
 
 echo "fetch-restic.sh: downloading $asset_name..."
 curl -sSfL "$download_url" -o "$work_dir/$asset_name"
-curl -sSfL "$sums_url" -o "$work_dir/SHA256SUMS"
 
 echo "fetch-restic.sh: verifying checksum..."
-expected="$(grep " ${asset_name}\$" "$work_dir/SHA256SUMS" | awk '{print $1}')"
+expected="$(grep " ${asset_name}\$" "$script_dir/restic.sha256" | awk '{print $1}')"
 if [ -z "$expected" ]; then
-  echo "fetch-restic.sh: no checksum entry for $asset_name in SHA256SUMS" >&2
+  echo "fetch-restic.sh: no pinned checksum for $asset_name in scripts/restic.sha256" >&2
   exit 1
 fi
 if command -v sha256sum >/dev/null 2>&1; then

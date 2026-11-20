@@ -23,3 +23,6 @@ Thumbs.db
 # Fetched restic sidecar binaries for Tauri bundling (see scripts/fetch-restic.sh)
 apps/ui/src-tauri/binaries/
 .claude/worktrees/
+
+# Restic programs copied onto backup drives (see scripts/fetch-restore-kit.sh)
+apps/ui/src-tauri/restore-kit/

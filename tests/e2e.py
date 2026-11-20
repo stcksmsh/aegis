@@ -158,6 +158,31 @@ def main():
     with open(os.path.join(target, "Docs", "a.txt"), "rb") as f:
         assert f.read() == b"hello"
 
+    step("restore kit on drive")
+    kit = os.path.join(mount, "AEGIS-RESTORE")
+    with open(os.path.join(kit, "kit.json")) as f:
+        print("  kit.json:", json.load(f))
+    for name in ["README.txt", "PROCITAJ.txt", "restore-windows.bat", "restore-mac.command", "restore-linux.sh"]:
+        assert os.path.isfile(os.path.join(kit, name)), name
+    if sys.platform != "win32" and os.path.isfile(os.path.join(kit, "restic", "SHA256SUMS")):
+        import subprocess
+        home = os.path.join(work, "kit-home")
+        os.makedirs(home)
+        shim = os.path.join(work, "shim")  # don't open a file manager on the test machine
+        os.makedirs(shim)
+        for tool in ("open", "xdg-open"):
+            with open(os.path.join(shim, tool), "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(os.path.join(shim, tool), 0o755)
+        env = {**os.environ, "HOME": home, "PATH": shim + os.pathsep + os.environ["PATH"]}
+        out = subprocess.run(["bash", os.path.join(kit, "restore-linux.sh")], input=PASS + "\n\n\n",
+                             env=env, capture_output=True, text=True, timeout=300)
+        print(out.stdout[-500:], out.stderr[-500:])
+        restored = [os.path.join(d, f) for d, _, fs in os.walk(home) for f in fs if f == "a.txt"]
+        assert len(restored) == 1, out.stdout
+        with open(restored[0], "rb") as f:
+            assert f.read() == b"hello"
+
     step("status shows drive + space")
     drive = call("GET", "/status")["drive"]
     print("  drive:", drive)

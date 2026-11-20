@@ -242,6 +242,12 @@ folder. Contains no secrets.
 
 Request: `{"drive_id": "..."}` → Response: `{"path": "/tmp/aegis-passphrase-sheet-1a2b3c4d.html"}`
 
+## Cancel Restore
+`POST /v1/restore/cancel`
+
+Stops the running restore, if any. The pending `POST /v1/restore` then fails with `409`
+"Restore stopped…". Response: `204`.
+
 ## Maintenance Hold
 `POST /v1/maintenance`
 

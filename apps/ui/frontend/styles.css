@@ -1230,3 +1230,8 @@ body.setup-loading .device-danger {
   box-shadow: var(--shadow);
   z-index: 60;
 }
+
+.field-title {
+  font-weight: 600;
+  margin: 0 0 6px;
+}

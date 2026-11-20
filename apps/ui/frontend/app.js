@@ -157,6 +157,7 @@ function updateActionState(status) {
   setDisabled("restore-selected-run", !canOperate || !trusted);
   setDisabled("eject-btn", !agentOnline || !driveConnected);
   setDisabled("export-recovery", !agentOnline || !trusted);
+  document.getElementById("restore-hint")?.classList.toggle("hidden", !agentOnline || (driveConnected && trusted));
   const setupThisDriveBtn = document.getElementById("setup-this-drive-btn");
   if (setupThisDriveBtn) {
     setupThisDriveBtn.classList.toggle("hidden", !driveConnected || trusted);
@@ -538,6 +539,10 @@ function applyPickedInstance(status) {
 document.addEventListener("change", (e) => {
   if (!e.target.classList?.contains("instance-picker")) return;
   pickedInstanceId = e.target.value;
+  // The backup list on Restore belongs to the previous backup: clear it.
+  document.getElementById("snapshot-list").innerHTML = "";
+  document.getElementById("snapshot-summary").textContent = "";
+  browseTreeReset();
   if (currentStatus) renderStatus(currentStatus);
 });
 
@@ -919,6 +924,12 @@ function renderEditFoldersCustomList() {
   const list = document.getElementById("edit-folders-custom-list");
   if (!list) return;
   list.innerHTML = "";
+  if (editFoldersCustomSources.length === 0) {
+    const hint = document.createElement("p");
+    hint.className = "muted";
+    hint.textContent = "None yet. Click Add folder to choose one.";
+    list.appendChild(hint);
+  }
   editFoldersCustomSources.forEach((item, index) => {
     const chip = document.createElement("span");
     chip.className = "chip";
@@ -929,7 +940,7 @@ function renderEditFoldersCustomList() {
     removeBtn.type = "button";
     removeBtn.className = "chip-remove";
     removeBtn.textContent = "×";
-    removeBtn.setAttribute("aria-label", "Remove");
+    removeBtn.setAttribute("aria-label", `Remove ${item.label}`);
     removeBtn.addEventListener("click", () => {
       editFoldersCustomSources.splice(index, 1);
       renderEditFoldersCustomList();
@@ -970,6 +981,41 @@ async function saveEditFolders() {
   } catch (err) {
     errEl.textContent = "Something went wrong. Please try again.";
   }
+}
+
+// Native folder picker (desktop app). Returns the chosen path, or null.
+async function pickFolder() {
+  const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
+  if (typeof invoke !== "function") {
+    uiAlert("Type the folder location in the box instead.");
+    return null;
+  }
+  try {
+    const path = await invoke("select_folder");
+    return typeof path === "string" && path ? path : null;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+function folderName(path) {
+  return path.split(/[\\/]/).filter(Boolean).pop() || "Folder";
+}
+
+// "Add" next to a custom folder: the name defaults to the folder's own name.
+function addCustomFolder(list, labelId, pathId, render) {
+  const labelEl = document.getElementById(labelId);
+  const pathEl = document.getElementById(pathId);
+  const path = pathEl.value.trim();
+  if (!path) {
+    uiAlert("Choose a folder first.");
+    return;
+  }
+  list.push({ label: labelEl.value.trim() || folderName(path), path });
+  labelEl.value = "";
+  pathEl.value = "";
+  render();
 }
 
 function openFolderPath(path) {
@@ -1561,7 +1607,7 @@ function renderSetupDriveCustomSources() {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.className = "chip-remove";
-    removeBtn.setAttribute("aria-label", "Remove");
+    removeBtn.setAttribute("aria-label", `Remove ${item.label}`);
     removeBtn.textContent = "×";
     removeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1588,7 +1634,7 @@ function renderCustomSources() {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.className = "chip-remove";
-    removeBtn.setAttribute("aria-label", "Remove");
+    removeBtn.setAttribute("aria-label", `Remove ${item.label}`);
     removeBtn.textContent = "×";
     removeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -2317,7 +2363,9 @@ async function runRestore(includePaths, confirmMessage) {
     return;
   }
 
-  showLoadingOverlay("Restoring your files…");
+  showLoadingOverlay("Restoring your files… This can take a while for large backups. Keep the drive plugged in.");
+  const stop = document.getElementById("loading-cancel");
+  stop?.classList.remove("hidden");
   try {
     const result = await postWithPassphrase(
       "/restore",
@@ -2332,13 +2380,18 @@ async function runRestore(includePaths, confirmMessage) {
     hideLoadingOverlay();
     if (!result) return;
     if (!result.res.ok) {
-      uiAlert(result.detail || "Restore failed. Please try again.", "Restore failed");
+      uiAlert(
+        result.detail || "Restore failed. Please try again.",
+        result.res.status === 409 ? "Restore stopped" : "Restore failed"
+      );
       return;
     }
   } catch (_) {
     hideLoadingOverlay();
     uiAlert("Can't connect to Aegis right now. Try restarting the app.", "Restore failed");
     return;
+  } finally {
+    stop?.classList.add("hidden");
   }
   await uiAlert(`Your files are back in ${target}. Existing files were left untouched.`, "Restore complete");
   openFolderPath(target);
@@ -2458,79 +2511,35 @@ function setupListeners() {
     "setup-drive-passphrase-meter-label"
   );
 
-  document.getElementById("add-custom").addEventListener("click", () => {
-    const label = document.getElementById("custom-label").value.trim();
-    const path = document.getElementById("custom-path").value.trim();
-    if (!label || !path) return;
-    customSources.push({ label, path });
-    document.getElementById("custom-label").value = "";
-    document.getElementById("custom-path").value = "";
-    renderCustomSources();
+  const wizardAdd = () => {
+    addCustomFolder(customSources, "custom-label", "custom-path", renderCustomSources);
     updateWizardSummary(currentStatus || { drive: { connected: false } });
+  };
+  const addDriveAdd = () =>
+    addCustomFolder(setupDriveCustomSources, "setup-drive-custom-label", "setup-drive-custom-path", renderSetupDriveCustomSources);
+  document.getElementById("add-custom").addEventListener("click", wizardAdd);
+  document.getElementById("setup-drive-add-custom").addEventListener("click", addDriveAdd);
+  // A folder picked with Browse… is added right away.
+  [
+    ["browse-folder", "custom-path", wizardAdd],
+    ["setup-drive-browse", "setup-drive-custom-path", addDriveAdd],
+  ].forEach(([buttonId, pathId, add]) => {
+    document.getElementById(buttonId).addEventListener("click", async () => {
+      const path = await pickFolder();
+      if (!path) return;
+      document.getElementById(pathId).value = path;
+      add();
+    });
   });
-
-  const setupDriveAddCustom = document.getElementById("setup-drive-add-custom");
-  if (setupDriveAddCustom) {
-    setupDriveAddCustom.addEventListener("click", () => {
-      const label = document.getElementById("setup-drive-custom-label")?.value?.trim() ?? "";
-      const path = document.getElementById("setup-drive-custom-path")?.value?.trim() ?? "";
-      if (!label || !path) return;
-      setupDriveCustomSources.push({ label, path });
-      const labelEl = document.getElementById("setup-drive-custom-label");
-      const pathEl = document.getElementById("setup-drive-custom-path");
-      if (labelEl) labelEl.value = "";
-      if (pathEl) pathEl.value = "";
-      renderSetupDriveCustomSources();
+  [
+    ["restore-browse", "restore-target"],
+    ["recovery-browse", "recovery-destination"],
+  ].forEach(([buttonId, inputId]) => {
+    document.getElementById(buttonId).addEventListener("click", async () => {
+      const path = await pickFolder();
+      if (path) document.getElementById(inputId).value = path;
     });
-  }
-  const setupDriveBrowse = document.getElementById("setup-drive-browse");
-  if (setupDriveBrowse) {
-    setupDriveBrowse.addEventListener("click", async (event) => {
-      event.preventDefault();
-      try {
-        const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
-        if (typeof invoke !== "function") {
-          uiAlert("Folder picker is available in the desktop app. Please type the path manually.");
-          return;
-        }
-        const selection = await invoke("select_folder");
-        if (typeof selection === "string") {
-          const pathEl = document.getElementById("setup-drive-custom-path");
-          const labelEl = document.getElementById("setup-drive-custom-label");
-          if (pathEl) pathEl.value = selection;
-          if (labelEl && !labelEl.value.trim()) {
-            const parts = selection.split(/[\\/]/).filter(Boolean);
-            if (parts.length > 0) labelEl.value = parts[parts.length - 1];
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    });
-  }
-
-  if (browseFolder) {
-    browseFolder.addEventListener("click", async (event) => {
-      event.preventDefault();
-      try {
-        const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
-        if (typeof invoke !== "function") {
-          uiAlert("Folder picker is available in the desktop app. Please type the path manually.");
-          return;
-        }
-        const selection = await invoke("select_folder");
-        if (typeof selection === "string") {
-          document.getElementById("custom-path").value = selection;
-          const parts = selection.split(/[\\/]/).filter(Boolean);
-          if (parts.length > 0) {
-            document.getElementById("custom-label").value ||= parts[parts.length - 1];
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    });
-  }
+  });
 
   const setupDriveBtn = document.getElementById("setup-drive");
   if (setupDriveBtn) {
@@ -2651,6 +2660,10 @@ function setupListeners() {
   remember.addEventListener("change", () => {
     if (remember.checked) paranoid.checked = false;
     securityTouched = true;
+  });
+
+  document.getElementById("loading-cancel").addEventListener("click", () => {
+    fetch(`${API}/restore/cancel`, { method: "POST" }).catch(() => {});
   });
 
   modalConfirm.addEventListener("click", confirmModal);

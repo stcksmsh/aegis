@@ -277,6 +277,7 @@
           <div class="panel">
             <h1>Restore</h1>
             <p class="lead">Choose a backup and restore it to a new folder. Aegis never overwrites your existing files.</p>
+            <p class="callout hidden" id="restore-hint">Plug in your Aegis drive to see its backups.</p>
             <label class="field-row instance-picker-row hidden">Backup on this drive:
               <select class="instance-picker"></select>
             </label>
@@ -293,7 +294,10 @@
             </div>
             <div class="field">
               <label for="restore-target">Restore to folder</label>
-              <input id="restore-target" type="text" placeholder="Choose an empty folder" />
+              <div class="field-row">
+                <input id="restore-target" type="text" placeholder="Choose an empty folder" />
+                <button class="btn ghost" id="restore-browse" type="button">Browse…</button>
+              </div>
             </div>
             <div class="field-row">
               <button class="btn primary" id="restore-run">Restore everything</button>
@@ -389,7 +393,10 @@
             </div>
             <div class="field">
               <label for="recovery-destination">Recovery kit</label>
-              <input id="recovery-destination" type="text" placeholder="Folder location" />
+              <div class="field-row">
+                <input id="recovery-destination" type="text" placeholder="Folder location" />
+                <button class="btn ghost" id="recovery-browse" type="button">Browse…</button>
+              </div>
               <button class="btn secondary" id="export-recovery">Export recovery kit</button>
             </div>
           </div>
@@ -445,7 +452,7 @@
           <label for="edit-folders-desktop">Desktop</label>
         </div>
         <div class="field" style="margin-top: 12px;">
-          <label>Custom folders</label>
+          <p class="field-title">Other folders</p>
           <div id="edit-folders-custom-list"></div>
           <button type="button" class="btn ghost" id="edit-folders-add">Add folder</button>
         </div>
@@ -461,6 +468,7 @@
       <div class="loading-card">
         <div class="loading-spinner" aria-hidden="true"></div>
         <p id="loading-message" class="loading-message">Working…</p>
+        <button class="btn secondary hidden" id="loading-cancel" type="button">Stop restore</button>
       </div>
     </div>
 

@@ -486,6 +486,7 @@ pub async fn serve(listener: tokio::net::TcpListener, state: SharedState) -> any
         .route("/v1/snapshots/stats", post(snapshot_stats))
         .route("/v1/snapshots/browse", post(browse_snapshot))
         .route("/v1/restore", post(restore_snapshot))
+        .route("/v1/restore/cancel", post(cancel_restore))
         .route("/v1/recovery-kit", post(export_recovery))
         .route("/v1/drives/eject", post(eject_drive))
         .route("/v1/drives/discontinue", post(discontinue_drive))
@@ -1317,10 +1318,16 @@ async fn restore_snapshot(
             &req.snapshot_id,
             &crate::backup::expand_home(&req.target_path),
             &req.include_paths,
-            cancel,
+            cancel.clone(),
         )
         .await
         .map_err(|e| {
+            if cancel.is_cancelled() {
+                return (
+                    StatusCode::CONFLICT,
+                    "Restore stopped. Files restored so far are in the folder.".to_string(),
+                );
+            }
             restic_err(
                 e,
                 "Restore failed. Check that the drive is still connected.",
@@ -1335,6 +1342,14 @@ async fn restore_snapshot(
     Ok(Json(RestoreResponse {
         status: "completed".to_string(),
     }))
+}
+
+/// Stops a running restore (the user clicked "Stop restore"). No-op if none runs.
+async fn cancel_restore(State(state): State<SharedState>) -> StatusCode {
+    if let Some(cancel) = state.read().await.restore_cancel_token.as_ref() {
+        cancel.cancel();
+    }
+    StatusCode::NO_CONTENT
 }
 
 async fn export_recovery(

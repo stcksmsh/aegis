@@ -1,7 +1,7 @@
 //! Compatibility contract (COMPATIBILITY.md): drives written by every released Aegis
 //! (committed fixtures in tests/fixtures) must open, back up and restore with this build.
 
-use crate::drive::{open_or_migrate, read_instance, DRIVE_FORMAT, LEGACY_REPO};
+use crate::drive::{read_instance, read_marker, DRIVE_FORMAT};
 use crate::restic::Restic;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -35,7 +35,7 @@ fn fixture(name: &str) -> PathBuf {
 
 /// Opens the drive, then: restore the fixture's file, back up again, see both snapshots.
 async fn open_backup_restore(root: &Path, expected_repo: &str, hello: &str) {
-    let marker = open_or_migrate(root).unwrap().unwrap();
+    let marker = read_marker(root).unwrap().unwrap();
     assert_eq!(marker.drive_format, DRIVE_FORMAT);
     assert_eq!(marker.instances.len(), 1);
     let meta = read_instance(root, &marker.instances[0]).unwrap();
@@ -81,12 +81,6 @@ async fn open_backup_restore(root: &Path, expected_repo: &str, hello: &str) {
         .unwrap();
     assert_eq!(restic.snapshots(&repo, PASS).await.unwrap().len(), 2);
     let _ = fs::remove_dir_all(root);
-}
-
-#[tokio::test]
-async fn format1_drive_from_0_2_migrates_and_works() {
-    let root = fixture("drive-format1");
-    open_backup_restore(&root, LEGACY_REPO, "hello from v0.2.0\n").await;
 }
 
 #[tokio::test]

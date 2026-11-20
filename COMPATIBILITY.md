@@ -19,18 +19,17 @@ Aegis follows SemVer:
 
 | Format | Written by | Layout |
 |---|---|---|
-| 1 (field absent) | 0.x | one restic repo at `.aegis/repo` |
 | 2 | 1.x | `instances: [id…]`; each has `.aegis/instances/<id>/instance.json` with `repo_path` |
 
 - An app reads every format up to its own maximum. **(tested: fixtures)**
-- A format-1 drive is upgraded to 2 on first use, without moving the repo: it becomes the
-  instance whose id is the drive id. Safe to re-run after a crash. **(tested)**
+- Format 2 is the first public format (there is no format 1 in the wild; pre-1.0 drives are
+  not supported).
 - A drive with a newer format than the app knows is never written to. **(tested)**
 - Unknown fields in `drive.json` and `instance.json` are kept on rewrite. **(tested)**
 - `instance.json` reserves `label_enc`, `label_kdf`, `label_nonce` (encrypted labels, planned
   for 1.0.x). Readers must ignore them until they are used.
-- Everything read from a drive is untrusted: ids are hex-only, `repo_path` must be one of the two
-  layouts above, labels are sanitized.
+- Everything read from a drive is untrusted: ids are hex-only, `repo_path` must be
+  `.aegis/instances/<id>/repo`, labels are sanitized.
 
 ## restic repositories
 

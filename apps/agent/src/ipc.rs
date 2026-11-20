@@ -270,13 +270,13 @@ struct MountResponse {
     mount_path: String,
 }
 
-/// Undoes the `migrations` count taken by a request handler, on every return path.
+/// Undoes the `drive_setups` count taken by a request handler, on every return path.
 struct BusyGuard(SharedState);
 
 impl Drop for BusyGuard {
     fn drop(&mut self) {
         let state = self.0.clone();
-        tokio::spawn(async move { state.write().await.migrations -= 1 });
+        tokio::spawn(async move { state.write().await.drive_setups -= 1 });
     }
 }
 
@@ -293,7 +293,7 @@ struct MaintenanceRequest {
 }
 
 /// The app takes a hold before installing an update and releases it if the install fails.
-/// Taking it fails while a backup, restore or drive migration runs; while held, none can start.
+/// Taking it fails while a backup, restore or drive setup runs; while held, none can start.
 async fn maintenance(
     State(state): State<SharedState>,
     Json(req): Json<MaintenanceRequest>,
@@ -651,7 +651,7 @@ async fn setup_drive(
         if guard.update_hold {
             return Err(updating());
         }
-        guard.migrations += 1;
+        guard.drive_setups += 1;
         BusyGuard(state.clone())
     };
     let mount_path = PathBuf::from(&req.mount_path);
@@ -741,11 +741,8 @@ async fn setup_drive(
         )
     };
 
-    debug!("setup drive: opening marker (migrating format 1 if needed)");
-    let marker = match crate::usb::open_drive(&state, &mount_path)
-        .await
-        .map_err(|e| internal("read", e))?
-    {
+    debug!("setup drive: reading marker");
+    let marker = match read_marker(&mount_path).map_err(|e| internal("read", e))? {
         Some(marker) => marker,
         None => {
             let marker = DriveMarker::new(Some(final_label.clone()));
@@ -1580,9 +1577,9 @@ mod tests {
         assert_eq!(hold(true).await.unwrap_err().0, StatusCode::CONFLICT);
         state.write().await.running_drive_ids.clear();
 
-        state.write().await.migrations = 1;
-        assert!(hold(true).await.is_err(), "migration in progress");
-        state.write().await.migrations = 0;
+        state.write().await.drive_setups = 1;
+        assert!(hold(true).await.is_err(), "drive setup in progress");
+        state.write().await.drive_setups = 0;
 
         // A connected, set-up drive, so start_backup gets as far as the hold check.
         {

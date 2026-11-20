@@ -3,7 +3,7 @@
 //! - newer minors (`track-X`) install automatically only if flagged `"security": true`,
 //!   otherwise the user is told and installs with one click;
 //! - a new major never installs by itself;
-//! - nothing installs while a backup, restore or drive migration runs (agent "hold").
+//! - nothing installs while a backup, restore or drive setup runs (agent "hold").
 //!
 //! The policy comes from the agent config (`update_policy`: security | all | off).
 

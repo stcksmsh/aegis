@@ -243,5 +243,4 @@ Request: `{"drive_id": "..."}` → Response: `{"path": "/tmp/aegis-passphrase-sh
 `POST /v1/maintenance`
 
 Used by the app before installing an update. `{"hold": true}` fails with `409` while a backup,
-restore or drive migration runs; once held, new ones are refused with `503` and drives are not
-migrated. `{"hold": false}` releases it. Response: `204`.
+restore or drive setup runs; once held, new ones are refused with `503`. `{"hold": false}` releases it. Response: `204`.

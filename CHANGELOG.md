@@ -3,7 +3,6 @@
 ## Unreleased (1.0.0)
 
 - One drive can hold several separate backups (e.g. one per company), each with its own passphrase. Typing a passphrase finds its backup; a passphrase that opens none asks before creating a new one.
-- Drives from Aegis 0.2 are upgraded automatically and keep working with 0.2.
 - Every backup drive now carries an AEGIS-RESTORE folder: restore your files on any Windows, Mac or Linux computer without Aegis (instructions in English and Serbian).
 - Cleaning up old backups only touches this computer's backups, so several computers can share one drive safely.
 - Settings saved by a newer Aegis version are kept when an older one runs.
@@ -12,7 +11,7 @@
 - Print a passphrase sheet per backup (name, a blank for the passphrase, restore steps in English and Serbian).
 - Automatic updates (signed): fixes for your version install by themselves when Aegis is idle, never during a backup or restore. Newer versions are offered with one click; security releases install automatically; a new major version never installs by itself. Policy: `update_policy` in the config (`security` default, `all`, `off`).
 
-## 0.2.0 — first public release
+## 0.2.0 — internal, never released
 
 - UI now follows your system's light/dark theme automatically.
 - Passphrase fields have a show/hide toggle and a strength meter ("Too short" / "Okay" / "Strong"); a new passphrase must be at least 8 characters.

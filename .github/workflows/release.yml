@@ -74,16 +74,22 @@ jobs:
           bash scripts/fetch-restic.sh ${{ matrix.target }}
           bash scripts/fetch-restore-kit.sh
 
+      # Signs the update bundles; tauri-action merges every platform into the
+      # release's latest.json. Updater artifacts are enabled only here so CI
+      # builds without the signing key keep working.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/ui
           tagName: ${{ github.ref_name }}
           releaseName: "Aegis v__VERSION__"
           releaseDraft: false
-          prerelease: false
-          args: --target ${{ matrix.target }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          includeUpdaterJson: true
+          args: --target ${{ matrix.target }} --config '{"bundle":{"createUpdaterArtifacts":true}}'
           releaseBody: |
             ## Download
 
@@ -107,3 +113,37 @@ jobs:
             **Windows**: on "Windows protected your PC", click **More info**, then **Run anyway**.
 
             Step-by-step help: [User Guide](https://github.com/stcksmsh/aegis/blob/master/docs/USER_GUIDE.md#first-launch-warning)
+
+  # Copy the release's latest.json to the update feeds the app polls:
+  # track-X.Y (fixes for X.Y) and track-X (newer minors). Prereleases never do.
+  # "[security]" in the release notes or the annotated tag message marks the
+  # update as a security release (installs automatically across minors).
+  feeds:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish update feeds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          notes="$(gh release view "$TAG" --json body -q .body; git tag -l --format='%(contents)' "$TAG")"
+          mkdir -p "$RUNNER_TEMP/feed"
+          feed="$RUNNER_TEMP/feed/latest.json"
+          gh release download "$TAG" -p latest.json -O "$feed"
+          if grep -qF '[security]' <<<"$notes"; then
+            jq '.security = true' "$feed" > "$feed.tmp" && mv "$feed.tmp" "$feed"
+          fi
+          cat "$feed"
+          version="${TAG#v}"; major="${version%%.*}"; rest="${version#*.}"; minor="${rest%%.*}"
+          for track in "track-$major.$minor" "track-$major"; do
+            gh release view "$track" > /dev/null 2>&1 || gh release create "$track" \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Update feed $track" \
+              --notes "Used by Aegis to check for updates. Download Aegis from the latest release instead."
+            gh release upload "$track" "$feed" --clobber
+          done

@@ -40,4 +40,4 @@ Non-trivial logic ships one small unit test. Trivial code needs none.
 
 ## Release
 
-Bump version in `tauri.conf.json` + both `Cargo.toml` → update `CHANGELOG.md` → tag `vX.Y.Z` → push tag. `release.yml` builds installers for all OSes and publishes the GitHub Release.
+Bump version in `tauri.conf.json` + both `Cargo.toml` → update `CHANGELOG.md` → tag `vX.Y.Z` → push tag. `release.yml` builds installers for all OSes and publishes the GitHub Release. Security fix: put `[security]` in the annotated tag message (`git tag -a vX.Y.Z -m "[security] ..."`) so updates install across minors. `-beta.N` tags publish a prerelease and leave the update feeds (`track-X.Y`, `track-X`) alone.

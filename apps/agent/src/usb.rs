@@ -421,7 +421,8 @@ async fn handle_removed(state: &SharedState, devnode: &Path) -> anyhow::Result<(
                 phase: RunPhase::Completed,
                 started_epoch: now_epoch(),
                 finished_epoch: Some(now_epoch()),
-                message: "Interrupted (drive disconnected)".to_string(),
+                message: "The drive was unplugged during the backup. Plug it in and back up again."
+                    .to_string(),
                 interrupted: true,
                 snapshot_id: None,
                 repository_id: None,

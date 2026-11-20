@@ -251,6 +251,7 @@
               <select class="instance-picker"></select>
             </label>
             <p class="muted hidden" id="dashboard-drive-space"></p>
+            <p class="last-run hidden" id="last-run-line" role="status" aria-live="polite"></p>
 
             <div class="backup-targets" id="backup-targets-section">
               <h2 class="step-label">Your drives</h2>
@@ -463,6 +464,7 @@
       </div>
     </div>
 
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
     <button class="devtools-toggle hidden" id="devtools-toggle" type="button">Devtools</button>
     <script src="app.js"></script>
     <script src="extras.js"></script>

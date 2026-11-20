@@ -152,11 +152,11 @@ pub async fn run_backup(
         let (mut status, mut message) = if summary.incomplete {
             (
                 RunStatus::Partial,
-                "Backup completed, but some files could not be read (in use or no permission)"
+                "Saved, but some files were skipped because they were open or couldn't be read. Close other apps and back up again."
                     .to_string(),
             )
         } else {
-            (RunStatus::Success, "Backup completed".to_string())
+            (RunStatus::Success, "Everything was saved.".to_string())
         };
 
         if config.quick_verify {
@@ -164,7 +164,7 @@ pub async fn run_backup(
                 &state,
                 RunPhase::VerifyingQuick,
                 RunStatus::Partial,
-                "Quick verification",
+                "Checking the backup",
                 started_epoch,
                 summary.snapshot_id.clone(),
                 false,
@@ -173,7 +173,7 @@ pub async fn run_backup(
             if let Err(err) = quick_verify(&restic, &repo_path, &passphrase).await {
                 error!("Quick verify failed: {}", Redact::new(err));
                 status = RunStatus::Partial;
-                message = "Backup completed, but verification failed".to_string();
+                message = "Saved, but Aegis couldn't confirm the backup can be read back. Back up again; if this keeps happening, try another drive.".to_string();
             }
         }
 
@@ -182,7 +182,7 @@ pub async fn run_backup(
                 &state,
                 RunPhase::VerifyingDeep,
                 RunStatus::Partial,
-                "Deep verification",
+                "Checking the backup thoroughly",
                 started_epoch,
                 summary.snapshot_id.clone(),
                 false,
@@ -191,7 +191,7 @@ pub async fn run_backup(
             if let Err(err) = deep_verify(&restic, &repo_path, &passphrase).await {
                 error!("Deep verify failed: {}", Redact::new(err));
                 status = RunStatus::Partial;
-                message = "Backup completed, but deep verification failed".to_string();
+                message = "Saved, but Aegis couldn't confirm the backup can be read back. Back up again; if this keeps happening, try another drive.".to_string();
             }
         }
 
@@ -200,7 +200,7 @@ pub async fn run_backup(
                 &state,
                 RunPhase::Pruning,
                 RunStatus::Partial,
-                "Applying retention",
+                "Cleaning up old backups",
                 started_epoch,
                 summary.snapshot_id.clone(),
                 false,
@@ -211,7 +211,7 @@ pub async fn run_backup(
             {
                 error!("Retention failed: {}", Redact::new(err));
                 status = RunStatus::Partial;
-                message = "Backup completed, but retention failed".to_string();
+                message = "Saved, but old backups couldn't be cleaned up.".to_string();
             }
         }
 
@@ -222,7 +222,7 @@ pub async fn run_backup(
         if !drive_connected {
             interrupted = true;
             status = RunStatus::Failed;
-            message = "Interrupted (drive disconnected)".to_string();
+            message = "The drive was unplugged during the backup. Plug it in and back up again.".to_string();
         }
 
         let finished_epoch = now_epoch();
@@ -271,11 +271,7 @@ pub async fn run_backup(
                     }
                 }
             }
-            notifications::notify_backup_finished(
-                &drive_label,
-                result.status == RunStatus::Success,
-                result.interrupted,
-            );
+            notifications::notify_backup_finished(&drive_label, &result.status, result.interrupted);
             let mut guard = state.write().await;
             guard.last_run = Some(result.clone());
             guard.config.update_last_seen(&drive_id);
@@ -293,11 +289,11 @@ pub async fn run_backup(
             };
             let interrupted = !drive_connected;
             let message = if interrupted {
-                "Interrupted (drive disconnected)"
+                "The drive was unplugged during the backup. Plug it in and back up again."
             } else if err.to_string() == crate::restic::WRONG_PASSPHRASE {
                 crate::restic::WRONG_PASSPHRASE
             } else {
-                "Backup failed"
+                "The backup didn't finish. Plug the drive in again and click Back up now. If it keeps failing, open the log files from Advanced."
             };
             let result = RunResult {
                 status: RunStatus::Failed,
@@ -312,7 +308,11 @@ pub async fn run_backup(
                 files_processed: None,
                 drive_almost_full: false,
             };
-            notifications::notify_backup_finished(&drive_label, false, result.interrupted);
+            notifications::notify_backup_finished(
+                &drive_label,
+                &RunStatus::Failed,
+                result.interrupted,
+            );
             let mut guard = state.write().await;
             guard.last_run = Some(result);
             Err(err)

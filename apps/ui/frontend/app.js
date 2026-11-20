@@ -397,6 +397,7 @@ async function confirmModal() {
       if (res.ok) {
         closeModal(true);
         await fetchStatus();
+        showToast("This computer forgot the drive. The backups on it are kept.");
       } else {
         const text = await res.text();
         modalError.textContent = text && text.trim() ? text.trim() : "Couldn't forget the drive. Please try again.";
@@ -452,6 +453,10 @@ async function fetchStatus() {
     agentOnline = false;
     renderBanner(null);
     updateActionState(null);
+    const summaryText = document.getElementById("dashboard-summary-text");
+    if (summaryText) summaryText.textContent = "";
+    document.querySelectorAll(".drive-detect-message").forEach((el) => { el.textContent = ""; });
+    document.getElementById("last-run-line")?.classList.add("hidden");
     console.error(err);
   }
 }
@@ -556,15 +561,15 @@ function renderStatus(status) {
         summaryText.textContent = msg ? `Backup in progress: ${msg}` : "Backup in progress…";
       }
     } else if (total === 0) {
-      summaryText.textContent = "No drives set up";
+      summaryText.textContent = "";
     } else {
+      // A drive can hold several backups, so count backups rather than drives.
       const conn = connected === 0 ? "none connected" : `${connected} connected`;
-      summaryText.textContent = `${total} drive${total !== 1 ? "s" : ""} set up · ${conn}`;
+      summaryText.textContent = `${total} backup${total !== 1 ? "s" : ""} set up · ${conn}`;
     }
   }
-  if (summaryVerify) {
-    summaryVerify.textContent = status.config?.quick_verify ? " · Quick verify on" : "";
-  }
+  if (summaryVerify) summaryVerify.textContent = "";
+  renderLastRun(status);
 
   const progressWrap = document.getElementById("backup-progress-wrap");
   const progressBar = document.getElementById("backup-progress-bar");
@@ -602,9 +607,11 @@ function renderStatus(status) {
       ? `Backing up to ${status.drive.label || "drive"}…`
       : `${status.drive.label || "Drive"} connected — another drive is backing up`;
   } else if (!status.drive?.connected) {
-    driveDetectText = total === 0 ? "Add a drive to get started" : "Plug in a drive to back up";
+    driveDetectText = total === 0 ? "" : "Plug in your Aegis drive to back up.";
   } else if (status.drive.trusted) {
-    driveDetectText = `${status.drive.label || "Drive"} connected — ready to back up`;
+    driveDetectText = status.restic_available
+      ? `${status.drive.label || "Drive"} connected — ready to back up`
+      : `${status.drive.label || "Drive"} connected`;
   } else if (!status.drive.mount_path) {
     driveDetectText = "Drive detected — select a drive below";
   } else {
@@ -631,6 +638,7 @@ function renderStatus(status) {
   const ctaHint = document.getElementById("dashboard-cta-hint");
   if (ctaHint) {
     const canBackup =
+      status.restic_available &&
       status.drive?.connected &&
       status.drive?.trusted &&
       !(status.running_drive_ids || []).includes(status.drive?.drive_id);
@@ -646,6 +654,8 @@ function renderStatus(status) {
 
   syncConfigUI(status);
 
+  // The welcome wizard is for the very first start only, not after forgetting the last drive.
+  if (!status.first_run) wizardDismissed = true;
   if (status.first_run && !wizardDismissed) {
     showView("wizard");
     renderWizard();
@@ -657,6 +667,36 @@ function renderStatus(status) {
   updateActionState(status);
   applyFirstRunMode(status);
   renderBackupTargets(status.trusted_drives || [], status);
+}
+
+function formatWhen(epoch) {
+  const day = formatLastBackup(epoch);
+  const time = new Date(epoch * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return day === "Today" || day === "Yesterday" ? `${day.toLowerCase()} at ${time}` : day;
+}
+
+// "Last backup finished today at 14:02. Everything was saved." The agent's message already says
+// what happened and what to do next; the line is colored by how it went.
+function renderLastRun(status) {
+  const el = document.getElementById("last-run-line");
+  if (!el) return;
+  const run = status.last_run;
+  if (status.running || !run?.finished_epoch) {
+    el.classList.add("hidden");
+    return;
+  }
+  const when = formatWhen(run.finished_epoch);
+  let text =
+    run.status === "Failed"
+      ? `Last backup (${when}) didn't finish. ${run.message}`
+      : `Last backup finished ${when}. ${run.message}`;
+  if (run.drive_almost_full) {
+    text += " The drive is almost full: turn on cleanup of old backups in Advanced, or use a bigger drive.";
+  }
+  el.textContent = text;
+  el.classList.remove("hidden", "warn", "alert");
+  if (run.status === "Failed") el.classList.add("alert");
+  else if (run.status === "Partial" || run.drive_almost_full) el.classList.add("warn");
 }
 
 function renderBackupTargets(trustedDrives, status) {
@@ -2300,7 +2340,6 @@ async function runRestore(includePaths, confirmMessage) {
     uiAlert("Can't connect to Aegis right now. Try restarting the app.", "Restore failed");
     return;
   }
-  notify("Restore complete", "Aegis restored your files.");
   await uiAlert(`Your files are back in ${target}. Existing files were left untouched.`, "Restore complete");
   openFolderPath(target);
 }
@@ -2363,9 +2402,9 @@ async function ejectDrive() {
     body: JSON.stringify({ mount_path: currentStatus.drive.mount_path }),
   });
   if (res.ok) {
-    notify("Drive ejected", "You can safely remove the USB drive.");
+    showToast("It's now safe to unplug the drive.");
   } else {
-    uiAlert("Couldn't eject the drive. Please try again.");
+    uiAlert((await res.text()).trim() || "Couldn't eject the drive. Please try again.");
   }
 }
 
@@ -2388,24 +2427,21 @@ async function exportRecoveryKit() {
     }),
   });
   if (res.ok) {
-    notify("Recovery kit created", "Store it somewhere safe.");
+    showToast("Drive details saved. Keep them somewhere safe.");
   } else {
     uiAlert("Couldn't create the recovery kit. Please try again.");
   }
 }
 
-function notify(title, body) {
-  if ("Notification" in window) {
-    if (Notification.permission === "granted") {
-      new Notification(title, { body });
-    } else if (Notification.permission !== "denied") {
-      Notification.requestPermission().then((permission) => {
-        if (permission === "granted") {
-          new Notification(title, { body });
-        }
-      });
-    }
-  }
+// Short in-app confirmation. (Backup results come as desktop notifications from Aegis itself.)
+let toastTimer = null;
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.add("hidden"), 6000);
 }
 
 function setupListeners() {

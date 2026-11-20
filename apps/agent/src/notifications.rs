@@ -1,6 +1,8 @@
 //! Desktop notifications for backup events and trusted device detection.
 //! Uses `notify-rust` (Linux/macOS/Windows), fire-and-forget on a thread.
 
+use crate::state::RunStatus;
+
 /// Send a desktop notification (fire-and-forget). Does not block.
 pub fn notify(title: &str, body: &str) {
     let title = title.to_string();
@@ -21,25 +23,36 @@ pub fn notify_backup_started(drive_label: &str) {
     );
 }
 
-pub fn notify_backup_finished(drive_label: &str, success: bool, interrupted: bool) {
+pub fn notify_backup_finished(drive_label: &str, status: &RunStatus, interrupted: bool) {
     let (title, body) = if interrupted {
         (
             "Backup interrupted",
             format!(
-                "Backup to \"{}\" was interrupted (drive disconnected).",
+                "The drive \"{}\" was unplugged during the backup. Plug it in and back up again.",
                 drive_label
             ),
         )
-    } else if success {
-        (
-            "Backup completed",
-            format!("Backup to \"{}\" completed successfully.", drive_label),
-        )
     } else {
-        (
-            "Backup failed",
-            format!("Backup to \"{}\" failed.", drive_label),
-        )
+        match status {
+            RunStatus::Success => (
+                "Backup completed",
+                format!("Backup to \"{}\" completed successfully.", drive_label),
+            ),
+            RunStatus::Partial => (
+                "Backup finished with warnings",
+                format!(
+                    "Backup to \"{}\" finished, but not everything went as planned. Open Aegis for details.",
+                    drive_label
+                ),
+            ),
+            RunStatus::Failed => (
+                "Backup failed",
+                format!(
+                    "Backup to \"{}\" didn't finish. Open Aegis to see why.",
+                    drive_label
+                ),
+            ),
+        }
     };
     notify(title, &body);
 }

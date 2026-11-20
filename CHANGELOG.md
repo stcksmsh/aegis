@@ -11,6 +11,17 @@
 - Print a passphrase sheet per backup (name, a blank for the passphrase, restore steps in English and Serbian).
 - Automatic updates (signed): fixes for your version install by themselves when Aegis is idle, never during a backup or restore. Newer versions are offered with one click; security releases install automatically; a new major version never installs by itself. Policy: `update_policy` in the config (`security` default, `all`, `off`).
 
+- The passphrase is asked for only when it's needed, and kept only after it worked. The choice between remembering it and typing it every time is in Settings.
+- Settings and Advanced each save only their own fields and keep what you typed while the page refreshes. Advanced is its own page.
+- The dashboard shows how the last backup went ("Last backup finished today at 14:02. Everything was saved."), with a progress bar while it runs.
+- Restore: **Browse…** to pick the folder, and **Stop restore** to stop one (files restored so far are kept).
+- Setup: plainer drive list and steps; setting a drive up again keeps its name and history. "Export recovery kit" is now **Save drive details** (Advanced).
+- Erasing a drive asks with a red **Erase drive** button that names the drive. "Forget and erase" erases first, so a failed erase leaves the drive listed.
+- Error messages for opening, erasing and updating say what to do next. A failed update can be tried again.
+- A backup's name is just **Name** everywhere; **Rename** sits with each drive.
+- Only the signed updater offers updates; the separate "Download" bar is gone.
+- Keyboard and screen readers: drive cards open with the keyboard, focus isn't lost while lists refresh, and dialogs block the page behind them. Better contrast in the light theme.
+
 ## 0.2.0 — internal, never released
 
 - UI now follows your system's light/dark theme automatically.

@@ -1,4 +1,38 @@
 const API = "http://127.0.0.1:7878/v1";
+
+// Theme: "system" (default), "light" or "dark", picked with the button in the top bar.
+// Linux web views misreport the system setting, so the app is asked first.
+const THEME_MODES = ["system", "light", "dark"];
+const THEME_LABELS = {
+  system: ["◐", "Theme: match system. Click to change."],
+  light: ["☀", "Theme: light. Click to change."],
+  dark: ["☾", "Theme: dark. Click to change."],
+};
+async function applyTheme() {
+  const mode = localStorage.getItem("aegis-theme") || "system";
+  let dark = mode === "dark";
+  if (mode === "system") {
+    const invoke = window.__TAURI__?.core?.invoke;
+    const fromApp = invoke ? await invoke("system_dark").catch(() => null) : null;
+    dark = fromApp ?? window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const button = document.getElementById("theme-toggle");
+  if (button) {
+    const [icon, label] = THEME_LABELS[mode] || THEME_LABELS.system;
+    button.textContent = icon;
+    button.title = label;
+    button.setAttribute("aria-label", label);
+  }
+}
+applyTheme();
+window.addEventListener("focus", applyTheme);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+document.getElementById("theme-toggle")?.addEventListener("click", () => {
+  const mode = localStorage.getItem("aegis-theme") || "system";
+  localStorage.setItem("aegis-theme", THEME_MODES[(THEME_MODES.indexOf(mode) + 1) % THEME_MODES.length]);
+  applyTheme();
+});
 let currentStatus = null;
 let customSources = [];
 let setupDriveCustomSources = [];
@@ -158,7 +192,12 @@ function updateActionState(status) {
   const canOperate = agentOnline && resticReady;
 
   setDisabled("run-first-backup", !canOperate || !trusted || currentDriveRunning);
-  setDisabled("backup-now", !canOperate || !trusted || currentDriveRunning);
+  const idle = idleConnectedBackups(status);
+  setDisabled("backup-now", !canOperate || idle.length === 0);
+  const backupNow = document.getElementById("backup-now");
+  if (backupNow && backupNow.dataset.busy !== "1") {
+    backupNow.textContent = idle.length > 1 ? "Back up all" : "Back up now";
+  }
   setDisabled("restore-btn", !canOperate || !trusted);
   setDisabled("load-snapshots", !canOperate || !trusted);
   setDisabled("restore-run", !canOperate || !trusted);
@@ -224,17 +263,21 @@ function openModal({ title, body, mode, drive_id, drive_label, confirmText, dang
     modalTitle.textContent = title;
     modalBody.textContent = body;
     modalError.textContent = "";
-    discontinueDrivePending = mode === "discontinue" && drive_id && drive_label ? { drive_id, drive_label } : null;
+    const typeName = mode === "discontinue" || mode === "delete-backup";
+    discontinueDrivePending = typeName && drive_id && drive_label ? { drive_id, drive_label } : null;
     renameDrivePending = mode === "rename-drive" && drive_id ? { drive_id, drive_label: drive_label || "" } : null;
 
     const needsPassphrase = mode === "passphrase";
-    const needsDiscontinue = mode === "discontinue";
+    const needsDiscontinue = typeName;
     const needsRename = mode === "rename-drive";
     if (modalField) modalField.classList.toggle("hidden", !needsPassphrase);
     const discontinueField = document.getElementById("modal-discontinue-field");
     const discontinueInput = document.getElementById("modal-discontinue-input");
     const discontinueWipe = document.getElementById("modal-discontinue-wipe");
-    if (discontinueField) discontinueField.classList.toggle("hidden", !needsDiscontinue);
+    if (discontinueField) {
+      discontinueField.classList.toggle("hidden", !needsDiscontinue);
+      discontinueField.classList.toggle("deleting", mode === "delete-backup");
+    }
     if (discontinueInput) {
       discontinueInput.value = "";
       discontinueInput.placeholder = drive_label || "";
@@ -254,8 +297,8 @@ function openModal({ title, body, mode, drive_id, drive_label, confirmText, dang
     } else if (mode === "confirm") {
       modalConfirm.textContent = confirmText || "Confirm";
       modalCancel.classList.remove("hidden");
-    } else if (mode === "discontinue") {
-      modalConfirm.textContent = "Forget";
+    } else if (mode === "discontinue" || mode === "delete-backup") {
+      modalConfirm.textContent = mode === "discontinue" ? "Forget" : "Delete backup";
       modalCancel.classList.remove("hidden");
     } else if (mode === "rename-drive") {
       modalConfirm.textContent = "Save";
@@ -266,8 +309,8 @@ function openModal({ title, body, mode, drive_id, drive_label, confirmText, dang
     }
 
     // Risky actions use a red button, and Enter/Space start on Cancel.
-    modalConfirm.classList.toggle("danger", !!danger || mode === "discontinue");
-    modalConfirm.classList.toggle("primary", !danger && mode !== "discontinue");
+    modalConfirm.classList.toggle("danger", !!danger || typeName);
+    modalConfirm.classList.toggle("primary", !danger && !typeName);
     modalOpenerElement = document.activeElement;
     setBackgroundInert(true);
     modalOverlay.classList.remove("hidden");
@@ -387,7 +430,8 @@ async function confirmModal() {
     closeModal(value);
     return;
   }
-  if (modalMode === "discontinue") {
+  if (modalMode === "discontinue" || modalMode === "delete-backup") {
+    const deleting = modalMode === "delete-backup";
     const input = document.getElementById("modal-discontinue-input");
     const value = (input?.value ?? "").trim();
     if (!discontinueDrivePending) {
@@ -399,10 +443,11 @@ async function confirmModal() {
       return;
     }
     modalError.textContent = "";
-    const wipe = document.getElementById("modal-discontinue-wipe")?.checked ?? false;
+    const wipe = !deleting && (document.getElementById("modal-discontinue-wipe")?.checked ?? false);
     if (wipe) showLoadingOverlay("Wiping drive…");
+    if (deleting) showLoadingOverlay("Deleting backup…");
     try {
-      const res = await fetch(`${API}/drives/discontinue`, {
+      const res = await fetch(`${API}/drives/${deleting ? "delete-backup" : "discontinue"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -414,15 +459,20 @@ async function confirmModal() {
       if (res.ok) {
         closeModal(true);
         await fetchStatus();
-        showToast("This computer forgot the drive. The backups on it are kept.");
+        showToast(
+          deleting
+            ? "The backup was deleted from the drive."
+            : "This computer forgot the drive. The backups on it are kept."
+        );
       } else {
         const text = await res.text();
-        modalError.textContent = text && text.trim() ? text.trim() : "Couldn't forget the drive. Please try again.";
+        modalError.textContent =
+          text && text.trim() ? text.trim() : deleting ? "Couldn't delete the backup. Please try again." : "Couldn't forget the drive. Please try again.";
       }
     } catch (err) {
       modalError.textContent = "Something went wrong. Please try again.";
     } finally {
-      if (wipe) hideLoadingOverlay();
+      if (wipe || deleting) hideLoadingOverlay();
     }
     return;
   }
@@ -767,9 +817,10 @@ function renderBackupTargets(trustedDrives, status) {
     name.textContent = d.label || d.drive_id;
     const statusBadge = document.createElement("span");
     const isDrivingBackingUp = runningDriveIds.has(d.drive_id);
+    const waiting = isDrivingBackingUp && /^Waiting/.test(progressMap[d.drive_id]?.message || "");
     if (isDrivingBackingUp) {
       statusBadge.className = "backup-target-badge backing-up";
-      statusBadge.textContent = "Backing up";
+      statusBadge.textContent = waiting ? "Waiting" : "Backing up";
     } else {
       statusBadge.className = d.is_connected ? "backup-target-badge connected" : "backup-target-badge";
       statusBadge.textContent = d.is_connected ? "Connected" : "Not connected";
@@ -784,14 +835,49 @@ function renderBackupTargets(trustedDrives, status) {
     const prog = progressMap[d.drive_id];
     if (isDrivingBackingUp && prog) {
       const pct = Math.round((prog.percent_done || 0) * 100);
-      summary.textContent = labels.length > 0
-        ? `${labels.join(", ")} · Backing up: ${pct}%`
-        : `Backing up: ${pct}%`;
+      const msg = prog.message || `Backing up: ${pct}%`;
+      summary.textContent = labels.length > 0 ? `${labels.join(", ")} · ${msg}` : msg;
     } else {
       summary.textContent = labels.length > 0 ? `${labels.join(", ")} · Last backup: ${lastBackupStr}` : `Last backup: ${lastBackupStr}`;
     }
     header.appendChild(summary);
     row.appendChild(header);
+    if (isDrivingBackingUp && prog && !waiting) {
+      const track = document.createElement("div");
+      track.className = "backup-progress-track card-progress";
+      const bar = document.createElement("div");
+      bar.className = "backup-progress-bar";
+      bar.style.width = `${Math.round((prog.percent_done || 0) * 100)}%`;
+      track.appendChild(bar);
+      row.appendChild(track);
+    }
+    if (d.is_connected) {
+      const quick = document.createElement("div");
+      quick.className = "backup-target-quick";
+      const backupBtn = document.createElement("button");
+      backupBtn.type = "button";
+      backupBtn.className = "btn primary";
+      backupBtn.textContent = "Back up now";
+      backupBtn.disabled = isDrivingBackingUp;
+      backupBtn.addEventListener("click", () => startBackup(d.drive_id));
+      const restoreBtn = document.createElement("button");
+      restoreBtn.type = "button";
+      restoreBtn.className = "btn secondary";
+      restoreBtn.textContent = "Restore…";
+      restoreBtn.addEventListener("click", () => {
+        if (pickedInstanceId !== d.drive_id) {
+          pickedInstanceId = d.drive_id;
+          document.getElementById("snapshot-list").innerHTML = "";
+          document.getElementById("snapshot-summary").textContent = "";
+          browseTreeReset();
+        }
+        showView("restore");
+        if (currentStatus) renderStatus(currentStatus);
+      });
+      quick.appendChild(backupBtn);
+      quick.appendChild(restoreBtn);
+      row.appendChild(quick);
+    }
 
     const expanded = document.createElement("div");
     expanded.className = expandedIds.has(d.drive_id) ? "backup-target-expanded" : "backup-target-expanded hidden";
@@ -871,7 +957,8 @@ function renderBackupTargets(trustedDrives, status) {
         title: "Forget this drive on this computer",
         body:
           "This computer stops backing up to this drive and forgets its saved passphrase. " +
-          "The backups on the drive are kept, and other computers can keep using it.\n\n" +
+          "The backups on the drive are kept, and other computers can keep using it. " +
+          "This works even if the drive is lost or broken.\n\n" +
           "Handing the drive over to someone else? Also delete any copies of the backed-up files " +
           "that should not stay on this computer.",
         mode: "discontinue",
@@ -880,6 +967,27 @@ function renderBackupTargets(trustedDrives, status) {
       });
     });
     expanded.appendChild(discontinueBtn);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn ghost backup-target-discontinue";
+    deleteBtn.textContent = "Delete from drive";
+    deleteBtn.disabled = !canEdit;
+    deleteBtn.title = !d.is_connected ? "Connect this drive to delete the backup from it" : isDrivingBackingUp ? "Backup in progress" : "";
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!canEdit) return;
+      openModal({
+        title: `Delete "${d.label || "this backup"}" from the drive`,
+        body:
+          "This deletes this backup and all its saved versions from the drive, and this computer forgets it. " +
+          "Nobody, not even Aegis, can get these files back from the drive afterwards. " +
+          "Other backups on the same drive are not touched.",
+        mode: "delete-backup",
+        drive_id: d.drive_id,
+        drive_label: d.label || "",
+      });
+    });
+    expanded.appendChild(deleteBtn);
     row.appendChild(expanded);
 
     header.addEventListener("click", () => {
@@ -929,6 +1037,8 @@ function openEditFoldersModal(d) {
   const title = document.getElementById("edit-folders-title");
   if (title) title.textContent = `Edit folders — ${editFoldersPending.drive_label || "Drive"}`;
   document.getElementById("edit-folders-error").textContent = "";
+  document.getElementById("edit-folders-custom-label").value = "";
+  document.getElementById("edit-folders-custom-path").value = "";
   editFoldersOpenerElement = document.activeElement;
   document.getElementById("edit-folders-overlay").classList.remove("hidden");
   setTimeout(() => docs?.focus(), 0);
@@ -948,38 +1058,12 @@ function closeEditFoldersModal() {
 let editFoldersCustomSources = [];
 
 function renderEditFoldersCustomList() {
-  const list = document.getElementById("edit-folders-custom-list");
-  if (!list) return;
-  list.innerHTML = "";
-  if (editFoldersCustomSources.length === 0) {
-    const hint = document.createElement("p");
-    hint.className = "muted";
-    hint.textContent = "None yet. Click Add folder to choose one.";
-    list.appendChild(hint);
-  }
-  editFoldersCustomSources.forEach((item, index) => {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    const text = document.createElement("span");
-    text.className = "chip-text";
-    text.textContent = `${item.label} · ${item.path}`;
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "chip-remove";
-    removeBtn.textContent = "×";
-    removeBtn.setAttribute("aria-label", `Remove ${item.label}`);
-    removeBtn.addEventListener("click", () => {
-      editFoldersCustomSources.splice(index, 1);
-      renderEditFoldersCustomList();
-    });
-    chip.appendChild(text);
-    chip.appendChild(removeBtn);
-    list.appendChild(chip);
-  });
+  renderFolderChips(document.getElementById("edit-folders-custom-list"), editFoldersCustomSources, renderEditFoldersCustomList);
 }
 
 async function saveEditFolders() {
   if (!editFoldersPending) return;
+  addPendingFolders();
   const docs = document.getElementById("edit-folders-docs");
   const pics = document.getElementById("edit-folders-pics");
   const desktop = document.getElementById("edit-folders-desktop");
@@ -999,8 +1083,17 @@ async function saveEditFolders() {
       }),
     });
     if (res.ok) {
+      const driveId = editFoldersPending.drive_id;
+      const before = new Set((editFoldersPending.backup_sources || []).map((s) => s.path));
+      const added = backup_sources.some((s) => !before.has(s.path));
       closeEditFoldersModal();
       await fetchStatus();
+      // New folders aren't in any backup yet: back up now if the drive is here.
+      const connected = (currentStatus?.trusted_drives || []).some((d) => d.drive_id === driveId && d.is_connected);
+      if (added && connected) {
+        showToast("Folders saved. Backing up now to include the new ones.");
+        startBackup(driveId);
+      }
     } else {
       const text = await res.text();
       errEl.textContent = text && text.trim() ? text.trim() : "Couldn't update folders. Please try again.";
@@ -1026,6 +1119,18 @@ async function pickFolder() {
   }
 }
 
+// A folder picked or typed but not yet added with Add is added when the user moves on
+// (Next, Set up, Save), so it isn't silently left out.
+function addPendingFolders() {
+  [
+    [customSources, "custom-label", "custom-path", renderCustomSources],
+    [setupDriveCustomSources, "setup-drive-custom-label", "setup-drive-custom-path", renderSetupDriveCustomSources],
+    [editFoldersCustomSources, "edit-folders-custom-label", "edit-folders-custom-path", renderEditFoldersCustomList],
+  ].forEach(([list, labelId, pathId, render]) => {
+    if (document.getElementById(pathId)?.value.trim()) addCustomFolder(list, labelId, pathId, render);
+  });
+}
+
 function folderName(path) {
   return path.split(/[\\/]/).filter(Boolean).pop() || "Folder";
 }
@@ -1039,7 +1144,13 @@ function addCustomFolder(list, labelId, pathId, render) {
     uiAlert("Choose a folder first.");
     return;
   }
-  list.push({ label: labelEl.value.trim() || folderName(path), path });
+  const label = labelEl.value.trim() || folderName(path);
+  const clash = folderClash(list, label, path);
+  if (clash) {
+    uiAlert(clash, "Add folder");
+    return;
+  }
+  list.push({ label, path });
   labelEl.value = "";
   pathEl.value = "";
   render();
@@ -1541,6 +1652,7 @@ function validateWizardStep(step) {
 }
 
 function goWizardNext() {
+  addPendingFolders();
   if (!validateWizardStep(wizardStep)) return;
   if (wizardStep === 2) {
     setupDriveFromSelection().then((ok) => {
@@ -1567,7 +1679,7 @@ function updateWizardSummary(status) {
   const remember = !!document.getElementById("remember-passphrase")?.checked;
   const auto = !!status.config?.auto_backup_on_insert && remember;
   const summaryItems = [
-    `Aegis backs up: ${sources.map((s) => s.label).join(", ") || "nothing yet (add folders under Your drives)"}.`,
+    `Aegis backs up: ${sources.map((s) => s.label).join(", ") || "nothing yet (add folders under Your backups)"}.`,
     auto
       ? "Backups start by themselves whenever you plug in this drive."
       : "Plug in the drive and click Back up now to make a backup.",
@@ -1613,17 +1725,58 @@ function buildSetupDriveBackupSources() {
   return sources;
 }
 
-function renderSetupDriveCustomSources() {
-  const list = document.getElementById("setup-drive-custom-list");
-  if (!list) return;
-  list.innerHTML = "";
-  setupDriveCustomSources.forEach((item, index) => {
+// Folder chips (wizard, Add backup, Edit folders): name · location, rename (✎) and remove (×).
+function renderFolderChips(listEl, list, rerender) {
+  if (!listEl) return;
+  listEl.innerHTML = "";
+  list.forEach((item, index) => {
     const li = document.createElement("li");
     li.className = "chip";
     const span = document.createElement("span");
     span.className = "chip-text";
     span.textContent = `${item.label} · ${item.path}`;
     span.title = item.path;
+    const renameBtn = document.createElement("button");
+    renameBtn.type = "button";
+    renameBtn.className = "chip-remove chip-rename";
+    renameBtn.textContent = "✎";
+    renameBtn.title = "Rename";
+    renameBtn.setAttribute("aria-label", `Rename ${item.label}`);
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "chip-input";
+      input.value = item.label;
+      input.setAttribute("aria-label", `New name for ${item.label}`);
+      let done = false;
+      const finish = (save) => {
+        if (done) return;
+        done = true;
+        const name = input.value.trim();
+        if (save && name && name !== item.label) {
+          const clash = folderClash(list, name, null, item);
+          if (clash) uiAlert(clash, "Rename folder");
+          else item.label = name;
+        }
+        rerender();
+      };
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          finish(true);
+        } else if (ev.key === "Escape") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(false);
+        }
+      });
+      input.addEventListener("blur", () => finish(true));
+      span.replaceWith(input);
+      renameBtn.remove();
+      input.focus();
+      input.select();
+    });
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.className = "chip-remove";
@@ -1631,39 +1784,34 @@ function renderSetupDriveCustomSources() {
     removeBtn.textContent = "×";
     removeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      setupDriveCustomSources.splice(index, 1);
-      renderSetupDriveCustomSources();
+      list.splice(index, 1);
+      rerender();
     });
     li.appendChild(span);
+    li.appendChild(renameBtn);
     li.appendChild(removeBtn);
-    list.appendChild(li);
+    listEl.appendChild(li);
   });
 }
 
+// Why a folder can't be added (or renamed) to `list`, or null. Default folders count as taken.
+function folderClash(list, label, path, skip) {
+  const norm = (p) => (p || "").trim().replace(/[\\/]+$/, "");
+  const taken = [...DEFAULT_SOURCES, ...list].filter((s) => s !== skip);
+  if (path && taken.some((s) => norm(s.path) === norm(path))) return "That folder is already in the list.";
+  if (taken.some((s) => s.label.toLowerCase() === label.toLowerCase()))
+    return `There's already a folder named "${label}". Pick another name.`;
+  return null;
+}
+
+function renderSetupDriveCustomSources() {
+  renderFolderChips(document.getElementById("setup-drive-custom-list"), setupDriveCustomSources, renderSetupDriveCustomSources);
+}
+
 function renderCustomSources() {
-  const list = document.getElementById("custom-list");
-  if (!list) return;
-  list.innerHTML = "";
-  customSources.forEach((item, index) => {
-    const li = document.createElement("li");
-    li.className = "chip";
-    const span = document.createElement("span");
-    span.className = "chip-text";
-    span.textContent = `${item.label} · ${item.path}`;
-    span.title = item.path;
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "chip-remove";
-    removeBtn.setAttribute("aria-label", `Remove ${item.label}`);
-    removeBtn.textContent = "×";
-    removeBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      customSources.splice(index, 1);
-      renderCustomSources();
-    });
-    li.appendChild(span);
-    li.appendChild(removeBtn);
-    list.appendChild(li);
+  renderFolderChips(document.getElementById("custom-list"), customSources, () => {
+    renderCustomSources();
+    updateWizardSummary(currentStatus || { drive: { connected: false } });
   });
 }
 
@@ -1749,9 +1897,21 @@ async function saveConfig(payload, savedNoteId) {
   }
 }
 
-// After "Add drive" opened a backup that other computers already use (e.g. a handover):
+// After "Add backup" opened a backup that other computers already use (e.g. a handover):
 // show their folders so the user can pick the matching ones on this computer.
 function showHandoverInfo(data) {
+  if (data?.joined) {
+    const name = (currentStatus?.trusted_drives || []).find((d) => d.drive_id === data.drive_id)?.label || "your backup";
+    // Back up right away, so the added folders are in a backup.
+    startBackup(data.drive_id);
+    uiAlert(
+      `This passphrase belongs to "${name}", a backup this computer already uses, so the folders you chose were added to it. ` +
+        "Aegis is backing it up now to include them.\n\n" +
+        "For a separate backup, use a different passphrase.",
+      "Added to an existing backup"
+    );
+    return;
+  }
   if (!data?.existing || !(data.previous_computers || []).length) return;
   const lines = data.previous_computers.map(
     (c) =>
@@ -1761,7 +1921,7 @@ function showHandoverInfo(data) {
   uiAlert(
     "This computer now continues an existing backup. Earlier backups stay on the drive and can still be restored.\n\n" +
       "Folders backed up so far:\n" + lines.join("\n") +
-      "\n\nIf this computer keeps the same files in other folders, open the drive under Your drives and choose Edit folders.",
+      "\n\nIf this computer keeps the same files in other folders, open it under Your backups and choose Edit folders.",
     "Continuing an existing backup"
   );
 }
@@ -1972,6 +2132,7 @@ async function setupDriveFromSelectionForAddDrive() {
         await fetchStatus();
       }
 
+    addPendingFolders();
     const labelRaw = document.getElementById("setup-drive-label")?.value?.trim();
     const payload = {
       mount_path: mountPath,
@@ -2156,8 +2317,20 @@ async function setupDriveFromSelection() {
   }
 }
 
-async function startBackup() {
-  if (!currentStatus?.drive?.drive_id) {
+// Backups on the plugged-in drive that could start now (set up here, not already running).
+function idleConnectedBackups(status = currentStatus) {
+  const running = status?.running_drive_ids || [];
+  const trusted = status?.trusted_drives || [];
+  return (status?.drive?.instance_ids || []).filter(
+    (id) => trusted.some((d) => d.drive_id === id) && !running.includes(id)
+  );
+}
+
+// One backup (from its card), or every idle backup on the plugged-in drive. Backups on the
+// same drive run one after another; the agent queues them.
+async function startBackup(driveId) {
+  const ids = typeof driveId === "string" ? [driveId] : idleConnectedBackups();
+  if (!ids.length) {
     uiAlert("Connect your Aegis drive first.");
     return;
   }
@@ -2165,16 +2338,20 @@ async function startBackup() {
     uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
     return;
   }
-
-  const result = await postWithPassphrase(
-    "/backup/run",
-    { drive_id: currentStatus.drive.drive_id },
-    "Enter your passphrase to start the backup.",
-    { verifies: false }
-  );
-  if (!result) return;
-  if (!result.res.ok) {
-    uiAlert(result.detail || "Couldn't start the backup. Please try again.", "Backup not started");
+  for (const id of ids) {
+    const name = (currentStatus?.trusted_drives || []).find((d) => d.drive_id === id)?.label || "this backup";
+    const result = await postWithPassphrase(
+      "/backup/run",
+      { drive_id: id },
+      ids.length > 1 || typeof driveId === "string"
+        ? `Enter the passphrase for "${name}" to start its backup.`
+        : "Enter your passphrase to start the backup.",
+      { verifies: false }
+    );
+    if (!result) return;
+    if (!result.res.ok) {
+      uiAlert(result.detail || "Couldn't start the backup. Please try again.", "Backup not started");
+    }
   }
 }
 
@@ -2537,16 +2714,22 @@ function setupListeners() {
     addCustomFolder(setupDriveCustomSources, "setup-drive-custom-label", "setup-drive-custom-path", renderSetupDriveCustomSources);
   document.getElementById("add-custom").addEventListener("click", wizardAdd);
   document.getElementById("setup-drive-add-custom").addEventListener("click", addDriveAdd);
-  // A folder picked with Browse… is added right away.
+  const editFoldersAdd = () =>
+    addCustomFolder(editFoldersCustomSources, "edit-folders-custom-label", "edit-folders-custom-path", renderEditFoldersCustomList);
+  document.getElementById("edit-folders-add-custom").addEventListener("click", editFoldersAdd);
+  // Browse… fills in the location (and the name, if empty); Add adds it.
   [
-    ["browse-folder", "custom-path", wizardAdd],
-    ["setup-drive-browse", "setup-drive-custom-path", addDriveAdd],
-  ].forEach(([buttonId, pathId, add]) => {
+    ["browse-folder", "custom-path", "custom-label", "add-custom"],
+    ["setup-drive-browse", "setup-drive-custom-path", "setup-drive-custom-label", "setup-drive-add-custom"],
+    ["edit-folders-browse", "edit-folders-custom-path", "edit-folders-custom-label", "edit-folders-add-custom"],
+  ].forEach(([buttonId, pathId, labelId, addId]) => {
     document.getElementById(buttonId).addEventListener("click", async () => {
       const path = await pickFolder();
       if (!path) return;
       document.getElementById(pathId).value = path;
-      add();
+      const labelEl = document.getElementById(labelId);
+      if (!labelEl.value.trim()) labelEl.value = folderName(path);
+      document.getElementById(addId).focus();
     });
   });
   [
@@ -2638,7 +2821,7 @@ function setupListeners() {
     });
 
   document.getElementById("backup-now").addEventListener("click", () =>
-    withBusy("backup-now", "Starting…", startBackup)
+    withBusy("backup-now", "Starting…", () => startBackup())
   );
   document.getElementById("restore-btn").addEventListener("click", () => showView("restore"));
   document.getElementById("eject-btn").addEventListener("click", () =>
@@ -2710,7 +2893,6 @@ function setupListeners() {
 
   const editFoldersCancel = document.getElementById("edit-folders-cancel");
   const editFoldersSave = document.getElementById("edit-folders-save");
-  const editFoldersAdd = document.getElementById("edit-folders-add");
   if (editFoldersCancel) {
     editFoldersCancel.addEventListener("click", closeEditFoldersModal);
   }
@@ -2742,25 +2924,6 @@ function setupListeners() {
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault();
         first.focus();
-      }
-    });
-  }
-  if (editFoldersAdd) {
-    editFoldersAdd.addEventListener("click", async () => {
-      const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
-      if (typeof invoke !== "function") {
-        document.getElementById("edit-folders-error").textContent = "Folder picker not available.";
-        return;
-      }
-      try {
-        const path = await invoke("select_folder");
-        if (path) {
-          const label = path.split(/[/\\]/).filter(Boolean).pop() || "Folder";
-          editFoldersCustomSources.push({ label, path });
-          renderEditFoldersCustomList();
-        }
-      } catch (err) {
-        document.getElementById("edit-folders-error").textContent = "Could not select folder.";
       }
     });
   }

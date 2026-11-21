@@ -20,13 +20,16 @@
             <span class="brand-tag">Secure USB Backup</span>
           </div>
         </div>
+        <div class="top-right">
         <nav class="nav" id="top-nav">
           <button class="nav-btn" data-view="dashboard">Dashboard</button>
-          <button class="nav-btn" data-view="setup-drive">Add drive</button>
+          <button class="nav-btn" data-view="setup-drive">Add backup</button>
           <button class="nav-btn" data-view="restore">Restore</button>
           <button class="nav-btn" data-view="settings">Settings</button>
           <button class="nav-btn" data-view="advanced">Advanced</button>
         </nav>
+        <button class="theme-btn" id="theme-toggle" type="button" aria-label="Theme: match system" title="Theme: match system">◐</button>
+        </div>
       </header>
 
       <div id="status-banner" class="status-banner hidden" role="status" aria-live="polite"></div>
@@ -55,7 +58,7 @@
                   <label><input type="checkbox" id="src-desktop" checked /> Desktop <span class="muted">(~/Desktop)</span></label>
                 </div>
                 <div class="field-row">
-                  <input id="custom-label" type="text" placeholder="Custom folder label" aria-label="Custom folder label" />
+                  <input id="custom-label" type="text" placeholder="Name (optional)" aria-label="Folder name" />
                   <input id="custom-path" type="text" placeholder="Folder location" aria-label="Folder location" />
                   <button class="btn ghost" id="browse-folder" type="button">Browse…</button>
                   <button class="btn secondary" id="add-custom" type="button">Add</button>
@@ -154,9 +157,10 @@
 
         <section id="setup-drive" class="view hidden">
           <div class="panel">
-            <h1>Set up a new drive</h1>
+            <h1>Add a backup</h1>
             <p class="lead">
-              Add another USB drive for Aegis to back up to. Choose the drive, open or format it, then set a passphrase.
+              Back up to a USB drive: a new one, or one that already holds backups. Choose the drive, then type a
+              passphrase: a new one for a separate backup, or an existing backup's passphrase to use it here.
             </p>
             <div class="device-panel">
               <div class="device-panel-header">
@@ -184,7 +188,7 @@
               <label><input type="checkbox" id="setup-drive-src-desktop" checked /> Desktop <span class="muted">(~/Desktop)</span></label>
             </div>
             <div class="field-row">
-              <input id="setup-drive-custom-label" type="text" placeholder="Custom folder label" aria-label="Custom folder label" />
+              <input id="setup-drive-custom-label" type="text" placeholder="Name (optional)" aria-label="Folder name" />
               <input id="setup-drive-custom-path" type="text" placeholder="Folder location" aria-label="Folder location" />
               <button class="btn ghost" id="setup-drive-browse" type="button">Browse…</button>
               <button class="btn secondary" id="setup-drive-add-custom" type="button">Add</button>
@@ -232,7 +236,7 @@
         <section id="dashboard" class="view">
           <div class="panel">
             <div class="dashboard-summary" id="dashboard-summary">
-              <span id="dashboard-summary-text">No drives set up</span>
+              <span id="dashboard-summary-text">No backups set up</span>
               <span class="muted" id="dashboard-summary-verify"></span>
             </div>
             <div class="backup-progress-wrap hidden" id="backup-progress-wrap">
@@ -242,19 +246,16 @@
               <p class="backup-progress-text muted" id="backup-progress-text" aria-live="polite"></p>
             </div>
             <p class="muted drive-detect-message">Waiting for drive…</p>
-            <label class="field-row instance-picker-row hidden">Backup on this drive:
-              <select class="instance-picker"></select>
-            </label>
             <p class="muted hidden" id="dashboard-drive-space"></p>
             <p class="last-run hidden" id="last-run-line" role="status" aria-live="polite"></p>
 
             <div class="backup-targets" id="backup-targets-section">
-              <h2 class="step-label">Your drives</h2>
+              <h2 class="step-label">Your backups</h2>
               <p class="muted">What is backed up and to which drive.</p>
               <div id="backup-targets-list" class="backup-targets-list"></div>
               <div id="backup-targets-empty" class="empty-state muted">
-                <p>No drives set up yet.</p>
-                <button class="btn primary" id="backup-targets-empty-add" type="button">Add drive</button>
+                <p>No backups set up yet.</p>
+                <button class="btn primary" id="backup-targets-empty-add" type="button">Add backup</button>
               </div>
             </div>
 
@@ -357,7 +358,7 @@
             </div>
             <div class="field">
               <h2 class="step-label" style="margin-top: 0;">Clean up old backups</h2>
-              <p class="muted">Aegis can automatically remove older backups to save space, while keeping a spread of recent, daily, weekly, monthly and yearly copies.</p>
+              <p class="muted">Files you delete stay in older backups, so you can still get them back. Aegis removes older backups to save space, keeping a spread of recent, daily, weekly, monthly and yearly copies. At first: one per day for 7 days, per week for 4 weeks, per month for 12 months.</p>
               <div class="retention-grid">
                 <div class="field">
                   <label for="keep-last">Always keep this many newest backups</label>
@@ -434,7 +435,7 @@
     </div>
 
     <div id="edit-folders-overlay" class="modal hidden">
-      <div class="modal-card" style="max-width: 28rem;" role="dialog" aria-modal="true" aria-labelledby="edit-folders-title">
+      <div class="modal-card" style="max-width: 44rem;" role="dialog" aria-modal="true" aria-labelledby="edit-folders-title">
         <h2 id="edit-folders-title">Edit folders</h2>
         <p class="muted">Choose which folders to back up to this drive.</p>
         <div class="checkbox" style="margin-top: 12px;">
@@ -451,8 +452,13 @@
         </div>
         <div class="field" style="margin-top: 12px;">
           <p class="field-title">Other folders</p>
-          <div id="edit-folders-custom-list"></div>
-          <button type="button" class="btn ghost" id="edit-folders-add">Add folder</button>
+          <div class="field-row">
+            <input id="edit-folders-custom-label" type="text" placeholder="Name (optional)" aria-label="Folder name" />
+            <input id="edit-folders-custom-path" type="text" placeholder="Folder location" aria-label="Folder location" />
+            <button class="btn ghost" id="edit-folders-browse" type="button">Browse…</button>
+            <button class="btn secondary" id="edit-folders-add-custom" type="button">Add</button>
+          </div>
+          <ul id="edit-folders-custom-list" class="chip-list"></ul>
         </div>
         <div id="edit-folders-error" role="alert" style="margin-top: 8px;"></div>
         <div class="actions" style="margin-top: 16px;">

@@ -3,7 +3,7 @@
 mod updater;
 
 use std::path::PathBuf;
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
@@ -49,17 +49,94 @@ fn open_in_file_manager(path: &std::path::Path) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Tray status line, updated by the frontend whenever it polls agent status.
-struct TrayStatus(MenuItem<tauri::Wry>);
+/// A backup on the plugged-in drive, as the tray lists it.
+#[derive(serde::Deserialize)]
+struct TrayBackup {
+    id: String,
+    label: String,
+    running: bool,
+}
 
+/// The tray's status line (updated in place) and what the menu was last built from.
+struct TrayState(std::sync::Mutex<(Option<MenuItem<tauri::Wry>>, String)>);
+
+/// Called by the frontend whenever it polls agent status. `drive`: the plugged-in drive's name.
+/// The menu is rebuilt only when the drive or its backups change, so an open menu isn't closed
+/// by every refresh.
 #[tauri::command]
-fn set_tray_status(app: AppHandle, text: String) {
-    if let Some(item) = app.try_state::<TrayStatus>() {
-        let _ = item.0.set_text(&text);
-    }
+fn set_tray_status(app: AppHandle, text: String, backups: Vec<TrayBackup>, drive: Option<String>) {
     if let Some(tray) = app.tray_by_id("main") {
         let _ = tray.set_tooltip(Some(format!("Aegis — {}", text)));
     }
+    let Some(state) = app.try_state::<TrayState>() else {
+        return;
+    };
+    let mut current = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let key = format!(
+        "{:?} {:?}",
+        backups
+            .iter()
+            .map(|b| (&b.id, &b.label, b.running))
+            .collect::<Vec<_>>(),
+        drive
+    );
+    if current.1 == key {
+        if let Some(item) = &current.0 {
+            let _ = item.set_text(&text);
+        }
+        return;
+    }
+    if let (Ok((menu, status)), Some(tray)) = (
+        tray_menu(&app, &text, &backups, drive.as_deref()),
+        app.tray_by_id("main"),
+    ) {
+        let _ = tray.set_menu(Some(menu));
+        *current = (Some(status), key);
+    }
+}
+
+/// Status line; the plugged-in drive's name, then "Back up "<name>"" per backup on it, "Back up
+/// all" when there are several, and "Eject"; Open; Quit.
+fn tray_menu(
+    app: &AppHandle,
+    text: &str,
+    backups: &[TrayBackup],
+    drive: Option<&str>,
+) -> tauri::Result<(Menu<tauri::Wry>, MenuItem<tauri::Wry>)> {
+    let item = |id: String, label: String, enabled: bool| {
+        MenuItem::with_id(app, id, label, enabled, None::<&str>)
+    };
+    let status = item("status".into(), text.into(), false)?;
+    let menu = Menu::new(app)?;
+    menu.append(&status)?;
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    if let Some(name) = drive {
+        menu.append(&item("drive".into(), name.into(), false)?)?;
+    }
+    for b in backups {
+        menu.append(&item(
+            format!("backup:{}", b.id),
+            format!("Back up \"{}\"", b.label),
+            !b.running,
+        )?)?;
+    }
+    if backups.len() > 1 {
+        menu.append(&item(
+            "backup-all".into(),
+            "Back up all".into(),
+            backups.iter().any(|b| !b.running),
+        )?)?;
+    }
+    if let Some(name) = drive {
+        let busy = backups.iter().any(|b| b.running);
+        menu.append(&item("eject".into(), format!("Eject {name}"), !busy)?)?;
+    }
+    if drive.is_some() || !backups.is_empty() {
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+    }
+    menu.append(&item("open".into(), "Open Aegis".into(), true)?)?;
+    menu.append(&item("quit".into(), "Quit Aegis".into(), true)?)?;
+    Ok((menu, status))
 }
 
 #[tauri::command]
@@ -72,6 +149,39 @@ async fn select_folder(app: AppHandle) -> Option<String> {
         let _ = tx.send(selection);
     });
     rx.await.unwrap_or(None)
+}
+
+/// Whether the desktop prefers a dark theme (None: no preference / unknown). Linux only: there the
+/// web view's prefers-color-scheme and Tauri's theme check both miss many dark themes.
+#[tauri::command]
+fn system_dark() -> Option<bool> {
+    #[cfg(target_os = "linux")]
+    {
+        use zbus::zvariant::Value;
+        let conn = zbus::blocking::Connection::session().ok()?;
+        let reply = conn
+            .call_method(
+                Some("org.freedesktop.portal.Desktop"),
+                "/org/freedesktop/portal/desktop",
+                Some("org.freedesktop.portal.Settings"),
+                "Read",
+                &("org.freedesktop.appearance", "color-scheme"),
+            )
+            .ok()?;
+        let body = reply.body();
+        let mut value: Value = body.deserialize().ok()?;
+        // Read wraps the setting in one or two extra variants.
+        while let Value::Value(inner) = value {
+            value = *inner;
+        }
+        match u32::try_from(value).ok()? {
+            1 => Some(true),
+            2 => Some(false),
+            _ => None,
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    None
 }
 
 #[tauri::command]
@@ -128,6 +238,11 @@ fn default_autostart_once(app: &AppHandle) {
 
 fn show_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        // GNOME ignores un-minimize and raise requests from a background app (focus-stealing
+        // prevention); hiding and showing the window again brings it to the front.
+        if window.is_minimized().unwrap_or(false) || !window.is_focused().unwrap_or(false) {
+            let _ = window.hide();
+        }
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -136,26 +251,35 @@ fn show_main(app: &AppHandle) {
 
 /// Tray icon keeps Aegis running (and watching for drives) after the window closes.
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
-    let status = MenuItem::with_id(app, "status", "Aegis is running", false, None::<&str>)?;
-    let backup = MenuItem::with_id(app, "backup", "Back up now", true, None::<&str>)?;
-    let open = MenuItem::with_id(app, "open", "Open Aegis", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Aegis", true, None::<&str>)?;
-    let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&status, &sep, &backup, &open, &quit])?;
-    app.manage(TrayStatus(status));
+    let (menu, status) = tray_menu(app, "Aegis is running", &[], None)?;
+    app.manage(TrayState(std::sync::Mutex::new((
+        Some(status),
+        String::new(),
+    ))));
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip("Aegis backup")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "open" => show_main(app),
-            "backup" => {
-                // Frontend runs the normal "Back up now" flow (may need to ask for the passphrase).
+        .on_menu_event(|app, event| {
+            let id = event.id.as_ref();
+            // The frontend runs the normal flows (may need to ask for the passphrase), so show it.
+            if let Some(backup) = id.strip_prefix("backup:") {
                 show_main(app);
-                let _ = app.emit("tray-backup", ());
+                let _ = app.emit("tray-backup", Some(backup.to_string()));
             }
-            "quit" => app.exit(0),
-            _ => {}
+            match id {
+                "open" => show_main(app),
+                "backup-all" => {
+                    show_main(app);
+                    let _ = app.emit("tray-backup", None::<String>);
+                }
+                // The tray choice is the confirmation; the result comes as a notification.
+                "eject" => {
+                    let _ = app.emit("tray-eject", ());
+                }
+                "quit" => app.exit(0),
+                _ => {}
+            }
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -191,6 +315,7 @@ fn main() {
             select_folder,
             open_path,
             is_dev_build,
+            system_dark,
             toggle_devtools,
             get_autostart,
             set_autostart,

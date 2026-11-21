@@ -20,18 +20,72 @@
     return `Last backup: ${ago(last)}`;
   }
 
+  // Backups on the plugged-in drive, for the tray's per-backup entries.
+  function trayBackups(status) {
+    const trusted = status.trusted_drives || [];
+    const running = status.running_drive_ids || [];
+    return (status.drive?.instance_ids || [])
+      .map((id) => ({ id, label: trusted.find((d) => d.drive_id === id)?.label, running: running.includes(id) }))
+      .filter((b) => b.label);
+  }
+
+  // The plugged-in drive's name for the tray ("DataTraveler 3.0 (57.8 GB)"). Looked up only
+  // when a different drive appears: listing devices scans the disks.
+  let driveName = { mount: null, name: null };
+  async function trayDriveName(mount) {
+    if (!mount) return null;
+    if (driveName.mount !== mount) {
+      let name = "USB drive";
+      try {
+        const res = await fetch("http://127.0.0.1:7878/v1/devices");
+        const devices = res.ok ? (await res.json()).devices || [] : [];
+        const dev = devices.find((d) => (d.partitions || []).some((p) => (p.mountpoints || []).includes(mount)));
+        if (dev) name = `${dev.model || "USB drive"} (${String(dev.size || "").replace(/([0-9.]+)([KMGT])$/, "$1 $2B")})`;
+      } catch (_) {
+        /* keep the generic name */
+      }
+      driveName = { mount, name };
+    }
+    return driveName.name;
+  }
+
   async function refreshTray() {
     try {
       const res = await fetch("http://127.0.0.1:7878/v1/status");
-      if (res.ok) await invoke("set_tray_status", { text: trayText(await res.json()) });
+      if (!res.ok) return;
+      const status = await res.json();
+      const mount = status.drive?.connected ? status.drive?.mount_path : null;
+      await invoke("set_tray_status", {
+        text: trayText(status),
+        backups: trayBackups(status),
+        drive: await trayDriveName(mount),
+      });
     } catch (_) {
       /* agent starting up; next tick retries */
     }
   }
   refreshTray();
-  setInterval(refreshTray, 10000);
+  setInterval(refreshTray, 3000);
 
-  tauri.event?.listen("tray-backup", () => document.getElementById("backup-now")?.click());
+  tauri.event?.listen("tray-backup", (event) =>
+    event.payload ? startBackup(event.payload) : document.getElementById("backup-now")?.click()
+  );
+  // Eject from the tray: no window and no extra confirm; Aegis notifies the result.
+  tauri.event?.listen("tray-eject", async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:7878/v1/status");
+      const mount = res.ok ? (await res.json()).drive?.mount_path : null;
+      if (!mount) return;
+      await fetch("http://127.0.0.1:7878/v1/drives/eject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mount_path: mount, notify: true }),
+      });
+      refreshTray();
+    } catch (_) {
+      /* agent unreachable; nothing to eject */
+    }
+  });
 
   // Version line at the bottom of Settings, for bug reports.
   tauri.app.getVersion().then((v) => {

@@ -1,4 +1,5 @@
 use crate::config::BackupSource;
+use crate::i18n::{t, tr};
 use crate::logging::Redact;
 use crate::notifications;
 use crate::restic::Restic;
@@ -34,7 +35,7 @@ pub async fn run_backup(
             state.write().await.backup_progress.insert(
                 drive_id.clone(),
                 BackupProgress {
-                    message: "Waiting for the other backup on this drive to finish".to_string(),
+                    message: t("waiting_for_other_backup"),
                     ..Default::default()
                 },
             );
@@ -46,7 +47,7 @@ pub async fn run_backup(
         &state,
         RunPhase::BackingUp,
         RunStatus::Partial,
-        "Starting backup",
+        &t("starting_backup"),
         started_epoch,
         None,
         false,
@@ -138,9 +139,13 @@ pub async fn run_backup(
                 let pct = (report.percent_done * 100.0) as u32;
                 let progress = BackupProgress {
                     percent_done: report.percent_done,
-                    message: format!(
-                        "Backing up: {}% ({} / {} files)",
-                        pct, report.files_done, report.total_files
+                    message: tr(
+                        "backing_up_files",
+                        &[
+                            ("pct", &pct.to_string()),
+                            ("done", &report.files_done.to_string()),
+                            ("total", &report.total_files.to_string()),
+                        ],
                     ),
                     files_done: report.files_done,
                     total_files: report.total_files,
@@ -168,24 +173,19 @@ pub async fn run_backup(
             (
                 RunStatus::Partial,
                 format!(
-                    "Saved, but these folders weren't found on this computer: {}. \
-                     Check them under Your drives, Edit folders.{}",
-                    missing.join(", "),
+                    "{}{}",
+                    tr("folders_not_found", &[("folders", &missing.join(", "))]),
                     if summary.incomplete {
-                        " Some files were also skipped because they were open or couldn't be read."
+                        format!(" {}", t("some_files_also_skipped"))
                     } else {
-                        ""
+                        String::new()
                     }
                 ),
             )
         } else if summary.incomplete {
-            (
-                RunStatus::Partial,
-                "Saved, but some files were skipped because they were open or couldn't be read. Close other apps and back up again."
-                    .to_string(),
-            )
+            (RunStatus::Partial, t("files_skipped"))
         } else {
-            (RunStatus::Success, "Everything was saved.".to_string())
+            (RunStatus::Success, t("everything_saved"))
         };
 
         if config.quick_verify {
@@ -193,7 +193,7 @@ pub async fn run_backup(
                 &state,
                 RunPhase::VerifyingQuick,
                 RunStatus::Partial,
-                "Checking the backup",
+                &t("checking_backup"),
                 started_epoch,
                 summary.snapshot_id.clone(),
                 false,
@@ -202,7 +202,7 @@ pub async fn run_backup(
             if let Err(err) = quick_verify(&restic, &repo_path, &passphrase).await {
                 error!("Quick verify failed: {}", Redact::new(err));
                 status = RunStatus::Partial;
-                message = "Saved, but Aegis couldn't confirm the backup can be read back. Back up again; if this keeps happening, try another drive.".to_string();
+                message = t("verify_failed");
             }
         }
 
@@ -211,7 +211,7 @@ pub async fn run_backup(
                 &state,
                 RunPhase::VerifyingDeep,
                 RunStatus::Partial,
-                "Checking the backup thoroughly",
+                &t("checking_backup_thoroughly"),
                 started_epoch,
                 summary.snapshot_id.clone(),
                 false,
@@ -220,7 +220,7 @@ pub async fn run_backup(
             if let Err(err) = deep_verify(&restic, &repo_path, &passphrase).await {
                 error!("Deep verify failed: {}", Redact::new(err));
                 status = RunStatus::Partial;
-                message = "Saved, but Aegis couldn't confirm the backup can be read back. Back up again; if this keeps happening, try another drive.".to_string();
+                message = t("verify_failed");
             }
         }
 
@@ -229,7 +229,7 @@ pub async fn run_backup(
                 &state,
                 RunPhase::Pruning,
                 RunStatus::Partial,
-                "Cleaning up old backups",
+                &t("cleaning_up_old_backups"),
                 started_epoch,
                 summary.snapshot_id.clone(),
                 false,
@@ -240,7 +240,7 @@ pub async fn run_backup(
             {
                 error!("Retention failed: {}", Redact::new(err));
                 status = RunStatus::Partial;
-                message = "Saved, but old backups couldn't be cleaned up.".to_string();
+                message = t("cleanup_failed");
             }
         }
 
@@ -251,7 +251,7 @@ pub async fn run_backup(
         if !drive_connected {
             interrupted = true;
             status = RunStatus::Failed;
-            message = "The drive was unplugged during the backup. Plug it in and back up again.".to_string();
+            message = t("unplugged_during_backup");
         }
 
         let finished_epoch = now_epoch();
@@ -317,15 +317,15 @@ pub async fn run_backup(
                 guard.drive_status.has_instance(&drive_id)
             };
             let interrupted = !drive_connected;
-            let message = if interrupted {
-                "The drive was unplugged during the backup. Plug it in and back up again."
+            let message = t(if interrupted {
+                "unplugged_during_backup"
             } else if err.to_string() == crate::restic::WRONG_PASSPHRASE {
-                crate::restic::WRONG_PASSPHRASE
+                "wrong_passphrase"
             } else if err.to_string() == NO_FOLDERS {
-                NO_FOLDERS
+                "no_folders_found"
             } else {
-                "The backup didn't finish. Plug the drive in again and click Back up now. If it keeps failing, open the log files from Advanced."
-            };
+                "backup_did_not_finish"
+            });
             let result = RunResult {
                 status: RunStatus::Failed,
                 phase: RunPhase::Completed,

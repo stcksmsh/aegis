@@ -1,5 +1,5 @@
 //! Printable passphrase sheet for one backup: name, a blank to write the passphrase on, and
-//! restore steps (English + Serbian). Contains no secrets; the app shows it and prints it
+//! restore steps, in the chosen language. Contains no secrets; the app shows it and prints it
 //! itself (opening an .html file depends on whatever app the desktop has for it). Never
 //! written to the drive (the backup name may be private).
 
@@ -22,9 +22,40 @@ pub fn render(info: &SheetInfo) -> String {
     let drive = esc(info.drive_label.unwrap_or("—"));
     let id = esc(info.instance_id);
     let created = esc(info.created);
+    // Translations come from volunteers: escaped like any other untrusted text.
+    let t = |key: &str| esc(&crate::i18n::t(key));
+    let lang = crate::i18n::language();
+    let (title, name, drive_h, id_h, printed) = (
+        t("sheet_title"),
+        t("name"),
+        t("drive"),
+        t("sheet_backup_id"),
+        t("sheet_printed"),
+    );
+    let (pass, by_hand, warning) = (
+        t("passphrase"),
+        t("sheet_write_by_hand"),
+        t("sheet_warning"),
+    );
+    let steps: String = [
+        crate::i18n::t("sheet_step_plug_in"),
+        crate::i18n::tr(
+            "sheet_step_with_aegis",
+            &[("restore", &crate::i18n::t("restore"))],
+        ),
+        crate::i18n::tr(
+            "sheet_step_without_aegis",
+            &[("readme", &crate::i18n::t("kit_readme"))],
+        ),
+        crate::i18n::t("sheet_step_passphrase"),
+    ]
+    .iter()
+    .map(|s| format!("<li>{}</li>\n", esc(s)))
+    .collect();
+    let restore_h = t("sheet_getting_files_back");
     format!(
         r#"<!doctype html>
-<html><head><meta charset="utf-8"><title>Aegis passphrase sheet – {label}</title>
+<html lang="{lang}"><head><meta charset="utf-8"><title>{title} – {label}</title>
 <style>
 body {{ font: 14px/1.5 system-ui, sans-serif; max-width: 720px; margin: 32px auto; color: #000; }}
 h1 {{ font-size: 22px; margin-bottom: 4px; }}
@@ -33,39 +64,22 @@ td {{ padding: 4px 16px 4px 0; vertical-align: top; }}
 .blank {{ border-bottom: 1px solid #000; height: 36px; margin: 8px 0; }}
 .box {{ border: 2px solid #000; padding: 12px 16px; margin: 16px 0; }}
 ol {{ padding-left: 20px; }}
-.cols {{ display: flex; gap: 32px; }} .cols > div {{ flex: 1; }}
 </style></head><body>
-<h1>Aegis backup – passphrase sheet</h1>
+<h1>{title}</h1>
 <table>
-<tr><td>Name / Naziv</td><td><b>{label}</b></td></tr>
-<tr><td>Drive / Disk</td><td>{drive}</td></tr>
-<tr><td>Backup ID</td><td><code>{id}</code></td></tr>
-<tr><td>Printed / Odštampano</td><td>{created}</td></tr>
+<tr><td>{name}</td><td><b>{label}</b></td></tr>
+<tr><td>{drive_h}</td><td>{drive}</td></tr>
+<tr><td>{id_h}</td><td><code>{id}</code></td></tr>
+<tr><td>{printed}</td><td>{created}</td></tr>
 </table>
 <div class="box">
-<b>Passphrase / Lozinka</b> (write it by hand / upišite rukom):
+<b>{pass}</b> {by_hand}
 <div class="blank"></div><div class="blank"></div>
-Without the passphrase nobody can open the backup, not even the person who set it up.
-Keep this sheet in a safe place, <b>never together with the drive</b>.<br>
-Bez lozinke niko ne može da otvori bekap. Čuvajte ovaj list na sigurnom mestu,
-<b>nikada zajedno sa diskom</b>.
+{warning}
 </div>
-<div class="cols">
-<div><h2>Getting files back</h2><ol>
-<li>Plug in the drive.</li>
-<li>With Aegis: open Aegis → Restore.</li>
-<li>Without Aegis: open the <b>AEGIS-RESTORE</b> folder on the drive and follow <b>README.txt</b>
-(Windows: restore-windows.bat, Mac: restore-mac.command).</li>
-<li>Type the passphrase. Files go into a new folder on the Desktop; nothing is overwritten.</li>
-</ol></div>
-<div><h2>Vraćanje fajlova</h2><ol>
-<li>Uključite disk.</li>
-<li>Sa Aegis-om: otvorite Aegis → Restore.</li>
-<li>Bez Aegis-a: otvorite folder <b>AEGIS-RESTORE</b> na disku i pratite <b>PROCITAJ.txt</b>
-(Windows: restore-windows.bat, Mac: restore-mac.command).</li>
-<li>Upišite lozinku. Fajlovi idu u novi folder na radnoj površini; ništa se ne prepisuje.</li>
-</ol></div>
-</div>
+<h2>{restore_h}</h2>
+<ol>
+{steps}</ol>
 </body></html>
 "#
     )

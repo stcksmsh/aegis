@@ -83,6 +83,9 @@ pub struct AgentConfig {
     /// Which app updates install by themselves (no settings UI yet; edit config.json).
     #[serde(default)]
     pub update_policy: UpdatePolicy,
+    /// Language picked in Settings ("en", "sr", "sr-Latn"); None = the computer's language.
+    #[serde(default)]
+    pub language: Option<String>,
     /// Fields written by a newer Aegis; kept as-is on save.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -151,6 +154,7 @@ impl Default for AgentConfig {
             reminder_days: default_reminder_days(),
             backup_interval_hours: 0,
             update_policy: UpdatePolicy::Security,
+            language: None,
             extra: Map::new(),
         }
     }

@@ -124,7 +124,7 @@ pub fn write_marker(root: &Path, marker: &DriveMarker) -> anyhow::Result<()> {
 
 pub fn ensure_writable_format(marker: &DriveMarker) -> anyhow::Result<()> {
     if marker.drive_format > DRIVE_FORMAT {
-        bail!("This drive was set up by a newer version of Aegis. Please update Aegis.");
+        bail!(crate::i18n::t("drive_from_newer_aegis"));
     }
     Ok(())
 }

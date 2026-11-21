@@ -39,17 +39,10 @@ pub fn export_recovery_kit(
 }
 
 fn default_instructions() -> String {
-    "Aegis drive details\n\n\
-     This note says where your backup is on your Aegis USB drive. It contains no passphrase.\n\n\
-     To get your files back on any computer:\n\
-     1) Plug in the Aegis drive.\n\
-     2) Open the AEGIS-RESTORE folder on the drive and follow README.txt (or install Aegis\n   \
-     and use Restore).\n\
-     3) Type your passphrase when asked.\n\n\
-     If you chose \"Ask for my passphrase every time\", the passphrase is stored nowhere: keep\n\
-     your written copy safe.\n\n\
-     For technical help: recovery.json next to this file lists the backup's location on the drive.\n"
-        .to_string()
+    crate::i18n::tr(
+        "recovery_note",
+        &[("readme", &crate::i18n::t("kit_readme"))],
+    )
 }
 
 fn now_epoch() -> u64 {

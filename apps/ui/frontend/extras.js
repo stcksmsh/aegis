@@ -4,20 +4,14 @@
   const invoke = tauri?.core?.invoke;
   if (!invoke) return;
 
-  function ago(epoch) {
-    if (!epoch) return "never";
-    const days = Math.floor((Date.now() / 1000 - epoch) / 86400);
-    if (days <= 0) return "today";
-    return days === 1 ? "yesterday" : `${days} days ago`;
-  }
 
   function trayText(status) {
     if (status.running) {
       const p = Object.values(status.backup_progress || {})[0];
-      return p ? `Backing up… ${Math.round(p.percent_done * 100)}%` : "Backing up…";
+      return p ? t("backing_up_pct", { pct: Math.round(p.percent_done * 100) }) : t("backing_up_dots");
     }
     const last = Math.max(0, ...(status.trusted_drives || []).map((d) => d.last_backup_epoch || 0));
-    return `Last backup: ${ago(last)}`;
+    return t("last_backup_when", { when: last ? formatLastBackup(last) : t("never") });
   }
 
   // Backups on the plugged-in drive, for the tray's per-backup entries.
@@ -35,12 +29,12 @@
   async function trayDriveName(mount) {
     if (!mount) return null;
     if (driveName.mount !== mount) {
-      let name = "USB drive";
+      let name = t("usb_drive");
       try {
         const res = await fetch("http://127.0.0.1:7878/v1/devices");
         const devices = res.ok ? (await res.json()).devices || [] : [];
         const dev = devices.find((d) => (d.partitions || []).some((p) => (p.mountpoints || []).includes(mount)));
-        if (dev) name = `${dev.model || "USB drive"} (${String(dev.size || "").replace(/([0-9.]+)([KMGT])$/, "$1 $2B")})`;
+        if (dev) name = `${dev.model || t("usb_drive")} (${String(dev.size || "").replace(/([0-9.]+)([KMGT])$/, "$1 $2B")})`;
       } catch (_) {
         /* keep the generic name */
       }
@@ -64,7 +58,7 @@
       /* agent starting up; next tick retries */
     }
   }
-  refreshTray();
+  stringsReady.then(refreshTray);
   setInterval(refreshTray, 3000);
 
   tauri.event?.listen("tray-backup", (event) =>
@@ -101,8 +95,9 @@
   if (recovery) {
     const field = document.createElement("div");
     field.className = "field";
-    field.innerHTML =
-      '<p class="field-title">Having problems?</p><button class="btn secondary" type="button">Open log files</button>';
+    field.innerHTML = '<p class="field-title"></p><button class="btn secondary" type="button"></button>';
+    field.querySelector("p").textContent = t("having_problems");
+    field.querySelector("button").textContent = t("open_log_files");
     field.querySelector("button").addEventListener("click", () =>
       invoke("open_logs").catch(() => {})
     );

@@ -23,6 +23,7 @@ which = "6"
 tower-http = { version = "0.6", features = ["cors"] }
 tokio-util = "0.7"
 sysinfo = "0.38.4"
+sys-locale = "0.3.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 udev = "0.8"

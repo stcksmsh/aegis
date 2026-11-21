@@ -8,7 +8,7 @@
 - Settings saved by a newer Aegis version are kept when an older one runs.
 - Hand a backup over to another computer: type the passphrase there, Aegis shows which folders the old computer backed up, and both computers' history stays restorable. The Restore page shows which computer made each backup.
 - "Discontinue drive" is now "Forget on this computer", with a reminder to delete local copies when handing over.
-- Print a passphrase sheet per backup (name, a blank for the passphrase, restore steps in English and Serbian). It opens inside Aegis with a Print button, so it doesn't depend on which app your computer uses for web pages.
+- Print a passphrase sheet, offered once right after a new backup is set up (name, a blank for the passphrase, how to get files back, in your language). It opens inside Aegis with a Print button, so it doesn't depend on which app your computer uses for web pages.
 - Automatic updates (signed): fixes for your version install by themselves when Aegis is idle, never during a backup or restore. Newer versions are offered with one click; security releases install automatically; a new major version never installs by itself. Policy: `update_policy` in the config (`security` default, `all`, `off`).
 
 - The passphrase is asked for only when it's needed, and kept only after it worked. The choice between remembering it and typing it every time is in Settings.
@@ -22,6 +22,7 @@
 - A backup folder that was moved or deleted no longer looks like "files were open": the backup saves the rest and names the missing folders.
 - Only the signed updater offers updates; the separate "Download" bar is gone.
 - Old backups are cleaned up by default (one per day for 7 days, per week for 4 weeks, per month for 12 months, always the 3 newest), so the drive stops filling up; deleted files stay restorable for up to a year. A folder removed from the backup list is now cleaned up too (before, its backups were kept forever).
+- Aegis speaks Serbian: pick English, Српски (Cyrillic) or Srpski (Latin) under Settings → Language, or let Aegis follow your computer's language. Screens, notifications, the tray menu and the passphrase sheet all switch. Volunteers can add languages (docs/TRANSLATING.md).
 - Windows: notifications show as Aegis instead of Windows PowerShell.
 - Each backup has its own card on the dashboard (Back up now, Restore…, its own progress) instead of a "Backup on this drive" list. Backups on the same drive run one after another; **Back up all** starts them all. Restoring one backup works while another backs up.
 - Setting up with the passphrase of a backup this computer already uses adds the chosen folders to that backup and says so (before, it silently renamed it and replaced its folders).

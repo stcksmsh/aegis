@@ -1,12 +1,58 @@
 const API = "http://127.0.0.1:7878/v1";
 
+// Texts come from the agent (locales/*.json) in the chosen language; English fills any gap.
+// Translations are plain text: always set with textContent, never innerHTML.
+let STRINGS = {};
+let LANG = "en";
+function t(key, args = {}) {
+  let s = STRINGS[key];
+  if (typeof args.count === "number") {
+    const form = new Intl.PluralRules(LANG).select(args.count);
+    s = STRINGS[`${key}_${form}`] ?? STRINGS[`${key}_other`] ?? s;
+  }
+  if (s == null) s = key === "agent_offline" ? "Can't connect to Aegis right now. Try restarting the app." : key;
+  return s.replace(/\{\{\s*(\w+)\s*\}\}/g, (m, name) => (name in args ? String(args[name]) : m));
+}
+function applyStrings() {
+  for (const [attr, target] of [["i18n", null], ["i18nPlaceholder", "placeholder"], ["i18nAria", "aria-label"], ["i18nTitle", "title"]]) {
+    const sel = "[data-" + attr.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()) + "]";
+    document.querySelectorAll(sel).forEach((el) => {
+      const text = t(el.dataset[attr]);
+      if (target) el.setAttribute(target, text);
+      else el.textContent = text;
+    });
+  }
+  document.documentElement.lang = LANG;
+  // Someone who picked a language they can't read can still find this setting.
+  const label = document.getElementById("language-label");
+  if (label && LANG !== "en") label.textContent = `${t("language")} (Language)`;
+}
+async function loadStrings() {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      const res = await fetch(`${API}/i18n`);
+      if (res.ok) {
+        const data = await res.json();
+        STRINGS = data.strings || {};
+        LANG = data.lang || "en";
+        break;
+      }
+    } catch (_) {
+      /* agent still starting */
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  applyStrings();
+}
+const stringsReady = loadStrings();
+
 // Theme: "system" (default), "light" or "dark", picked with the button in the top bar.
 // Linux web views misreport the system setting, so the app is asked first.
 const THEME_MODES = ["system", "light", "dark"];
 const THEME_LABELS = {
-  system: ["◐", "Theme: match system. Click to change."],
-  light: ["☀", "Theme: light. Click to change."],
-  dark: ["☾", "Theme: dark. Click to change."],
+  system: ["◐", "theme_match_system_click_to_ch"],
+  light: ["☀", "theme_light_click_to_change"],
+  dark: ["☾", "theme_dark_click_to_change"],
 };
 async function applyTheme() {
   const mode = localStorage.getItem("aegis-theme") || "system";
@@ -19,13 +65,14 @@ async function applyTheme() {
   document.documentElement.dataset.theme = dark ? "dark" : "light";
   const button = document.getElementById("theme-toggle");
   if (button) {
-    const [icon, label] = THEME_LABELS[mode] || THEME_LABELS.system;
+    const [icon, key] = THEME_LABELS[mode] || THEME_LABELS.system;
+    const label = t(key);
     button.textContent = icon;
     button.title = label;
     button.setAttribute("aria-label", label);
   }
 }
-applyTheme();
+stringsReady.then(applyTheme);
 window.addEventListener("focus", applyTheme);
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 document.getElementById("theme-toggle")?.addEventListener("click", () => {
@@ -90,7 +137,7 @@ function setBackgroundInert(on) {
 }
 
 function showLoadingOverlay(message) {
-  if (loadingMessage) loadingMessage.textContent = message || "Working…";
+  if (loadingMessage) loadingMessage.textContent = message || t("working");
   if (loadingOverlay) loadingOverlay.classList.remove("hidden");
   setBackgroundInert(true);
   document.body.classList.add("setup-loading");
@@ -196,7 +243,7 @@ function updateActionState(status) {
   setDisabled("backup-now", !canOperate || idle.length === 0);
   const backupNow = document.getElementById("backup-now");
   if (backupNow && backupNow.dataset.busy !== "1") {
-    backupNow.textContent = idle.length > 1 ? "Back up all" : "Back up now";
+    backupNow.textContent = idle.length > 1 ? t("back_up_all") : t("back_up_now");
   }
   setDisabled("restore-btn", !canOperate || !trusted);
   setDisabled("load-snapshots", !canOperate || !trusted);
@@ -218,20 +265,20 @@ function updateActionState(status) {
 window.__TAURI__?.event?.listen("update-available", (event) => {
   const banner = document.getElementById("update-banner");
   document.getElementById("update-banner-text").textContent =
-    `Aegis ${event.payload} is available.`;
+    t("update_available", { version: event.payload });
   banner.classList.remove("hidden");
 });
 document.getElementById("update-install")?.addEventListener("click", async () => {
   const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
   const button = document.getElementById("update-install");
   button.disabled = true;
-  button.textContent = "Installing…";
+  button.textContent = t("installing");
   try {
     await invoke("install_update"); // restarts Aegis on success
   } catch (err) {
-    uiAlert(String(err), "Update not installed");
+    uiAlert(String(err), t("update_not_installed"));
     button.disabled = false;
-    button.textContent = "Install and restart";
+    button.textContent = t("install_and_restart");
   }
 });
 
@@ -239,17 +286,17 @@ const BACKUP_STUCK_THRESHOLD_SEC = 30 * 60; // 30 minutes
 
 function renderBanner(status) {
   if (!agentOnline) {
-    setBanner("alert", "Can't connect to Aegis right now. Try restarting the app.");
+    setBanner("alert", t("agent_offline"));
     return;
   }
   if (status && !status.restic_available) {
-    setBanner("warn", "Aegis is missing a part it needs. Please reinstall Aegis.");
+    setBanner("warn", t("aegis_is_missing_a_part_it_nee"));
     return;
   }
   if (status?.running && status?.last_run?.started_epoch) {
     const elapsed = Math.floor(Date.now() / 1000) - status.last_run.started_epoch;
     if (elapsed >= BACKUP_STUCK_THRESHOLD_SEC) {
-      setBanner("warn", "Backup has been running for a long time. If nothing seems to be happening, try restarting Aegis.");
+      setBanner("warn", t("backup_has_been_running_for_a"));
       return;
     }
   }
@@ -292,19 +339,19 @@ function openModal({ title, body, mode, drive_id, drive_label, confirmText, dang
     }
 
     if (mode === "alert") {
-      modalConfirm.textContent = "OK";
+      modalConfirm.textContent = t("ok");
       modalCancel.classList.add("hidden");
     } else if (mode === "confirm") {
-      modalConfirm.textContent = confirmText || "Confirm";
+      modalConfirm.textContent = confirmText || t("confirm");
       modalCancel.classList.remove("hidden");
     } else if (mode === "discontinue" || mode === "delete-backup") {
-      modalConfirm.textContent = mode === "discontinue" ? "Forget" : "Delete backup";
+      modalConfirm.textContent = mode === "discontinue" ? t("forget") : t("delete_backup");
       modalCancel.classList.remove("hidden");
     } else if (mode === "rename-drive") {
-      modalConfirm.textContent = "Save";
+      modalConfirm.textContent = t("save");
       modalCancel.classList.remove("hidden");
     } else {
-      modalConfirm.textContent = "Continue";
+      modalConfirm.textContent = t("continue");
       modalCancel.classList.remove("hidden");
     }
 
@@ -350,11 +397,17 @@ function trapModalTab(event) {
   }
 }
 
-function uiAlert(message, title = "Notice") {
+// "Type ERASE to confirm": the English word always works, as does the translated one.
+function isEraseWord(value) {
+  const v = (value || "").trim().toUpperCase();
+  return v === "ERASE" || v === t("erase_word").toUpperCase();
+}
+
+function uiAlert(message, title = t("notice")) {
   return openModal({ title, body: message, mode: "alert" });
 }
 
-function uiConfirm(message, title = "Confirm", options = {}) {
+function uiConfirm(message, title = t("confirm"), options = {}) {
   return openModal({ title, body: message, mode: "confirm", ...options });
 }
 
@@ -366,7 +419,7 @@ function requestPassphrase(message) {
     // A "Restoring…" overlay would hide the prompt; bring it back once answered.
     const wasLoading = loadingOverlay && !loadingOverlay.classList.contains("hidden");
     if (wasLoading) loadingOverlay.classList.add("hidden");
-    passphrasePrompt = openModal({ title: "Passphrase required", body: message, mode: "passphrase" })
+    passphrasePrompt = openModal({ title: t("passphrase_required"), body: message, mode: "passphrase" })
       .finally(() => {
         passphrasePrompt = null;
         if (wasLoading) loadingOverlay.classList.remove("hidden");
@@ -393,7 +446,7 @@ async function postWithPassphrase(path, payload, promptMessage, { verifies = tru
   while (!res.ok && /passphrase/i.test(detail)) {
     if (/wrong/i.test(detail)) {
       sessionPassphrase = null;
-      message = "That passphrase didn't open this backup. Passphrases are case-sensitive. Try again.";
+      message = t("that_passphrase_didn_t_open_th");
     }
     const passphrase = await requestPassphrase(message);
     if (!passphrase) return null;
@@ -423,7 +476,7 @@ async function confirmModal() {
   if (modalMode === "passphrase") {
     const value = modalPassphrase.value;
     if (!value.trim()) {
-      modalError.textContent = "Enter your passphrase.";
+      modalError.textContent = t("enter_your_passphrase");
       return;
     }
     modalPassphrase.value = "";
@@ -439,13 +492,13 @@ async function confirmModal() {
       return;
     }
     if (value !== discontinueDrivePending.drive_label) {
-      modalError.textContent = "That name doesn't match. Type the name exactly as shown.";
+      modalError.textContent = t("that_name_doesn_t_match_type_t");
       return;
     }
     modalError.textContent = "";
     const wipe = !deleting && (document.getElementById("modal-discontinue-wipe")?.checked ?? false);
-    if (wipe) showLoadingOverlay("Wiping drive…");
-    if (deleting) showLoadingOverlay("Deleting backup…");
+    if (wipe) showLoadingOverlay(t("wiping_drive"));
+    if (deleting) showLoadingOverlay(t("deleting_backup"));
     try {
       const res = await fetch(`${API}/drives/${deleting ? "delete-backup" : "discontinue"}`, {
         method: "POST",
@@ -461,16 +514,16 @@ async function confirmModal() {
         await fetchStatus();
         showToast(
           deleting
-            ? "The backup was deleted from the drive."
-            : "This computer forgot the drive. The backups on it are kept."
+            ? t("the_backup_was_deleted_from_th")
+            : t("this_computer_forgot_the_drive")
         );
       } else {
         const text = await res.text();
         modalError.textContent =
-          text && text.trim() ? text.trim() : deleting ? "Couldn't delete the backup. Please try again." : "Couldn't forget the drive. Please try again.";
+          text && text.trim() ? text.trim() : deleting ? t("couldn_t_delete_the_backup_ple") : t("couldn_t_forget_the_drive_plea");
       }
     } catch (err) {
-      modalError.textContent = "Something went wrong. Please try again.";
+      modalError.textContent = t("something_went_wrong_please_tr");
     } finally {
       if (wipe || deleting) hideLoadingOverlay();
     }
@@ -484,7 +537,7 @@ async function confirmModal() {
       return;
     }
     if (!value) {
-      modalError.textContent = "Enter a name.";
+      modalError.textContent = t("enter_a_name");
       return;
     }
     modalError.textContent = "";
@@ -499,10 +552,10 @@ async function confirmModal() {
         await fetchStatus();
       } else {
         const text = await res.text();
-        modalError.textContent = text && text.trim() ? text.trim() : "Couldn't change the name. Please try again.";
+        modalError.textContent = text && text.trim() ? text.trim() : t("couldn_t_change_the_name_pleas");
       }
     } catch (err) {
-      modalError.textContent = "Something went wrong. Please try again.";
+      modalError.textContent = t("something_went_wrong_please_tr");
     }
     return;
   }
@@ -559,15 +612,15 @@ async function fetchPreflight() {
 }
 
 function formatLastBackup(epoch) {
-  if (epoch == null) return "Never";
+  if (epoch == null) return t("never");
   const d = new Date(epoch * 1000);
   const now = Date.now();
   const diffMs = now - d.getTime();
   const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return d.toLocaleDateString();
+  if (diffDays === 0) return t("today");
+  if (diffDays === 1) return t("yesterday");
+  if (diffDays < 7) return t("days_ago", { count: diffDays });
+  return d.toLocaleDateString(LANG);
 }
 
 function formatGB(bytes) {
@@ -631,16 +684,16 @@ function renderStatus(status) {
       const n = (status.running_drive_ids || []).length;
       const msg = status.last_run?.message;
       if (n > 1) {
-        summaryText.textContent = `${n} backups in progress`;
+        summaryText.textContent = t("backups_in_progress", { count: n });
       } else {
-        summaryText.textContent = msg ? `Backup in progress: ${msg}` : "Backup in progress…";
+        summaryText.textContent = msg ? t("backup_in_progress_msg", { msg }) : t("backup_in_progress_dots");
       }
     } else if (total === 0) {
       summaryText.textContent = "";
     } else {
       // A drive can hold several backups, so count backups rather than drives.
-      const conn = connected === 0 ? "none connected" : `${connected} connected`;
-      summaryText.textContent = `${total} backup${total !== 1 ? "s" : ""} set up · ${conn}`;
+      const conn = connected === 0 ? t("none_connected") : t("n_connected", { count: connected });
+      summaryText.textContent = `${t("backups_set_up", { count: total })} · ${conn}`;
     }
   }
   if (summaryVerify) summaryVerify.textContent = "";
@@ -676,21 +729,21 @@ function renderStatus(status) {
   const runningDriveIds = status.running_drive_ids || [];
   const currentDriveRunning =
     status.drive?.drive_id && runningDriveIds.includes(status.drive.drive_id);
-  let driveDetectText = "Waiting for drive…";
+  let driveDetectText = t("waiting_for_drive");
   if (status.running && status.drive?.trusted) {
     driveDetectText = currentDriveRunning
-      ? `Backing up to ${status.drive.label || "drive"}…`
-      : `${status.drive.label || "Drive"} connected — another drive is backing up`;
+      ? t("backing_up_to", { name: status.drive.label || t("drive") })
+      : t("connected_other_backing_up", { name: status.drive.label || t("drive") });
   } else if (!status.drive?.connected) {
-    driveDetectText = total === 0 ? "" : "Plug in your Aegis drive to back up.";
+    driveDetectText = total === 0 ? "" : t("plug_in_your_aegis_drive_to_ba");
   } else if (status.drive.trusted) {
     driveDetectText = status.restic_available
-      ? `${status.drive.label || "Drive"} connected — ready to back up`
-      : `${status.drive.label || "Drive"} connected`;
+      ? t("connected_ready", { name: status.drive.label || t("drive") })
+      : t("name_connected", { name: status.drive.label || t("drive") });
   } else if (!status.drive.mount_path) {
-    driveDetectText = "A USB drive is plugged in.";
+    driveDetectText = t("a_usb_drive_is_plugged_in");
   } else {
-    driveDetectText = "A USB drive is plugged in that Aegis doesn't use yet.";
+    driveDetectText = t("a_usb_drive_is_plugged_in_that");
   }
   driveDetectEls.forEach((el) => { el.textContent = driveDetectText; });
 
@@ -700,7 +753,7 @@ function renderStatus(status) {
     const totalBytes = status.drive?.total_bytes;
     if (status.drive?.connected && status.drive?.trusted && typeof free === "number" && typeof totalBytes === "number" && totalBytes > 0) {
       const almostFull = free < totalBytes * 0.1;
-      driveSpaceEl.textContent = `${formatGB(free)} GB free of ${formatGB(totalBytes)} GB`;
+      driveSpaceEl.textContent = t("gb_free", { free: formatGB(free), total: formatGB(totalBytes) });
       driveSpaceEl.classList.toggle("drive-space-warning", almostFull);
       driveSpaceEl.classList.remove("hidden");
     } else {
@@ -719,7 +772,7 @@ function renderStatus(status) {
       !(status.running_drive_ids || []).includes(status.drive?.drive_id);
     if (canBackup) {
       const label = status.drive.label || "drive";
-      ctaHint.textContent = `Ready — click Back up now to back up to ${label}.`;
+      ctaHint.textContent = t("ready_click_back_up", { name: label });
       ctaHint.classList.remove("hidden");
     } else {
       ctaHint.textContent = "";
@@ -745,8 +798,10 @@ function renderStatus(status) {
 
 function formatWhen(epoch) {
   const day = formatLastBackup(epoch);
-  const time = new Date(epoch * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return day === "Today" || day === "Yesterday" ? `${day.toLowerCase()} at ${time}` : day;
+  const time = new Date(epoch * 1000).toLocaleTimeString(LANG, { hour: "2-digit", minute: "2-digit" });
+  if (day === t("today")) return t("today_at", { time });
+  if (day === t("yesterday")) return t("yesterday_at", { time });
+  return day;
 }
 
 // "Last backup finished today at 14:02. Everything was saved." The agent's message already says
@@ -762,10 +817,10 @@ function renderLastRun(status) {
   const when = formatWhen(run.finished_epoch);
   let text =
     run.status === "Failed"
-      ? `Last backup (${when}) didn't finish. ${run.message}`
-      : `Last backup finished ${when}. ${run.message}`;
+      ? t("last_backup_failed", { when, msg: run.message })
+      : t("last_backup_finished", { when, msg: run.message });
   if (run.drive_almost_full) {
-    text += " The drive is almost full: turn on cleanup of old backups in Advanced, or use a bigger drive.";
+    text += " " + t("the_drive_is_almost_full_turn");
   }
   el.textContent = text;
   el.classList.remove("hidden", "warn", "alert");
@@ -820,10 +875,10 @@ function renderBackupTargets(trustedDrives, status) {
     const waiting = isDrivingBackingUp && /^Waiting/.test(progressMap[d.drive_id]?.message || "");
     if (isDrivingBackingUp) {
       statusBadge.className = "backup-target-badge backing-up";
-      statusBadge.textContent = waiting ? "Waiting" : "Backing up";
+      statusBadge.textContent = waiting ? t("waiting") : t("backing_up");
     } else {
       statusBadge.className = d.is_connected ? "backup-target-badge connected" : "backup-target-badge";
-      statusBadge.textContent = d.is_connected ? "Connected" : "Not connected";
+      statusBadge.textContent = d.is_connected ? t("connected") : t("not_connected");
     }
     top.appendChild(name);
     top.appendChild(statusBadge);
@@ -835,10 +890,10 @@ function renderBackupTargets(trustedDrives, status) {
     const prog = progressMap[d.drive_id];
     if (isDrivingBackingUp && prog) {
       const pct = Math.round((prog.percent_done || 0) * 100);
-      const msg = prog.message || `Backing up: ${pct}%`;
+      const msg = prog.message || t("backing_up_pct", { pct });
       summary.textContent = labels.length > 0 ? `${labels.join(", ")} · ${msg}` : msg;
     } else {
-      summary.textContent = labels.length > 0 ? `${labels.join(", ")} · Last backup: ${lastBackupStr}` : `Last backup: ${lastBackupStr}`;
+      summary.textContent = labels.length > 0 ? `${labels.join(", ")} · ${t("last_backup_when", { when: lastBackupStr })}` : t("last_backup_when", { when: lastBackupStr });
     }
     header.appendChild(summary);
     row.appendChild(header);
@@ -857,13 +912,13 @@ function renderBackupTargets(trustedDrives, status) {
       const backupBtn = document.createElement("button");
       backupBtn.type = "button";
       backupBtn.className = "btn primary";
-      backupBtn.textContent = "Back up now";
+      backupBtn.textContent = t("back_up_now");
       backupBtn.disabled = isDrivingBackingUp;
       backupBtn.addEventListener("click", () => startBackup(d.drive_id));
       const restoreBtn = document.createElement("button");
       restoreBtn.type = "button";
       restoreBtn.className = "btn secondary";
-      restoreBtn.textContent = "Restore…";
+      restoreBtn.textContent = t("restore_dots");
       restoreBtn.addEventListener("click", () => {
         if (pickedInstanceId !== d.drive_id) {
           pickedInstanceId = d.drive_id;
@@ -910,15 +965,15 @@ function renderBackupTargets(trustedDrives, status) {
     const renameBtn = document.createElement("button");
     renameBtn.type = "button";
     renameBtn.className = "btn ghost";
-    renameBtn.textContent = "Rename";
+    renameBtn.textContent = t("rename");
     renameBtn.disabled = !canEdit;
-    renameBtn.title = !d.is_connected ? "Connect this drive to change its name" : isDrivingBackingUp ? "Backup in progress" : "";
+    renameBtn.title = !d.is_connected ? t("connect_this_drive_to_change_i") : isDrivingBackingUp ? t("backup_in_progress") : "";
     renameBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!canEdit) return;
       openModal({
-        title: "Rename",
-        body: "Change the name Aegis shows for this backup. The drive itself isn't renamed.",
+        title: t("rename"),
+        body: t("change_the_name_aegis_shows_fo"),
         mode: "rename-drive",
         drive_id: d.drive_id,
         drive_label: d.label || "",
@@ -927,40 +982,27 @@ function renderBackupTargets(trustedDrives, status) {
     const editFoldersBtn = document.createElement("button");
     editFoldersBtn.type = "button";
     editFoldersBtn.className = "btn ghost";
-    editFoldersBtn.textContent = "Edit folders";
+    editFoldersBtn.textContent = t("edit_folders");
     editFoldersBtn.disabled = !canEdit;
-    editFoldersBtn.title = !d.is_connected ? "Connect this drive to change folders" : isDrivingBackingUp ? "Backup in progress" : "";
+    editFoldersBtn.title = !d.is_connected ? t("connect_this_drive_to_change_f") : isDrivingBackingUp ? t("backup_in_progress") : "";
     editFoldersBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!canEdit) return;
       openEditFoldersModal(d);
     });
-    const sheetBtn = document.createElement("button");
-    sheetBtn.type = "button";
-    sheetBtn.className = "btn ghost";
-    sheetBtn.textContent = "Print passphrase sheet";
-    sheetBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openPassphraseSheet(d.drive_id);
-    });
     driveActions.appendChild(renameBtn);
     driveActions.appendChild(editFoldersBtn);
-    driveActions.appendChild(sheetBtn);
     expanded.appendChild(driveActions);
     const discontinueBtn = document.createElement("button");
     discontinueBtn.type = "button";
     discontinueBtn.className = "btn ghost backup-target-discontinue";
-    discontinueBtn.textContent = "Forget on this computer";
+    discontinueBtn.textContent = t("forget_on_this_computer");
     discontinueBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       openModal({
-        title: "Forget this drive on this computer",
+        title: t("forget_this_drive_on_this_comp"),
         body:
-          "This computer stops backing up to this drive and forgets its saved passphrase. " +
-          "The backups on the drive are kept, and other computers can keep using it. " +
-          "This works even if the drive is lost or broken.\n\n" +
-          "Handing the drive over to someone else? Also delete any copies of the backed-up files " +
-          "that should not stay on this computer.",
+          t("forget_body"),
         mode: "discontinue",
         drive_id: d.drive_id,
         drive_label: d.label || "",
@@ -970,18 +1012,15 @@ function renderBackupTargets(trustedDrives, status) {
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "btn ghost backup-target-discontinue";
-    deleteBtn.textContent = "Delete from drive";
+    deleteBtn.textContent = t("delete_from_drive");
     deleteBtn.disabled = !canEdit;
-    deleteBtn.title = !d.is_connected ? "Connect this drive to delete the backup from it" : isDrivingBackingUp ? "Backup in progress" : "";
+    deleteBtn.title = !d.is_connected ? t("connect_this_drive_to_delete_t") : isDrivingBackingUp ? t("backup_in_progress") : "";
     deleteBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!canEdit) return;
       openModal({
-        title: `Delete "${d.label || "this backup"}" from the drive`,
-        body:
-          "This deletes this backup and all its saved versions from the drive, and this computer forgets it. " +
-          "Nobody, not even Aegis, can get these files back from the drive afterwards. " +
-          "Other backups on the same drive are not touched.",
+        title: t("delete_from_drive_title", { name: d.label || t("this_backup") }),
+        body: t("delete_from_drive_body"),
         mode: "delete-backup",
         drive_id: d.drive_id,
         drive_label: d.label || "",
@@ -1001,9 +1040,9 @@ function renderBackupTargets(trustedDrives, status) {
 }
 
 const DEFAULT_SOURCES = [
-  { label: "Documents", path: "~/Documents" },
-  { label: "Pictures", path: "~/Pictures" },
-  { label: "Desktop", path: "~/Desktop" },
+  { label: t("documents"), path: "~/Documents" },
+  { label: t("pictures"), path: "~/Pictures" },
+  { label: t("desktop"), path: "~/Desktop" },
 ];
 
 function pathMatches(pathA, pathB) {
@@ -1035,7 +1074,7 @@ function openEditFoldersModal(d) {
   );
   renderEditFoldersCustomList();
   const title = document.getElementById("edit-folders-title");
-  if (title) title.textContent = `Edit folders — ${editFoldersPending.drive_label || "Drive"}`;
+  if (title) title.textContent = `${t("edit_folders")} — ${editFoldersPending.drive_label || t("drive")}`;
   document.getElementById("edit-folders-error").textContent = "";
   document.getElementById("edit-folders-custom-label").value = "";
   document.getElementById("edit-folders-custom-path").value = "";
@@ -1091,15 +1130,15 @@ async function saveEditFolders() {
       // New folders aren't in any backup yet: back up now if the drive is here.
       const connected = (currentStatus?.trusted_drives || []).some((d) => d.drive_id === driveId && d.is_connected);
       if (added && connected) {
-        showToast("Folders saved. Backing up now to include the new ones.");
+        showToast(t("folders_saved_backing_up_now_t"));
         startBackup(driveId);
       }
     } else {
       const text = await res.text();
-      errEl.textContent = text && text.trim() ? text.trim() : "Couldn't update folders. Please try again.";
+      errEl.textContent = text && text.trim() ? text.trim() : t("couldn_t_update_folders_please");
     }
   } catch (err) {
-    errEl.textContent = "Something went wrong. Please try again.";
+    errEl.textContent = t("something_went_wrong_please_tr");
   }
 }
 
@@ -1107,7 +1146,7 @@ async function saveEditFolders() {
 async function pickFolder() {
   const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
   if (typeof invoke !== "function") {
-    uiAlert("Type the folder location in the box instead.");
+    uiAlert(t("type_the_folder_location_in_th"));
     return null;
   }
   try {
@@ -1132,7 +1171,7 @@ function addPendingFolders() {
 }
 
 function folderName(path) {
-  return path.split(/[\\/]/).filter(Boolean).pop() || "Folder";
+  return path.split(/[\\/]/).filter(Boolean).pop() || t("folder");
 }
 
 // "Add" next to a custom folder: the name defaults to the folder's own name.
@@ -1141,13 +1180,13 @@ function addCustomFolder(list, labelId, pathId, render) {
   const pathEl = document.getElementById(pathId);
   const path = pathEl.value.trim();
   if (!path) {
-    uiAlert("Choose a folder first.");
+    uiAlert(t("choose_a_folder_first"));
     return;
   }
   const label = labelEl.value.trim() || folderName(path);
   const clash = folderClash(list, label, path);
   if (clash) {
-    uiAlert(clash, "Add folder");
+    uiAlert(clash, t("add_folder"));
     return;
   }
   list.push({ label, path });
@@ -1163,7 +1202,7 @@ function openFolderPath(path) {
   }
   invoke("open_path", { path }).catch((err) => {
     console.error(err);
-    uiAlert(typeof err === "string" ? err : "Could not open path.", "Open folder");
+    uiAlert(typeof err === "string" ? err : t("could_not_open_path"), t("open_folder"));
   });
 }
 
@@ -1176,16 +1215,16 @@ function renderDeviceListInto(listEl, emptyEl, helpEl, updatedEl, radioName) {
 
   if (!deviceList.length) {
     if (empty) empty.classList.remove("hidden");
-    if (help) help.textContent = "Plug in a USB drive.";
+    if (help) help.textContent = t("plug_in_a_usb_drive");
     return false;
   }
   if (empty) empty.classList.add("hidden");
-  if (help) help.textContent = "Choose the drive to back up to.";
+  if (help) help.textContent = t("choose_the_drive_to_back_up_to");
 
   let hasSelection = false;
   deviceList.forEach((device) => {
-    const deviceTitle = `${device.model || "USB drive"} (${device.size})`;
-    const deviceMeta = device.removable ? "" : "This computer's own drive";
+    const deviceTitle = `${device.model || t("usb_drive")} (${device.size})`;
+    const deviceMeta = device.removable ? "" : t("this_computer_s_own_drive");
     const card = document.createElement("div");
     card.className = "device-card";
     const header = document.createElement("div");
@@ -1245,10 +1284,10 @@ function renderDeviceListInto(listEl, emptyEl, helpEl, updatedEl, radioName) {
       const titleEl = document.createElement("div");
       titleEl.className = "partition-title";
       titleEl.textContent = !device.removable
-        ? "Can't be used for backups"
+        ? t("can_t_be_used_for_backups")
         : severalParts
-        ? `Part ${partIndex + 1} of this drive`
-        : "Whole drive";
+        ? t("part_of_drive", { n: partIndex + 1 })
+        : t("whole_drive");
       const sub = document.createElement("div");
       sub.className = "partition-subtitle";
       sub.textContent = subtitle;
@@ -1259,10 +1298,10 @@ function renderDeviceListInto(listEl, emptyEl, helpEl, updatedEl, radioName) {
       if (!device.removable) {
         status.textContent = "";
       } else if (isWholeDisk || !part.fstype) {
-        status.textContent = "Needs erasing before Aegis can use it";
+        status.textContent = t("needs_erasing_before_aegis_can");
         status.classList.add("warn");
       } else {
-        status.textContent = mountpoint ? "Ready to use" : "Not opened yet";
+        status.textContent = mountpoint ? t("ready_to_use") : t("not_opened_yet");
       }
       row.appendChild(input);
       row.appendChild(details);
@@ -1319,13 +1358,13 @@ function renderDevices() {
 // Shows only what's missing, with what to do about it.
 function renderPreflight() {
   const problems = {
-    restic: preflight.restic ? "" : "Aegis is missing a part it needs. Please reinstall Aegis.",
+    restic: preflight.restic ? "" : t("aegis_is_missing_a_part_it_nee"),
     udisks: preflight.can_mount
       ? ""
-      : "Aegis can't open drives by itself on this computer. Open the drive in your file manager first, then come back.",
+      : t("aegis_can_t_open_drives_by_its"),
     exfat: preflight.can_format
       ? ""
-      : "Aegis can't erase drives on this computer. You can still use a drive that already works in your file manager.",
+      : t("aegis_can_t_erase_drives_on_th"),
   };
   Object.entries(problems).forEach(([key, text]) => {
     [`preflight-${key}`, `setup-drive-preflight-${key}`].forEach((id) => {
@@ -1363,15 +1402,15 @@ function updateSetupDriveActions() {
 
   if (status) {
     let message = "";
-    if (!agentOnline) message = "Not connected to Aegis.";
-    else if (!hasSelection) message = "Choose a drive to continue.";
-    else if (wantsErase && !canFormat) message = "Aegis can't erase drives on this computer.";
-    else if (!mounted && !canMount) message = "Aegis can't open drives on this computer.";
-    else if (!canSetup) message = "Aegis is missing a part it needs. Please reinstall Aegis.";
-    else if (!mounted && !wantsErase) message = "Click Open drive, or tick \"Erase this drive\".";
-    else if (wantsErase && (erasePhrase?.value || "").trim() !== "ERASE") {
-      message = 'Type ERASE in the box to confirm erasing.';
-    } else message = "Ready to set up this drive.";
+    if (!agentOnline) message = t("not_connected_to_aegis");
+    else if (!hasSelection) message = t("choose_a_drive_to_continue");
+    else if (wantsErase && !canFormat) message = t("aegis_can_t_erase_drives_on_th2");
+    else if (!mounted && !canMount) message = t("aegis_can_t_open_drives_on_thi");
+    else if (!canSetup) message = t("aegis_is_missing_a_part_it_nee");
+    else if (!mounted && !wantsErase) message = t("click_open_drive_or_tick_erase");
+    else if (wantsErase && !isEraseWord(erasePhrase?.value)) {
+      message = t("type_erase_in_the_box_to_confi");
+    } else message = t("ready_to_set_up_this_drive");
     status.textContent = message;
   }
 }
@@ -1399,48 +1438,48 @@ function updateDeviceActions() {
   if (mountButton) {
     mountButton.disabled = !hasSelection || !hasFilesystem;
     mountButton.title = !hasSelection
-      ? "Choose a drive to open."
+      ? t("choose_a_drive_to_open")
       : !hasFilesystem
-      ? "Tick \"Erase this drive\" first."
+      ? t("tick_erase_this_drive_first")
       : mounted
-      ? "Already open."
+      ? t("already_open")
       : !canMount
-      ? "Aegis can't open drives on this computer."
-      : "Open the selected drive.";
+      ? t("aegis_can_t_open_drives_on_thi")
+      : t("open_the_selected_drive");
   }
   if (setupButton) {
     setupButton.disabled = !hasSelection;
     setupButton.title = !hasSelection
-      ? "Choose a drive to continue."
+      ? t("choose_a_drive_to_continue")
       : !canSetup
-      ? "Aegis is missing a part it needs. Please reinstall Aegis."
+      ? t("aegis_is_missing_a_part_it_nee")
       : !hasFilesystem && !wantsErase
-      ? "Tick \"Erase this drive\" first."
+      ? t("tick_erase_this_drive_first")
       : !mounted && !canMount
-      ? "Aegis can't open drives on this computer."
+      ? t("aegis_can_t_open_drives_on_thi")
       : wantsErase && !canFormat
-      ? "Aegis can't erase drives on this computer."
-      : "Set up this drive.";
+      ? t("aegis_can_t_erase_drives_on_th2")
+      : t("set_up_this_drive2");
   }
 
   if (status) {
     let message = "";
     if (!agentOnline) {
-      message = "Not connected to Aegis.";
+      message = t("not_connected_to_aegis");
     } else if (!hasSelection) {
-      message = "Choose a drive to continue.";
+      message = t("choose_a_drive_to_continue");
     } else if (wantsErase && !canFormat) {
-      message = "Aegis can't erase drives on this computer.";
+      message = t("aegis_can_t_erase_drives_on_th2");
     } else if (!mounted && !canMount) {
-      message = "Aegis can't open drives on this computer.";
+      message = t("aegis_can_t_open_drives_on_thi");
     } else if (!canSetup) {
-      message = "Aegis is missing a part it needs. Please reinstall Aegis.";
+      message = t("aegis_is_missing_a_part_it_nee");
     } else if (!mounted && !wantsErase) {
-      message = "Click Open drive, or tick \"Erase this drive\".";
-    } else if (wantsErase && (erasePhrase?.value || "").trim() !== "ERASE") {
-      message = 'Type ERASE in the box to confirm erasing.';
+      message = t("click_open_drive_or_tick_erase");
+    } else if (wantsErase && !isEraseWord(erasePhrase?.value)) {
+      message = t("type_erase_in_the_box_to_confi");
     } else {
-      message = "Ready to set up this drive.";
+      message = t("ready_to_set_up_this_drive");
     }
     status.textContent = message;
   }
@@ -1502,13 +1541,13 @@ function renderWizard() {
     step.classList.toggle("hidden", index !== wizardStep);
   });
   if (wizardProgress) {
-    wizardProgress.textContent = `Step ${wizardStep + 1} of ${wizardSteps.length}`;
+    wizardProgress.textContent = t("step_of", { n: wizardStep + 1, total: wizardSteps.length });
   }
   // The last step comes after the drive is set up: there's nothing to go back to.
   if (wizardBack) wizardBack.disabled = wizardStep === 0 || wizardStep === wizardSteps.length - 1;
   if (wizardNext) {
     wizardNext.classList.toggle("hidden", wizardStep === wizardSteps.length - 1);
-    wizardNext.textContent = wizardStep === 2 ? "Set up this drive" : "Next";
+    wizardNext.textContent = wizardStep === 2 ? t("set_up_this_drive") : t("next");
   }
   if (wizardFinish) wizardFinish.classList.toggle("hidden", wizardStep !== wizardSteps.length - 1);
 
@@ -1558,20 +1597,20 @@ function passphraseStrength(value) {
   const wordCount = value.split(/[\s-_]+/).filter(Boolean).length;
 
   if (tooShort) {
-    return { score: 1, label: "Too short" };
+    return { score: 1, label: t("too_short") };
   }
   if (hasCommonWord) {
-    return { score: 1, label: "Easy to guess" };
+    return { score: 1, label: t("easy_to_guess") };
   }
   const long = value.length >= 20 || wordCount >= 4;
   const decent = value.length >= 12 || variety >= 3;
   if (long && (variety >= 2 || wordCount >= 4)) {
-    return { score: 3, label: "Strong" };
+    return { score: 3, label: t("strong") };
   }
   if (decent) {
-    return { score: 2, label: "Okay" };
+    return { score: 2, label: t("okay") };
   }
-  return { score: 1, label: "Weak" };
+  return { score: 1, label: t("weak") };
 }
 
 function updatePassphraseMeter(inputId, barId, labelId) {
@@ -1613,8 +1652,8 @@ function wirePassphraseToggles() {
       if (!input) return;
       const showing = input.type === "text";
       input.type = showing ? "password" : "text";
-      btn.textContent = showing ? "Show" : "Hide";
-      btn.setAttribute("aria-label", showing ? "Show passphrase" : "Hide passphrase");
+      btn.textContent = showing ? t("show") : t("hide");
+      btn.setAttribute("aria-label", showing ? t("show_passphrase") : t("hide_passphrase"));
     });
   });
 }
@@ -1630,10 +1669,10 @@ function clearPassphraseFields(...ids) {
 
 function checkNewPassphrase(passphrase, confirm) {
   if (!passphrase || passphrase.length < MIN_PASSPHRASE_LENGTH) {
-    return `Your passphrase needs to be at least ${MIN_PASSPHRASE_LENGTH} characters. Try 4+ random words, like "maple-orbit-candle-river".`;
+    return t("passphrase_too_short", { n: MIN_PASSPHRASE_LENGTH });
   }
   if (passphrase !== confirm) {
-    return "Passphrases do not match.";
+    return t("passphrases_do_not_match");
   }
   return null;
 }
@@ -1679,14 +1718,14 @@ function updateWizardSummary(status) {
   const remember = !!document.getElementById("remember-passphrase")?.checked;
   const auto = !!status.config?.auto_backup_on_insert && remember;
   const summaryItems = [
-    `Aegis backs up: ${sources.map((s) => s.label).join(", ") || "nothing yet (add folders under Your backups)"}.`,
+    t("aegis_backs_up", { folders: sources.map((s) => s.label).join(", ") || t("nothing_yet_add_folders") }),
     auto
-      ? "Backups start by themselves whenever you plug in this drive."
-      : "Plug in the drive and click Back up now to make a backup.",
+      ? t("backups_start_by_themselves_wh")
+      : t("plug_in_the_drive_and_click_ba"),
     remember
-      ? "Your passphrase is remembered on this computer."
-      : "Aegis asks for your passphrase every time.",
-    "To get files back, use Restore. Without Aegis, use the AEGIS-RESTORE folder on the drive.",
+      ? t("your_passphrase_is_remembered")
+      : t("aegis_asks_for_your_passphrase"),
+    t("to_get_files_back_use_restore"),
   ];
   summaryItems.forEach((item) => {
     const li = document.createElement("li");
@@ -1698,13 +1737,13 @@ function updateWizardSummary(status) {
 function buildBackupSources() {
   const sources = [];
   if (document.getElementById("src-docs")?.checked) {
-    sources.push({ label: "Documents", path: "~/Documents" });
+    sources.push({ label: t("documents"), path: "~/Documents" });
   }
   if (document.getElementById("src-pics")?.checked) {
-    sources.push({ label: "Pictures", path: "~/Pictures" });
+    sources.push({ label: t("pictures"), path: "~/Pictures" });
   }
   if (document.getElementById("src-desktop")?.checked) {
-    sources.push({ label: "Desktop", path: "~/Desktop" });
+    sources.push({ label: t("desktop"), path: "~/Desktop" });
   }
   customSources.forEach((item) => sources.push(item));
   return sources;
@@ -1713,13 +1752,13 @@ function buildBackupSources() {
 function buildSetupDriveBackupSources() {
   const sources = [];
   if (document.getElementById("setup-drive-src-docs")?.checked) {
-    sources.push({ label: "Documents", path: "~/Documents" });
+    sources.push({ label: t("documents"), path: "~/Documents" });
   }
   if (document.getElementById("setup-drive-src-pics")?.checked) {
-    sources.push({ label: "Pictures", path: "~/Pictures" });
+    sources.push({ label: t("pictures"), path: "~/Pictures" });
   }
   if (document.getElementById("setup-drive-src-desktop")?.checked) {
-    sources.push({ label: "Desktop", path: "~/Desktop" });
+    sources.push({ label: t("desktop"), path: "~/Desktop" });
   }
   setupDriveCustomSources.forEach((item) => sources.push(item));
   return sources;
@@ -1740,15 +1779,15 @@ function renderFolderChips(listEl, list, rerender) {
     renameBtn.type = "button";
     renameBtn.className = "chip-remove chip-rename";
     renameBtn.textContent = "✎";
-    renameBtn.title = "Rename";
-    renameBtn.setAttribute("aria-label", `Rename ${item.label}`);
+    renameBtn.title = t("rename");
+    renameBtn.setAttribute("aria-label", t("rename_name", { name: item.label }));
     renameBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const input = document.createElement("input");
       input.type = "text";
       input.className = "chip-input";
       input.value = item.label;
-      input.setAttribute("aria-label", `New name for ${item.label}`);
+      input.setAttribute("aria-label", t("new_name_for", { name: item.label }));
       let done = false;
       const finish = (save) => {
         if (done) return;
@@ -1756,7 +1795,7 @@ function renderFolderChips(listEl, list, rerender) {
         const name = input.value.trim();
         if (save && name && name !== item.label) {
           const clash = folderClash(list, name, null, item);
-          if (clash) uiAlert(clash, "Rename folder");
+          if (clash) uiAlert(clash, t("rename_folder"));
           else item.label = name;
         }
         rerender();
@@ -1780,7 +1819,7 @@ function renderFolderChips(listEl, list, rerender) {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.className = "chip-remove";
-    removeBtn.setAttribute("aria-label", `Remove ${item.label}`);
+    removeBtn.setAttribute("aria-label", t("remove_name", { name: item.label }));
     removeBtn.textContent = "×";
     removeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1798,9 +1837,9 @@ function renderFolderChips(listEl, list, rerender) {
 function folderClash(list, label, path, skip) {
   const norm = (p) => (p || "").trim().replace(/[\\/]+$/, "");
   const taken = [...DEFAULT_SOURCES, ...list].filter((s) => s !== skip);
-  if (path && taken.some((s) => norm(s.path) === norm(path))) return "That folder is already in the list.";
+  if (path && taken.some((s) => norm(s.path) === norm(path))) return t("that_folder_is_already_in_the");
   if (taken.some((s) => s.label.toLowerCase() === label.toLowerCase()))
-    return `There's already a folder named "${label}". Pick another name.`;
+    return t("folder_name_taken", { name: label });
   return null;
 }
 
@@ -1878,7 +1917,7 @@ async function saveConfig(payload, savedNoteId) {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      uiAlert((await res.text()).trim() || "Couldn't save settings. Please try again.");
+      uiAlert((await res.text()).trim() || t("couldn_t_save_settings_please"));
       return false;
     }
     currentStatus = await res.json();
@@ -1887,12 +1926,12 @@ async function saveConfig(payload, savedNoteId) {
     renderStatus(currentStatus);
     const note = savedNoteId && document.getElementById(savedNoteId);
     if (note) {
-      note.textContent = "Saved.";
+      note.textContent = t("saved");
       setTimeout(() => { note.textContent = ""; }, 4000);
     }
     return true;
   } catch (_) {
-    uiAlert("Can't connect to Aegis right now. Try restarting the app.");
+    uiAlert(t("agent_offline"));
     return false;
   }
 }
@@ -1901,28 +1940,31 @@ async function saveConfig(payload, savedNoteId) {
 // show their folders so the user can pick the matching ones on this computer.
 function showHandoverInfo(data) {
   if (data?.joined) {
-    const name = (currentStatus?.trusted_drives || []).find((d) => d.drive_id === data.drive_id)?.label || "your backup";
+    const name = (currentStatus?.trusted_drives || []).find((d) => d.drive_id === data.drive_id)?.label || t("your_backup");
     // Back up right away, so the added folders are in a backup.
     startBackup(data.drive_id);
     uiAlert(
-      `This passphrase belongs to "${name}", a backup this computer already uses, so the folders you chose were added to it. ` +
-        "Aegis is backing it up now to include them.\n\n" +
-        "For a separate backup, use a different passphrase.",
-      "Added to an existing backup"
+      t("joined_body", { name }),
+      t("added_to_an_existing_backup")
     );
     return;
   }
-  if (!data?.existing || !(data.previous_computers || []).length) return;
+  if (!data?.existing) {
+    // A new backup: offer the sheet once, while the passphrase is fresh in mind.
+    uiConfirm(t("sheet_offer_body"), t("print_passphrase_sheet"), {
+      confirmText: t("print_passphrase_sheet"),
+    }).then((yes) => yes && openPassphraseSheet(data.drive_id));
+    return;
+  }
+  if (!(data.previous_computers || []).length) return;
   const lines = data.previous_computers.map(
     (c) =>
-      `• ${c.host || "unknown computer"} (last backup ${new Date(c.last_backup).toLocaleDateString()}):\n    ` +
+      `• ${t("computer_last_backup", { host: c.host || t("unknown_computer"), date: new Date(c.last_backup).toLocaleDateString(LANG) })}:\n    ` +
       c.folders.join("\n    ")
   );
   uiAlert(
-    "This computer now continues an existing backup. Earlier backups stay on the drive and can still be restored.\n\n" +
-      "Folders backed up so far:\n" + lines.join("\n") +
-      "\n\nIf this computer keeps the same files in other folders, open it under Your backups and choose Edit folders.",
-    "Continuing an existing backup"
+    t("handover_body", { folders: lines.join("\n") }),
+    t("continuing_an_existing_backup")
   );
 }
 
@@ -1943,7 +1985,7 @@ async function openPassphraseSheet(driveId) {
     document.getElementById("sheet-print").focus();
   } catch (err) {
     console.error(err);
-    uiAlert("Couldn't open the passphrase sheet.");
+    uiAlert(t("couldn_t_open_the_passphrase_s"));
   }
 }
 
@@ -1975,25 +2017,23 @@ async function postDriveSetup(payload) {
   if (res.status !== 409) return res;
   hideLoadingOverlay();
   const ok = await uiConfirm(
-    "This drive already has backups, but this passphrase doesn't open any of them.\n\n" +
-      "If you mistyped it, choose Cancel and try again.\n" +
-      'Choose "Create separate backup" only if you want a separate new backup on this drive, protected by this passphrase.',
-    "Create a separate backup?",
-    { confirmText: "Create separate backup", focusCancel: true }
+    t("separate_backup_body"),
+    t("create_a_separate_backup"),
+    { confirmText: t("create_separate_backup"), focusCancel: true }
   );
   if (!ok) return null;
-  showLoadingOverlay("Setting up drive…");
+  showLoadingOverlay(t("setting_up_drive"));
   return send({ ...payload, new_instance: true });
 }
 
 // Returns true only when the drive was set up.
 async function setupDriveWithMount(mountPath) {
   if (!mountPath) {
-    uiAlert("The drive isn't open yet. Click Open drive, or tick \"Erase this drive\".");
+    uiAlert(t("the_drive_isn_t_open_yet_click"));
     return false;
   }
   if (!currentStatus?.restic_available) {
-    uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
+    uiAlert(t("aegis_is_missing_a_part_it_nee"));
     return false;
   }
 
@@ -2033,8 +2073,8 @@ async function setupDriveWithMount(mountPath) {
   }
   const detail = await res.text();
   uiAlert(
-    detail && detail.trim() ? detail.trim() : "Drive setup failed. Check the passphrase and try again.",
-    "Setup failed"
+    detail && detail.trim() ? detail.trim() : t("drive_setup_failed_check_the_p"),
+    t("setup_failed")
   );
   return false;
 }
@@ -2042,20 +2082,20 @@ async function setupDriveWithMount(mountPath) {
 function formatErrorMessage(detail, forFormat) {
   const lower = (detail || "").toLowerCase();
   if (lower.includes("authorization") || lower.includes("not authorized")) {
-    return "Aegis needs your computer's password to do this. Try again and enter it when your computer asks.";
+    return t("aegis_needs_your_computer_s_pa");
   }
-  return detail && detail.trim() ? detail.trim() : (forFormat ? "Formatting failed." : "Something went wrong. Please try again.");
+  return detail && detail.trim() ? detail.trim() : (forFormat ? t("formatting_failed") : t("something_went_wrong_please_tr"));
 }
 
 async function setupDriveFromSelectionForAddDrive() {
   try {
     const selection = getSelectedPartition();
     if (!selection) {
-      uiAlert("Choose a drive first.");
+      uiAlert(t("choose_a_drive_first"));
       return;
     }
     if (!preflight.restic) {
-      uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
+      uiAlert(t("aegis_is_missing_a_part_it_nee"));
       return;
     }
     const passphrase = document.getElementById("setup-drive-passphrase")?.value ?? "";
@@ -2077,28 +2117,27 @@ async function setupDriveFromSelectionForAddDrive() {
       const canFormat = preflight.can_format;
       if (!canFormat) {
         uiAlert(
-          "Aegis can't erase drives on this computer. Erase it with your computer's disk tool (choose \"exFAT\"), then try again."
+          t("aegis_can_t_erase_drives_on_th3")
         );
         return;
       }
       const confirmErase = (erasePhrase?.value || "").trim();
-      if (confirmErase !== "ERASE") {
-        uiAlert('Type ERASE in the box to confirm erasing.');
+      if (!isEraseWord(confirmErase)) {
+        uiAlert(t("type_erase_in_the_box_to_confi"));
         return;
       }
       const confirmMsg =
-        `Erase "${selection.device.model || "USB drive"} (${selection.device.size})"? ` +
-        "Everything on it will be deleted. This can't be undone.";
-      if (!(await uiConfirm(confirmMsg, "Erase drive", { confirmText: "Erase drive", danger: true, focusCancel: true }))) {
+        t("erase_confirm", { name: `${selection.device.model || t("usb_drive")} (${selection.device.size})` });
+      if (!(await uiConfirm(confirmMsg, t("erase_drive"), { confirmText: t("erase_drive"), danger: true, focusCancel: true }))) {
         return;
       }
     }
 
-    showLoadingOverlay("Preparing…");
+    showLoadingOverlay(t("preparing"));
 
     try {
       if (shouldErase) {
-        showLoadingOverlay("Erasing drive…");
+        showLoadingOverlay(t("erasing_drive"));
         const res = await fetch(`${API}/drives/format`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2109,10 +2148,10 @@ async function setupDriveFromSelectionForAddDrive() {
         });
         if (!res.ok) {
           const detail = await res.text();
-          uiAlert(formatErrorMessage(detail, true), "Format failed");
+          uiAlert(formatErrorMessage(detail, true), t("format_failed"));
           return;
         }
-        showLoadingOverlay("Refreshing device list…");
+        showLoadingOverlay(t("refreshing_device_list"));
         await fetchDevices();
         mountPath = null;
         if (wasWholeDisk) {
@@ -2124,16 +2163,16 @@ async function setupDriveFromSelectionForAddDrive() {
       }
 
       if (!selection.partition.fstype && !shouldErase) {
-        await uiAlert("This drive needs erasing first. Tick \"Erase this drive\".");
+        await uiAlert(t("this_drive_needs_erasing_first"));
         return;
       }
 
       if (!mountPath) {
         if (!preflight.can_mount) {
-          uiAlert("Aegis can't open drives on this computer.");
+          uiAlert(t("aegis_can_t_open_drives_on_thi"));
           return;
         }
-        showLoadingOverlay("Opening drive…");
+        showLoadingOverlay(t("opening_drive"));
         const mountRes = await fetch(`${API}/drives/mount`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2141,7 +2180,7 @@ async function setupDriveFromSelectionForAddDrive() {
         });
         if (!mountRes.ok) {
           const detail = await mountRes.text();
-          uiAlert(formatErrorMessage(detail, false), "Couldn't open the drive");
+          uiAlert(formatErrorMessage(detail, false), t("couldn_t_open_the_drive"));
           return;
         }
         const data = await mountRes.json();
@@ -2162,7 +2201,7 @@ async function setupDriveFromSelectionForAddDrive() {
       paranoid_mode: !!currentStatus?.config?.paranoid_mode,
     };
 
-    showLoadingOverlay("Setting up drive…");
+    showLoadingOverlay(t("setting_up_drive"));
     const res = await postDriveSetup(payload);
     if (!res) return;
 
@@ -2181,7 +2220,7 @@ async function setupDriveFromSelectionForAddDrive() {
       showView("dashboard");
     } else {
       const detail = await res.text();
-      uiAlert(formatErrorMessage(detail, false) || "Drive setup failed. Check the passphrase and try again.", "Setup failed");
+      uiAlert(formatErrorMessage(detail, false) || t("drive_setup_failed_check_the_p"), t("setup_failed"));
     }
     } finally {
       hideLoadingOverlay();
@@ -2189,7 +2228,7 @@ async function setupDriveFromSelectionForAddDrive() {
   } catch (err) {
     hideLoadingOverlay();
     console.error(err);
-    uiAlert("Setup failed — check your connection and try again.");
+    uiAlert(t("setup_failed_check_your_connec"));
   }
 }
 
@@ -2197,11 +2236,11 @@ async function mountSelectedPartition() {
   try {
     const selection = getSelectedPartition();
     if (!selection) {
-      uiAlert("Choose a drive first.");
+      uiAlert(t("choose_a_drive_first"));
       return;
     }
     if (!preflight.can_mount) {
-      uiAlert("Aegis can't open drives on this computer.");
+      uiAlert(t("aegis_can_t_open_drives_on_thi"));
       return;
     }
     const res = await fetch(`${API}/drives/mount`, {
@@ -2213,8 +2252,8 @@ async function mountSelectedPartition() {
       const detail = await res.text();
       uiAlert(
         detail === "authorization required"
-          ? "Aegis needs your computer's password to do this. Try again and enter it when your computer asks."
-          : detail.trim() || "Couldn't open the drive. Unplug it, plug it back in, and try again."
+          ? t("aegis_needs_your_computer_s_pa")
+          : detail.trim() || t("couldn_t_open_the_drive_unplug")
       );
       return;
     }
@@ -2222,7 +2261,7 @@ async function mountSelectedPartition() {
     await fetchDevices();
   } catch (err) {
     console.error(err);
-    uiAlert("Couldn't open the drive due to a connection error.");
+    uiAlert(t("couldn_t_open_the_drive_due_to"));
   }
 }
 
@@ -2230,11 +2269,11 @@ async function setupDriveFromSelection() {
   try {
     const selection = getSelectedPartition();
     if (!selection) {
-      uiAlert("Choose a drive first.");
+      uiAlert(t("choose_a_drive_first"));
       return false;
     }
     if (!preflight.restic) {
-      uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
+      uiAlert(t("aegis_is_missing_a_part_it_nee"));
       return false;
     }
     const eraseOption = document.getElementById("erase-option");
@@ -2249,28 +2288,27 @@ async function setupDriveFromSelection() {
       const canFormat = preflight.can_format;
       if (!canFormat) {
         uiAlert(
-          "Aegis can't erase drives on this computer. Erase it with your computer's disk tool (choose \"exFAT\"), then try again."
+          t("aegis_can_t_erase_drives_on_th3")
         );
         return false;
       }
       const confirm = (erasePhrase?.value || "").trim();
-      if (confirm !== "ERASE") {
-        uiAlert('Type ERASE in the box to confirm erasing.');
+      if (!isEraseWord(confirm)) {
+        uiAlert(t("type_erase_in_the_box_to_confi"));
         return false;
       }
       const confirmMsg =
-        `Erase "${selection.device.model || "USB drive"} (${selection.device.size})"? ` +
-        "Everything on it will be deleted. This can't be undone.";
-      if (!(await uiConfirm(confirmMsg, "Erase drive", { confirmText: "Erase drive", danger: true, focusCancel: true }))) {
+        t("erase_confirm", { name: `${selection.device.model || t("usb_drive")} (${selection.device.size})` });
+      if (!(await uiConfirm(confirmMsg, t("erase_drive"), { confirmText: t("erase_drive"), danger: true, focusCancel: true }))) {
         return false;
       }
     }
 
-    showLoadingOverlay("Preparing…");
+    showLoadingOverlay(t("preparing"));
 
     try {
       if (shouldErase) {
-        showLoadingOverlay("Erasing drive…");
+        showLoadingOverlay(t("erasing_drive"));
         const res = await fetch(`${API}/drives/format`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2281,10 +2319,10 @@ async function setupDriveFromSelection() {
         });
         if (!res.ok) {
           const detail = await res.text();
-          uiAlert(formatErrorMessage(detail, true), "Format failed");
+          uiAlert(formatErrorMessage(detail, true), t("format_failed"));
           return false;
         }
-        showLoadingOverlay("Refreshing device list…");
+        showLoadingOverlay(t("refreshing_device_list"));
         await fetchDevices();
         mountPath = null;
         if (wasWholeDisk) {
@@ -2296,16 +2334,16 @@ async function setupDriveFromSelection() {
       }
 
       if (!selection.partition.fstype && !shouldErase) {
-        await uiAlert("This drive needs erasing first. Tick \"Erase this drive\".");
+        await uiAlert(t("this_drive_needs_erasing_first"));
         return false;
       }
 
       if (!mountPath) {
         if (!preflight.can_mount) {
-          uiAlert("Aegis can't open drives on this computer.");
+          uiAlert(t("aegis_can_t_open_drives_on_thi"));
           return false;
         }
-        showLoadingOverlay("Opening drive…");
+        showLoadingOverlay(t("opening_drive"));
         const mountRes = await fetch(`${API}/drives/mount`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2313,7 +2351,7 @@ async function setupDriveFromSelection() {
         });
         if (!mountRes.ok) {
           const detail = await mountRes.text();
-          uiAlert(formatErrorMessage(detail, false), "Couldn't open the drive");
+          uiAlert(formatErrorMessage(detail, false), t("couldn_t_open_the_drive"));
           return false;
         }
         const data = await mountRes.json();
@@ -2322,7 +2360,7 @@ async function setupDriveFromSelection() {
         await fetchStatus();
       }
 
-      showLoadingOverlay("Setting up drive…");
+      showLoadingOverlay(t("setting_up_drive"));
       return await setupDriveWithMount(mountPath);
     } finally {
       hideLoadingOverlay();
@@ -2330,7 +2368,7 @@ async function setupDriveFromSelection() {
   } catch (err) {
     hideLoadingOverlay();
     console.error(err);
-    uiAlert("Setup failed — check your connection and try again.");
+    uiAlert(t("setup_failed_check_your_connec"));
     return false;
   }
 }
@@ -2349,47 +2387,47 @@ function idleConnectedBackups(status = currentStatus) {
 async function startBackup(driveId) {
   const ids = typeof driveId === "string" ? [driveId] : idleConnectedBackups();
   if (!ids.length) {
-    uiAlert("Connect your Aegis drive first.");
+    uiAlert(t("connect_your_aegis_drive_first"));
     return;
   }
   if (!currentStatus?.restic_available) {
-    uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
+    uiAlert(t("aegis_is_missing_a_part_it_nee"));
     return;
   }
   for (const id of ids) {
-    const name = (currentStatus?.trusted_drives || []).find((d) => d.drive_id === id)?.label || "this backup";
+    const name = (currentStatus?.trusted_drives || []).find((d) => d.drive_id === id)?.label || t("this_backup");
     const result = await postWithPassphrase(
       "/backup/run",
       { drive_id: id },
       ids.length > 1 || typeof driveId === "string"
-        ? `Enter the passphrase for "${name}" to start its backup.`
-        : "Enter your passphrase to start the backup.",
+        ? t("enter_passphrase_for", { name })
+        : t("enter_your_passphrase_to_start"),
       { verifies: false }
     );
     if (!result) return;
     if (!result.res.ok) {
-      uiAlert(result.detail || "Couldn't start the backup. Please try again.", "Backup not started");
+      uiAlert(result.detail || t("couldn_t_start_the_backup_plea"), t("backup_not_started"));
     }
   }
 }
 
 async function loadSnapshots() {
   if (!currentStatus?.drive?.drive_id) {
-    uiAlert("Connect your Aegis drive to see your backups.");
+    uiAlert(t("connect_your_aegis_drive_to_se"));
     return;
   }
   if (!currentStatus?.restic_available) {
-    uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
+    uiAlert(t("aegis_is_missing_a_part_it_nee"));
     return;
   }
   const result = await postWithPassphrase(
     "/snapshots",
     { drive_id: currentStatus.drive.drive_id },
-    "Enter your passphrase to see your backups."
+    t("enter_your_passphrase_to_see_y")
   );
   if (!result) return;
   if (!result.res.ok) {
-    uiAlert(result.detail || "Couldn't load your backups. Please try again.");
+    uiAlert(result.detail || t("couldn_t_load_your_backups_ple"));
     return;
   }
 
@@ -2400,7 +2438,7 @@ async function loadSnapshots() {
   if (!data.snapshots || data.snapshots.length === 0) {
     const empty = document.createElement("p");
     empty.className = "muted";
-    empty.textContent = "No backups on this drive yet.";
+    empty.textContent = t("no_backups_on_this_drive_yet");
     list.appendChild(empty);
     return;
   }
@@ -2421,8 +2459,8 @@ async function loadSnapshots() {
     });
     label.appendChild(radio);
     const span = document.createElement("span");
-    span.textContent = `Backup from ${new Date(snap.time).toLocaleString()}` +
-      (severalComputers && snap.hostname ? ` · computer: ${snap.hostname}` : "");
+    span.textContent = t("backup_from", { date: new Date(snap.time).toLocaleString(LANG) }) +
+      (severalComputers && snap.hostname ? ` · ${t("computer_name", { name: snap.hostname })}` : "");
     label.appendChild(span);
     item.appendChild(label);
     list.appendChild(item);
@@ -2446,11 +2484,11 @@ async function fetchBrowseEntries(snapshotId, path) {
   const result = await postWithPassphrase(
     "/snapshots/browse",
     { drive_id: currentStatus.drive.drive_id, snapshot_id: snapshotId, path: path || null },
-    "Enter your passphrase to browse this backup."
+    t("enter_your_passphrase_to_brows")
   );
   if (!result) return null;
   if (!result.res.ok) {
-    uiAlert(result.detail || "Couldn't read the contents of this backup.");
+    uiAlert(result.detail || t("couldn_t_read_the_contents_of"));
     return null;
   }
   return (await result.res.json()).entries;
@@ -2470,7 +2508,7 @@ async function loadBrowseChildren(path, listEl) {
   listEl.innerHTML = "";
   const loading = document.createElement("li");
   loading.className = "muted";
-  loading.textContent = "Loading…";
+  loading.textContent = t("loading");
   listEl.appendChild(loading);
   const entries = await fetchBrowseEntries(browseSnapshotId, path);
   listEl.innerHTML = "";
@@ -2478,7 +2516,7 @@ async function loadBrowseChildren(path, listEl) {
   if (entries.length === 0) {
     const empty = document.createElement("li");
     empty.className = "muted";
-    empty.textContent = "(nothing here)";
+    empty.textContent = t("nothing_here");
     listEl.appendChild(empty);
     return;
   }
@@ -2499,7 +2537,7 @@ function buildBrowseNode(entry) {
     toggle.className = "browse-toggle";
     toggle.setAttribute("aria-expanded", "false");
     toggle.textContent = "▸";
-    toggle.setAttribute("aria-label", `Show contents of ${entry.name}`);
+    toggle.setAttribute("aria-label", t("show_contents_of", { name: entry.name }));
     row.appendChild(toggle);
   } else {
     const spacer = document.createElement("span");
@@ -2560,23 +2598,23 @@ function buildBrowseNode(entry) {
 async function runRestore(includePaths, confirmMessage) {
   const selected = document.querySelector("input[name='snapshot']:checked");
   if (!selected) {
-    uiAlert("Select a backup first.");
+    uiAlert(t("select_a_backup_first"));
     return;
   }
   if (!currentStatus?.restic_available) {
-    uiAlert("Aegis is missing a part it needs. Please reinstall Aegis.");
+    uiAlert(t("aegis_is_missing_a_part_it_nee"));
     return;
   }
   const target = document.getElementById("restore-target").value;
   if (!target) {
-    uiAlert("Choose a restore folder.");
+    uiAlert(t("choose_a_restore_folder"));
     return;
   }
-  if (!(await uiConfirm(confirmMessage, "Restore files"))) {
+  if (!(await uiConfirm(confirmMessage, t("restore_files")))) {
     return;
   }
 
-  showLoadingOverlay("Restoring your files… This can take a while for large backups. Keep the drive plugged in.");
+  showLoadingOverlay(t("restoring_your_files_this_can"));
   const stop = document.getElementById("loading-cancel");
   stop?.classList.remove("hidden");
   try {
@@ -2588,60 +2626,60 @@ async function runRestore(includePaths, confirmMessage) {
         target_path: target,
         include_paths: includePaths,
       },
-      "Enter your passphrase to restore."
+      t("enter_your_passphrase_to_resto")
     );
     hideLoadingOverlay();
     if (!result) return;
     if (!result.res.ok) {
       uiAlert(
-        result.detail || "Restore failed. Please try again.",
-        result.res.status === 409 ? "Restore stopped" : "Restore failed"
+        result.detail || t("restore_failed_please_try_agai"),
+        result.res.status === 409 ? t("restore_stopped") : t("restore_failed")
       );
       return;
     }
   } catch (_) {
     hideLoadingOverlay();
-    uiAlert("Can't connect to Aegis right now. Try restarting the app.", "Restore failed");
+    uiAlert(t("agent_offline"), t("restore_failed"));
     return;
   } finally {
     stop?.classList.add("hidden");
   }
-  await uiAlert(`Your files are back in ${target}. Existing files were left untouched.`, "Restore complete");
+  await uiAlert(t("restore_done", { folder: target }), t("restore_complete"));
   openFolderPath(target);
 }
 
 function restoreSnapshot() {
-  return runRestore([], "Restore all files to a new folder? Aegis will not overwrite existing files.");
+  return runRestore([], t("restore_all_files_to_a_new_fol"));
 }
 
 function restoreSelected() {
   if (browseSelectedPaths.size === 0) {
-    uiAlert('Check at least one file or folder first, or use "Restore everything".');
+    uiAlert(t("check_at_least_one_file_or_fol"));
     return;
   }
   return runRestore(
     Array.from(browseSelectedPaths),
-    "Restore the checked files to a new folder? Aegis will not overwrite existing files."
+    t("restore_the_checked_files_to_a")
   );
 }
 
 async function fetchSnapshotStats(snapshotId) {
   if (!snapshotId) return;
   const summary = document.getElementById("snapshot-summary");
-  summary.textContent = "Loading backup details…";
+  summary.textContent = t("loading_backup_details");
 
   const result = await postWithPassphrase(
     "/snapshots/stats",
     { drive_id: currentStatus.drive.drive_id, snapshot_id: snapshotId },
-    "Enter your passphrase to view backup details."
+    t("enter_your_passphrase_to_view")
   );
   if (!result || !result.res.ok) {
-    summary.textContent = "Couldn't load backup details.";
+    summary.textContent = t("couldn_t_load_backup_details");
     return;
   }
 
   const stats = await result.res.json();
-  summary.textContent = `Files: ${stats.total_file_count.toLocaleString()} · Size: ${formatBytes(stats.total_size)}`;
+  summary.textContent = t("files_size", { files: stats.total_file_count.toLocaleString(LANG), size: formatBytes(stats.total_size) });
 }
 
 function formatBytes(bytes) {
@@ -2658,30 +2696,30 @@ function formatBytes(bytes) {
 
 async function ejectDrive() {
   if (!currentStatus?.drive?.mount_path) {
-    uiAlert("No drive to eject.");
+    uiAlert(t("no_drive_to_eject"));
     return;
   }
-  if (!(await uiConfirm("Eject the drive now?", "Eject drive"))) return;
+  if (!(await uiConfirm(t("eject_the_drive_now"), t("eject_drive")))) return;
   const res = await fetch(`${API}/drives/eject`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ mount_path: currentStatus.drive.mount_path }),
   });
   if (res.ok) {
-    showToast("It's now safe to unplug the drive.");
+    showToast(t("it_s_now_safe_to_unplug_the_dr"));
   } else {
-    uiAlert((await res.text()).trim() || "Couldn't eject the drive. Please try again.");
+    uiAlert((await res.text()).trim() || t("couldn_t_eject_the_drive_pleas"));
   }
 }
 
 async function exportRecoveryKit() {
   if (!currentStatus?.drive?.drive_id) {
-    uiAlert("Plug in your Aegis drive first.");
+    uiAlert(t("plug_in_your_aegis_drive_first"));
     return;
   }
   const destination = document.getElementById("recovery-destination").value.trim();
   if (!destination) {
-    uiAlert("Choose a folder to save the drive details in.");
+    uiAlert(t("choose_a_folder_to_save_the_dr"));
     return;
   }
   const res = await fetch(`${API}/recovery-kit`, {
@@ -2693,9 +2731,9 @@ async function exportRecoveryKit() {
     }),
   });
   if (res.ok) {
-    showToast("Drive details saved. Keep them somewhere safe.");
+    showToast(t("drive_details_saved_keep_them"));
   } else {
-    uiAlert("Couldn't save the drive details. Check that the folder exists and try again.");
+    uiAlert(t("couldn_t_save_the_drive_detail"));
   }
 }
 
@@ -2839,28 +2877,28 @@ function setupListeners() {
     });
 
   document.getElementById("backup-now").addEventListener("click", () =>
-    withBusy("backup-now", "Starting…", () => startBackup())
+    withBusy("backup-now", t("starting"), () => startBackup())
   );
   document.getElementById("restore-btn").addEventListener("click", () => showView("restore"));
   document.getElementById("eject-btn").addEventListener("click", () =>
-    withBusy("eject-btn", "Ejecting…", ejectDrive)
+    withBusy("eject-btn", t("ejecting"), ejectDrive)
   );
 
   document.getElementById("load-snapshots").addEventListener("click", () =>
-    withBusy("load-snapshots", "Loading backups…", loadSnapshots)
+    withBusy("load-snapshots", t("loading_backups"), loadSnapshots)
   );
   document.getElementById("restore-run").addEventListener("click", restoreSnapshot);
   document.getElementById("restore-selected-run").addEventListener("click", restoreSelected);
 
   document.getElementById("save-settings").addEventListener("click", () =>
-    withBusy("save-settings", "Saving…", () => saveConfig(settingsPayload(), "settings-saved"))
+    withBusy("save-settings", t("saving"), () => saveConfig(settingsPayload(), "settings-saved"))
   );
   initAutostartToggle();
   document.getElementById("save-advanced").addEventListener("click", () =>
-    withBusy("save-advanced", "Saving…", () => saveConfig(advancedPayload(), "advanced-saved"))
+    withBusy("save-advanced", t("saving"), () => saveConfig(advancedPayload(), "advanced-saved"))
   );
   document.getElementById("export-recovery").addEventListener("click", () =>
-    withBusy("export-recovery", "Saving…", exportRecoveryKit)
+    withBusy("export-recovery", t("saving"), exportRecoveryKit)
   );
 
   const remember = document.getElementById("remember-passphrase");
@@ -2915,7 +2953,7 @@ function setupListeners() {
     editFoldersCancel.addEventListener("click", closeEditFoldersModal);
   }
   if (editFoldersSave) {
-    editFoldersSave.addEventListener("click", () => withBusy("edit-folders-save", "Saving…", saveEditFolders));
+    editFoldersSave.addEventListener("click", () => withBusy("edit-folders-save", t("saving"), saveEditFolders));
   }
   const editFoldersOverlay = document.getElementById("edit-folders-overlay");
   if (editFoldersOverlay) {
@@ -2968,12 +3006,47 @@ console.info("[init] app.js loaded");
       console.error("[devtools] failed", err);
     });
 })();
-fetchStatus();
-fetchDevices();
-fetchPreflight();
-setInterval(fetchStatus, 1500);
-setInterval(fetchDevices, 1500);
-setInterval(fetchPreflight, 5000);
+stringsReady.then(() => {
+  const view = sessionStorage.getItem("aegis-view");
+  if (view) {
+    sessionStorage.removeItem("aegis-view");
+    showView(view);
+  }
+  fetchStatus();
+  fetchDevices();
+  fetchPreflight();
+  setInterval(fetchStatus, 1500);
+  setInterval(fetchDevices, 1500);
+  setInterval(fetchPreflight, 5000);
+});
+
+// Language: saved right away; the page reloads to show every text in the new language.
+(() => {
+  const select = document.getElementById("language");
+  if (!select) return;
+  stringsReady.then(async () => {
+    try {
+      const res = await fetch(`${API}/status`);
+      if (res.ok) select.value = (await res.json()).config?.language || "system";
+    } catch (_) {
+      /* stays on "system" */
+    }
+  });
+  select.addEventListener("change", async () => {
+    try {
+      const res = await fetch(`${API}/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: select.value }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      sessionStorage.setItem("aegis-view", "settings");
+      location.reload();
+    } catch (_) {
+      uiAlert(t("couldn_t_save_settings_please"));
+    }
+  });
+})();
 
 // "Start at login" lives in the desktop shell, not the agent config; applies immediately.
 function initAutostartToggle() {
@@ -2984,7 +3057,7 @@ function initAutostartToggle() {
   box.addEventListener("change", () => {
     invoke("set_autostart", { enabled: box.checked }).catch(() => {
       box.checked = !box.checked;
-      uiAlert("Couldn't change the login setting. Please try again.");
+      uiAlert(t("couldn_t_change_the_login_sett"));
     });
   });
 }

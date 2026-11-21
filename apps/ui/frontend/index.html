@@ -17,97 +17,93 @@
           <div class="logo">A</div>
           <div class="brand-text">
             <span class="brand-name">Aegis</span>
-            <span class="brand-tag">Secure USB Backup</span>
+            <span class="brand-tag" data-i18n="secure_usb_backup"></span>
           </div>
         </div>
         <div class="top-right">
         <nav class="nav" id="top-nav">
-          <button class="nav-btn" data-view="dashboard">Dashboard</button>
-          <button class="nav-btn" data-view="setup-drive">Add backup</button>
-          <button class="nav-btn" data-view="restore">Restore</button>
-          <button class="nav-btn" data-view="settings">Settings</button>
-          <button class="nav-btn" data-view="advanced">Advanced</button>
+          <button class="nav-btn" data-view="dashboard" data-i18n="dashboard"></button>
+          <button class="nav-btn" data-view="setup-drive" data-i18n="add_backup"></button>
+          <button class="nav-btn" data-view="restore" data-i18n="restore"></button>
+          <button class="nav-btn" data-view="settings" data-i18n="settings"></button>
+          <button class="nav-btn" data-view="advanced" data-i18n="advanced"></button>
         </nav>
-        <button class="theme-btn" id="theme-toggle" type="button" aria-label="Theme: match system" title="Theme: match system">◐</button>
+        <button class="theme-btn" id="theme-toggle" type="button" data-i18n-aria="theme_match_system" data-i18n-title="theme_match_system">◐</button>
         </div>
       </header>
 
       <div id="status-banner" class="status-banner hidden" role="status" aria-live="polite"></div>
       <div id="update-banner" class="status-banner hidden" role="status" aria-live="polite">
         <span id="update-banner-text"></span>
-        <button class="btn secondary" id="update-install" type="button">Install and restart</button>
+        <button class="btn secondary" id="update-install" type="button" data-i18n="install_and_restart"></button>
       </div>
 
       <main>
         <section id="wizard" class="view hidden">
           <div class="panel">
-            <h1>Welcome to Aegis</h1>
-            <p class="lead">
-              Aegis protects your files by encrypting every backup, so if your USB drive is lost or
-              stolen, no one else can read it. It can't protect you if your computer is already
-              infected, or if someone forces you to unlock your files.
-            </p>
-            <div class="wizard-progress" id="wizard-progress">Step 1 of 4</div>
+            <h1 data-i18n="welcome_to_aegis"></h1>
+            <p class="lead" data-i18n="aegis_protects_your_files_by_e"></p>
+            <div class="wizard-progress" id="wizard-progress" data-i18n="step_1_of_4"></div>
             <div class="step-grid">
               <div class="step-card wizard-step" data-step="0">
-                <div class="step-label">Step 1</div>
-                <h2>Select what to protect</h2>
+                <div class="step-label" data-i18n="step_1"></div>
+                <h2 data-i18n="select_what_to_protect"></h2>
                 <div class="toggle-list">
-                  <label><input type="checkbox" id="src-docs" checked /> Documents <span class="muted">(~/Documents)</span></label>
-                  <label><input type="checkbox" id="src-pics" checked /> Pictures <span class="muted">(~/Pictures)</span></label>
-                  <label><input type="checkbox" id="src-desktop" checked /> Desktop <span class="muted">(~/Desktop)</span></label>
+                  <label><input type="checkbox" id="src-docs" checked /> <span data-i18n="documents"></span> <span class="muted">(~/Documents)</span></label>
+                  <label><input type="checkbox" id="src-pics" checked /> <span data-i18n="pictures"></span> <span class="muted">(~/Pictures)</span></label>
+                  <label><input type="checkbox" id="src-desktop" checked /> <span data-i18n="desktop"></span> <span class="muted">(~/Desktop)</span></label>
                 </div>
                 <div class="field-row">
-                  <input id="custom-label" type="text" placeholder="Name (optional)" aria-label="Folder name" />
-                  <input id="custom-path" type="text" placeholder="Folder location" aria-label="Folder location" />
-                  <button class="btn ghost" id="browse-folder" type="button">Browse…</button>
-                  <button class="btn secondary" id="add-custom" type="button">Add</button>
+                  <input id="custom-label" type="text" data-i18n-placeholder="name_optional" data-i18n-aria="folder_name" />
+                  <input id="custom-path" type="text" data-i18n-placeholder="folder_location" data-i18n-aria="folder_location" />
+                  <button class="btn ghost" id="browse-folder" type="button" data-i18n="browse"></button>
+                  <button class="btn secondary" id="add-custom" type="button" data-i18n="add"></button>
                 </div>
                 <ul id="custom-list" class="chip-list"></ul>
               </div>
 
               <div class="step-card wizard-step hidden" data-step="1">
-                <div class="step-label">Step 2</div>
-                <h2>Security setup</h2>
-                <p class="muted">Your passphrase unlocks the backup. Aegis never stores it on the USB drive.</p>
-                <p class="callout">Write your passphrase down and keep it somewhere safe, away from the drive. If you forget it, nobody can open your backups, not even Aegis. There is no reset.</p>
-                <p class="muted">Already used this drive with Aegis on another computer? Type the passphrase you chose back then.</p>
+                <div class="step-label" data-i18n="step_2"></div>
+                <h2 data-i18n="security_setup"></h2>
+                <p class="muted" data-i18n="your_passphrase_unlocks_the_ba"></p>
+                <p class="callout" data-i18n="write_your_passphrase_down_and"></p>
+                <p class="muted" data-i18n="already_used_this_drive_with_a"></p>
                 <div class="field">
-                  <label for="passphrase">Passphrase</label>
+                  <label for="passphrase" data-i18n="passphrase"></label>
                   <div class="password-field">
-                    <input id="passphrase" type="password" placeholder="Type a passphrase" autocomplete="new-password" aria-describedby="passphrase-meter-label" />
-                    <button type="button" class="password-toggle" data-toggle-for="passphrase" aria-label="Show passphrase">Show</button>
+                    <input id="passphrase" type="password" data-i18n-placeholder="type_a_passphrase" autocomplete="new-password" aria-describedby="passphrase-meter-label" />
+                    <button type="button" class="password-toggle" data-toggle-for="passphrase" data-i18n-aria="show_passphrase" data-i18n="show"></button>
                   </div>
-                  <p class="muted passphrase-hint">Use 4+ random words, e.g. "maple-orbit-candle-river".</p>
+                  <p class="muted passphrase-hint" data-i18n="use_4_random_words_e_g_maple_o"></p>
                   <div class="passphrase-meter" aria-live="polite">
                     <div class="passphrase-meter-track"><div class="passphrase-meter-bar" id="passphrase-meter-bar"></div></div>
                     <span class="passphrase-meter-label" id="passphrase-meter-label"></span>
                   </div>
                 </div>
                 <div class="field">
-                  <label for="passphrase-confirm">Confirm</label>
+                  <label for="passphrase-confirm" data-i18n="confirm"></label>
                   <div class="password-field">
-                    <input id="passphrase-confirm" type="password" placeholder="Re-enter passphrase" autocomplete="new-password" />
-                    <button type="button" class="password-toggle" data-toggle-for="passphrase-confirm" aria-label="Show passphrase">Show</button>
+                    <input id="passphrase-confirm" type="password" data-i18n-placeholder="re_enter_passphrase" autocomplete="new-password" />
+                    <button type="button" class="password-toggle" data-toggle-for="passphrase-confirm" data-i18n-aria="show_passphrase" data-i18n="show"></button>
                   </div>
                 </div>
                 <label class="checkbox">
-                  <input id="remember-passphrase" type="radio" name="wizard-passphrase-mode" checked /> Remember my passphrase on this computer (needed for automatic backups)
+                  <input id="remember-passphrase" type="radio" name="wizard-passphrase-mode" checked /> <span data-i18n="remember_my_passphrase_on_this"></span>
                 </label>
                 <label class="checkbox">
-                  <input id="paranoid-mode" type="radio" name="wizard-passphrase-mode" /> Ask for my passphrase every time (more private; no automatic backups)
+                  <input id="paranoid-mode" type="radio" name="wizard-passphrase-mode" /> <span data-i18n="ask_for_my_passphrase_every_ti"></span>
                 </label>
               </div>
 
               <div class="step-card wizard-step hidden" data-step="2">
-                <div class="step-label">Step 3</div>
-                <h2>Connect your USB drive</h2>
-                <p class="muted">Plug in the USB drive you want to back up to and choose it below.</p>
-                <div class="drive-detect drive-detect-message">Waiting for drive…</div>
+                <div class="step-label" data-i18n="step_3"></div>
+                <h2 data-i18n="connect_your_usb_drive"></h2>
+                <p class="muted" data-i18n="plug_in_the_usb_drive_you_want"></p>
+                <div class="drive-detect drive-detect-message" data-i18n="waiting_for_drive"></div>
                 <div class="device-panel">
                   <div class="device-panel-header">
-                    <div class="device-panel-title">Available drives</div>
-                    <div class="device-panel-subtitle" id="device-help">Plug in a USB drive.</div>
+                    <div class="device-panel-title" data-i18n="available_drives"></div>
+                    <div class="device-panel-subtitle" id="device-help" data-i18n="plug_in_a_usb_drive"></div>
                     <div class="device-panel-subtitle" id="device-status"></div>
                   </div>
                   <div class="preflight" id="preflight">
@@ -115,41 +111,41 @@
                     <div class="preflight-item hidden" id="preflight-udisks"></div>
                     <div class="preflight-item hidden" id="preflight-exfat"></div>
                   </div>
-                  <div id="device-empty" class="muted hidden">No USB drive found yet. Plug one in; it shows up here within a few seconds.</div>
+                  <div id="device-empty" class="muted hidden" data-i18n="no_usb_drive_found_yet_plug_on"></div>
                   <div id="device-list" class="device-list"></div>
                 </div>
                 <div class="field">
-                  <label for="drive-label">Name (optional)</label>
-                  <input id="drive-label" type="text" placeholder="Work Backup" />
+                  <label for="drive-label" data-i18n="name_optional"></label>
+                  <input id="drive-label" type="text" data-i18n-placeholder="work_backup" />
                 </div>
                 <div class="device-actions">
-                  <button class="btn secondary" id="mount-drive" type="button">Open drive</button>
+                  <button class="btn secondary" id="mount-drive" type="button" data-i18n="open_drive"></button>
                 </div>
                 <div class="device-danger">
                   <label class="checkbox">
-                    <input id="erase-option" type="checkbox" /> Erase this drive and prepare it for Aegis (deletes everything on it)
+                    <input id="erase-option" type="checkbox" /> <span data-i18n="erase_this_drive_and_prepare_i"></span>
                   </label>
                   <label class="field hidden" id="erase-phrase-field">
-                    <span>Type ERASE to confirm</span>
-                    <input id="erase-phrase" type="text" aria-label="Type ERASE to confirm" />
+                    <span data-i18n="type_erase_to_confirm"></span>
+                    <input id="erase-phrase" type="text" data-i18n-aria="type_erase_to_confirm" />
                   </label>
                 </div>
               </div>
 
               <div class="step-card wizard-step hidden" data-step="3">
-                <div class="step-label">Step 4</div>
-                <h2>What happens next</h2>
+                <div class="step-label" data-i18n="step_4"></div>
+                <h2 data-i18n="what_happens_next"></h2>
                 <ul class="summary" id="wizard-summary"></ul>
               </div>
             </div>
             <div class="wizard-actions">
               <div class="wizard-actions-left">
-                <button class="btn ghost" id="wizard-back">Back</button>
-                <button class="btn ghost" id="wizard-skip">Skip for now</button>
+                <button class="btn ghost" id="wizard-back" data-i18n="back"></button>
+                <button class="btn ghost" id="wizard-skip" data-i18n="skip_for_now"></button>
               </div>
               <div class="wizard-actions-right">
-                <button class="btn primary" id="wizard-next">Next</button>
-                <button class="btn primary hidden" id="run-first-backup">Run first backup now</button>
+                <button class="btn primary" id="wizard-next" data-i18n="next"></button>
+                <button class="btn primary hidden" id="run-first-backup" data-i18n="run_first_backup_now"></button>
               </div>
             </div>
           </div>
@@ -157,15 +153,12 @@
 
         <section id="setup-drive" class="view hidden">
           <div class="panel">
-            <h1>Add a backup</h1>
-            <p class="lead">
-              Back up to a USB drive: a new one, or one that already holds backups. Choose the drive, then type a
-              passphrase: a new one for a separate backup, or an existing backup's passphrase to use it here.
-            </p>
+            <h1 data-i18n="add_a_backup"></h1>
+            <p class="lead" data-i18n="back_up_to_a_usb_drive_a_new_o"></p>
             <div class="device-panel">
               <div class="device-panel-header">
-                <div class="device-panel-title">Available drives</div>
-                <div class="device-panel-subtitle" id="setup-drive-help">Plug in a USB drive.</div>
+                <div class="device-panel-title" data-i18n="available_drives"></div>
+                <div class="device-panel-subtitle" id="setup-drive-help" data-i18n="plug_in_a_usb_drive"></div>
                 <div class="device-panel-subtitle" id="setup-drive-status"></div>
               </div>
               <div class="preflight" id="setup-drive-preflight">
@@ -173,62 +166,62 @@
                 <div class="preflight-item hidden" id="setup-drive-preflight-udisks"></div>
                 <div class="preflight-item hidden" id="setup-drive-preflight-exfat"></div>
               </div>
-              <div id="setup-drive-device-empty" class="muted hidden">No USB drive found yet. Plug one in; it shows up here within a few seconds.</div>
+              <div id="setup-drive-device-empty" class="muted hidden" data-i18n="no_usb_drive_found_yet_plug_on"></div>
               <div id="setup-drive-device-list" class="device-list"></div>
             </div>
             <div class="field">
-              <label for="setup-drive-label">Name (optional)</label>
-              <input id="setup-drive-label" type="text" placeholder="e.g. Work Backup" />
+              <label for="setup-drive-label" data-i18n="name_optional"></label>
+              <input id="setup-drive-label" type="text" data-i18n-placeholder="e_g_work_backup" />
             </div>
-            <h2 class="step-label" style="margin-top: 20px;">What to back up to this drive</h2>
-            <p class="muted">Choose which folders to back up when this drive is connected. Different drives can have different backup sets.</p>
+            <h2 class="step-label" style="margin-top: 20px;" data-i18n="what_to_back_up_to_this_drive"></h2>
+            <p class="muted" data-i18n="choose_which_folders_to_back_u"></p>
             <div class="toggle-list">
-              <label><input type="checkbox" id="setup-drive-src-docs" checked /> Documents <span class="muted">(~/Documents)</span></label>
-              <label><input type="checkbox" id="setup-drive-src-pics" checked /> Pictures <span class="muted">(~/Pictures)</span></label>
-              <label><input type="checkbox" id="setup-drive-src-desktop" checked /> Desktop <span class="muted">(~/Desktop)</span></label>
+              <label><input type="checkbox" id="setup-drive-src-docs" checked /> <span data-i18n="documents"></span> <span class="muted">(~/Documents)</span></label>
+              <label><input type="checkbox" id="setup-drive-src-pics" checked /> <span data-i18n="pictures"></span> <span class="muted">(~/Pictures)</span></label>
+              <label><input type="checkbox" id="setup-drive-src-desktop" checked /> <span data-i18n="desktop"></span> <span class="muted">(~/Desktop)</span></label>
             </div>
             <div class="field-row">
-              <input id="setup-drive-custom-label" type="text" placeholder="Name (optional)" aria-label="Folder name" />
-              <input id="setup-drive-custom-path" type="text" placeholder="Folder location" aria-label="Folder location" />
-              <button class="btn ghost" id="setup-drive-browse" type="button">Browse…</button>
-              <button class="btn secondary" id="setup-drive-add-custom" type="button">Add</button>
+              <input id="setup-drive-custom-label" type="text" data-i18n-placeholder="name_optional" data-i18n-aria="folder_name" />
+              <input id="setup-drive-custom-path" type="text" data-i18n-placeholder="folder_location" data-i18n-aria="folder_location" />
+              <button class="btn ghost" id="setup-drive-browse" type="button" data-i18n="browse"></button>
+              <button class="btn secondary" id="setup-drive-add-custom" type="button" data-i18n="add"></button>
             </div>
             <ul id="setup-drive-custom-list" class="chip-list"></ul>
-            <h2 class="step-label" style="margin-top: 24px;">Passphrase for this drive</h2>
-            <p class="muted">Your passphrase encrypts the backup. Aegis never stores it on the USB drive.</p>
-            <p class="callout">Write your passphrase down and keep it somewhere safe, away from the drive. If you forget it, nobody can open your backups, not even Aegis. There is no reset.</p>
-            <p class="muted">Already used this drive with Aegis on another computer? Type the passphrase you chose back then.</p>
+            <h2 class="step-label" style="margin-top: 24px;" data-i18n="passphrase_for_this_drive"></h2>
+            <p class="muted" data-i18n="your_passphrase_encrypts_the_b"></p>
+            <p class="callout" data-i18n="write_your_passphrase_down_and"></p>
+            <p class="muted" data-i18n="already_used_this_drive_with_a"></p>
             <div class="field">
-              <label for="setup-drive-passphrase">Passphrase</label>
+              <label for="setup-drive-passphrase" data-i18n="passphrase"></label>
               <div class="password-field">
-                <input id="setup-drive-passphrase" type="password" placeholder="Type a passphrase" autocomplete="new-password" aria-describedby="setup-drive-passphrase-meter-label" />
-                <button type="button" class="password-toggle" data-toggle-for="setup-drive-passphrase" aria-label="Show passphrase">Show</button>
+                <input id="setup-drive-passphrase" type="password" data-i18n-placeholder="type_a_passphrase" autocomplete="new-password" aria-describedby="setup-drive-passphrase-meter-label" />
+                <button type="button" class="password-toggle" data-toggle-for="setup-drive-passphrase" data-i18n-aria="show_passphrase" data-i18n="show"></button>
               </div>
-              <p class="muted passphrase-hint">Use 4+ random words, e.g. "maple-orbit-candle-river".</p>
+              <p class="muted passphrase-hint" data-i18n="use_4_random_words_e_g_maple_o"></p>
               <div class="passphrase-meter" aria-live="polite">
                 <div class="passphrase-meter-track"><div class="passphrase-meter-bar" id="setup-drive-passphrase-meter-bar"></div></div>
                 <span class="passphrase-meter-label" id="setup-drive-passphrase-meter-label"></span>
               </div>
             </div>
             <div class="field">
-              <label for="setup-drive-passphrase-confirm">Confirm</label>
+              <label for="setup-drive-passphrase-confirm" data-i18n="confirm"></label>
               <div class="password-field">
-                <input id="setup-drive-passphrase-confirm" type="password" placeholder="Re-enter passphrase" autocomplete="new-password" />
-                <button type="button" class="password-toggle" data-toggle-for="setup-drive-passphrase-confirm" aria-label="Show passphrase">Show</button>
+                <input id="setup-drive-passphrase-confirm" type="password" data-i18n-placeholder="re_enter_passphrase" autocomplete="new-password" />
+                <button type="button" class="password-toggle" data-toggle-for="setup-drive-passphrase-confirm" data-i18n-aria="show_passphrase" data-i18n="show"></button>
               </div>
             </div>
             <div class="device-danger">
               <label class="checkbox">
-                <input id="setup-drive-erase-option" type="checkbox" /> Erase this drive and prepare it for Aegis (deletes everything on it)
+                <input id="setup-drive-erase-option" type="checkbox" /> <span data-i18n="erase_this_drive_and_prepare_i"></span>
               </label>
               <label class="field hidden" id="setup-drive-erase-phrase-field">
-                <span>Type ERASE to confirm</span>
-                <input id="setup-drive-erase-phrase" type="text" aria-label="Type ERASE to confirm" />
+                <span data-i18n="type_erase_to_confirm"></span>
+                <input id="setup-drive-erase-phrase" type="text" data-i18n-aria="type_erase_to_confirm" />
               </label>
             </div>
             <div class="device-actions">
-              <button class="btn secondary" id="setup-drive-mount" type="button">Open drive</button>
-              <button class="btn primary" id="setup-drive-setup-btn" type="button">Set up this drive</button>
+              <button class="btn secondary" id="setup-drive-mount" type="button" data-i18n="open_drive"></button>
+              <button class="btn primary" id="setup-drive-setup-btn" type="button" data-i18n="set_up_this_drive"></button>
             </div>
           </div>
         </section>
@@ -236,7 +229,7 @@
         <section id="dashboard" class="view">
           <div class="panel">
             <div class="dashboard-summary" id="dashboard-summary">
-              <span id="dashboard-summary-text">No backups set up</span>
+              <span id="dashboard-summary-text" data-i18n="no_backups_set_up"></span>
               <span class="muted" id="dashboard-summary-verify"></span>
             </div>
             <div class="backup-progress-wrap hidden" id="backup-progress-wrap">
@@ -245,99 +238,108 @@
               </div>
               <p class="backup-progress-text muted" id="backup-progress-text" aria-live="polite"></p>
             </div>
-            <p class="muted drive-detect-message">Waiting for drive…</p>
+            <p class="muted drive-detect-message" data-i18n="waiting_for_drive"></p>
             <p class="muted hidden" id="dashboard-drive-space"></p>
             <p class="last-run hidden" id="last-run-line" role="status" aria-live="polite"></p>
 
             <div class="backup-targets" id="backup-targets-section">
-              <h2 class="step-label">Your backups</h2>
-              <p class="muted">What is backed up and to which drive.</p>
+              <h2 class="step-label" data-i18n="your_backups"></h2>
+              <p class="muted" data-i18n="what_is_backed_up_and_to_which"></p>
               <div id="backup-targets-list" class="backup-targets-list"></div>
               <div id="backup-targets-empty" class="empty-state muted">
-                <p>No backups set up yet.</p>
-                <button class="btn primary" id="backup-targets-empty-add" type="button">Add backup</button>
+                <p data-i18n="no_backups_set_up_yet"></p>
+                <button class="btn primary" id="backup-targets-empty-add" type="button" data-i18n="add_backup"></button>
               </div>
             </div>
 
             <p class="muted dashboard-cta-hint hidden" id="dashboard-cta-hint" aria-live="polite"></p>
             <div class="actions">
-              <button class="btn primary" id="backup-now">Back up now</button>
-              <button class="btn secondary hidden" id="setup-this-drive-btn" type="button">Set up this drive</button>
-              <button class="btn secondary" id="restore-btn">Restore…</button>
-              <button class="btn ghost" id="eject-btn">Eject drive</button>
+              <button class="btn primary" id="backup-now" data-i18n="back_up_now"></button>
+              <button class="btn secondary hidden" id="setup-this-drive-btn" type="button" data-i18n="set_up_this_drive"></button>
+              <button class="btn secondary" id="restore-btn" data-i18n="restore_dots"></button>
+              <button class="btn ghost" id="eject-btn" data-i18n="eject_drive"></button>
             </div>
           </div>
         </section>
 
         <section id="restore" class="view hidden">
           <div class="panel">
-            <h1>Restore</h1>
-            <p class="lead">Choose a backup and restore it to a new folder. Aegis never overwrites your existing files.</p>
-            <p class="callout hidden" id="restore-hint">Plug in your Aegis drive to see its backups.</p>
-            <label class="field-row instance-picker-row hidden">Backup on this drive:
+            <h1 data-i18n="restore"></h1>
+            <p class="lead" data-i18n="choose_a_backup_and_restore_it"></p>
+            <p class="callout hidden" id="restore-hint" data-i18n="plug_in_your_aegis_drive_to_se"></p>
+            <label class="field-row instance-picker-row hidden"><span data-i18n="backup_on_this_drive"></span>
               <select class="instance-picker"></select>
             </label>
             <div class="field-row">
-              <button class="btn secondary" id="load-snapshots">Show backups</button>
-              <span class="muted" id="snapshot-info">Backups are encrypted. Passphrase required.</span>
+              <button class="btn secondary" id="load-snapshots" data-i18n="show_backups"></button>
+              <span class="muted" id="snapshot-info" data-i18n="backups_are_encrypted_passphra"></span>
             </div>
             <div class="snapshot-list" id="snapshot-list"></div>
             <div class="muted" id="snapshot-summary"></div>
             <div class="browse-section hidden" id="browse-section">
-              <p class="field-title">Get back just some files (optional)</p>
-              <p class="muted">Check the files or folders you want. Leave everything unchecked to get the whole backup.</p>
-              <ul class="browse-list" id="browse-tree" aria-label="Backup contents"></ul>
+              <p class="field-title" data-i18n="get_back_just_some_files_optio"></p>
+              <p class="muted" data-i18n="check_the_files_or_folders_you"></p>
+              <ul class="browse-list" id="browse-tree" data-i18n-aria="backup_contents"></ul>
             </div>
             <div class="field">
-              <label for="restore-target">Restore to folder</label>
+              <label for="restore-target" data-i18n="restore_to_folder"></label>
               <div class="field-row">
-                <input id="restore-target" type="text" placeholder="Choose an empty folder" />
-                <button class="btn ghost" id="restore-browse" type="button">Browse…</button>
+                <input id="restore-target" type="text" data-i18n-placeholder="choose_an_empty_folder" />
+                <button class="btn ghost" id="restore-browse" type="button" data-i18n="browse"></button>
               </div>
             </div>
             <div class="field-row">
-              <button class="btn primary" id="restore-run">Restore everything</button>
-              <button class="btn secondary" id="restore-selected-run">Restore selected</button>
+              <button class="btn primary" id="restore-run" data-i18n="restore_everything"></button>
+              <button class="btn secondary" id="restore-selected-run" data-i18n="restore_selected"></button>
             </div>
           </div>
         </section>
 
         <section id="settings" class="view hidden">
           <div class="panel">
-            <h1>Settings</h1>
+            <h1 data-i18n="settings"></h1>
             <div class="field">
-              <label for="exclude-patterns">Skip these files or folders</label>
+              <label for="language" id="language-label" data-i18n="language"></label>
+              <select id="language">
+                <option value="system" data-i18n="language_system"></option>
+                <option value="en">English</option>
+                <option value="sr">Српски (ћирилица)</option>
+                <option value="sr-Latn">Srpski (latinica)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="exclude-patterns" data-i18n="skip_these_files_or_folders"></label>
               <input id="exclude-patterns" type="text" aria-describedby="exclude-help" />
-              <p class="muted" id="exclude-help">Names separated by commas, e.g. "Downloads, *.tmp" (* means any text). Aegis already skips temporary and system files.</p>
+              <p class="muted" id="exclude-help" data-i18n="names_separated_by_commas_e_g"></p>
             </div>
             <label class="checkbox">
-              <input id="quick-verify" type="checkbox" checked /> Quickly check each backup after it's made
+              <input id="quick-verify" type="checkbox" checked /> <span data-i18n="quickly_check_each_backup_afte"></span>
             </label>
             <label class="checkbox">
-              <input id="auto-backup" type="checkbox" checked /> Back up automatically when your Aegis drive is plugged in
+              <input id="auto-backup" type="checkbox" checked /> <span data-i18n="back_up_automatically_when_you"></span>
             </label>
             <label class="checkbox">
-              <input id="autostart" type="checkbox" /> Start Aegis when I log in (needed for automatic backups)
+              <input id="autostart" type="checkbox" /> <span data-i18n="start_aegis_when_i_log_in_need"></span>
             </label>
             <fieldset class="field choice-group">
-              <legend>Your passphrase</legend>
+              <legend data-i18n="your_passphrase"></legend>
               <label class="checkbox">
-                <input type="radio" name="passphrase-mode" id="settings-remember" /> Remember my passphrase on this computer (needed for automatic backups)
+                <input type="radio" name="passphrase-mode" id="settings-remember" /> <span data-i18n="remember_my_passphrase_on_this"></span>
               </label>
               <label class="checkbox">
-                <input type="radio" name="passphrase-mode" id="settings-ask" /> Ask for my passphrase every time (more private; no automatic backups)
+                <input type="radio" name="passphrase-mode" id="settings-ask" /> <span data-i18n="ask_for_my_passphrase_every_ti"></span>
               </label>
             </fieldset>
             <div class="field">
-              <label for="reminder-days">Remind me to back up after this many days (0 = never)</label>
+              <label for="reminder-days" data-i18n="remind_me_to_back_up_after_thi"></label>
               <input id="reminder-days" type="number" min="0" placeholder="7" />
             </div>
             <div class="field">
-              <label for="backup-interval-hours">While the drive stays plugged in, back up again every this many hours (0 = only when plugged in)</label>
+              <label for="backup-interval-hours" data-i18n="while_the_drive_stays_plugged"></label>
               <input id="backup-interval-hours" type="number" min="0" placeholder="0" />
             </div>
             <div class="save-row">
-              <button class="btn primary" id="save-settings">Save settings</button>
+              <button class="btn primary" id="save-settings" data-i18n="save_settings"></button>
               <span class="muted" id="settings-saved" role="status"></span>
             </div>
           </div>
@@ -345,58 +347,58 @@
 
         <section id="advanced" class="view hidden">
           <div class="panel">
-            <h1>Advanced</h1>
+            <h1 data-i18n="advanced"></h1>
             <div class="field-row">
               <label class="checkbox">
-                <input id="deep-verify" type="checkbox" /> Check backups thoroughly (much slower)
+                <input id="deep-verify" type="checkbox" /> <span data-i18n="check_backups_thoroughly_much"></span>
               </label>
             </div>
             <div class="field">
-              <label for="include-patterns">Only back up files like these</label>
+              <label for="include-patterns" data-i18n="only_back_up_files_like_these"></label>
               <input id="include-patterns" type="text" aria-describedby="include-help" />
-              <p class="muted" id="include-help">Leave empty to back up everything in your folders. Example: "*.docx, *.pdf".</p>
+              <p class="muted" id="include-help" data-i18n="leave_empty_to_back_up_everyth"></p>
             </div>
             <div class="field">
-              <h2 class="step-label" style="margin-top: 0;">Clean up old backups</h2>
-              <p class="muted">Files you delete stay in older backups, so you can still get them back. Aegis removes older backups to save space, keeping a spread of recent, daily, weekly, monthly and yearly copies. At first: one per day for 7 days, per week for 4 weeks, per month for 12 months.</p>
+              <h2 class="step-label" style="margin-top: 0;" data-i18n="clean_up_old_backups"></h2>
+              <p class="muted" data-i18n="files_you_delete_stay_in_older"></p>
               <div class="retention-grid">
                 <div class="field">
-                  <label for="keep-last">Always keep this many newest backups</label>
+                  <label for="keep-last" data-i18n="always_keep_this_many_newest_b"></label>
                   <input id="keep-last" type="number" min="0" placeholder="0" />
                 </div>
                 <div class="field">
-                  <label for="keep-daily">Keep one backup per day, for this many days</label>
+                  <label for="keep-daily" data-i18n="keep_one_backup_per_day_for_th"></label>
                   <input id="keep-daily" type="number" min="0" placeholder="0" />
                 </div>
                 <div class="field">
-                  <label for="keep-weekly">Keep one backup per week, for this many weeks</label>
+                  <label for="keep-weekly" data-i18n="keep_one_backup_per_week_for_t"></label>
                   <input id="keep-weekly" type="number" min="0" placeholder="0" />
                 </div>
                 <div class="field">
-                  <label for="keep-monthly">Keep one backup per month, for this many months</label>
+                  <label for="keep-monthly" data-i18n="keep_one_backup_per_month_for"></label>
                   <input id="keep-monthly" type="number" min="0" placeholder="0" />
                 </div>
                 <div class="field">
-                  <label for="keep-yearly">Keep one backup per year, for this many years</label>
+                  <label for="keep-yearly" data-i18n="keep_one_backup_per_year_for_t"></label>
                   <input id="keep-yearly" type="number" min="0" placeholder="0" />
                 </div>
               </div>
               <label class="checkbox">
-                <input id="retention-enabled" type="checkbox" /> Automatically delete old backups based on these settings
+                <input id="retention-enabled" type="checkbox" /> <span data-i18n="automatically_delete_old_backu"></span>
               </label>
             </div>
             <div class="save-row">
-              <button class="btn primary" id="save-advanced">Save</button>
+              <button class="btn primary" id="save-advanced" data-i18n="save"></button>
               <span class="muted" id="advanced-saved" role="status"></span>
             </div>
             <div class="field">
-              <label for="recovery-destination">Save drive details (optional)</label>
-              <p class="muted">Saves a short note about where your backup is on the drive, to keep with your papers. It contains no passphrase. To get files back without Aegis, use the AEGIS-RESTORE folder on the drive.</p>
+              <label for="recovery-destination" data-i18n="save_drive_details_optional"></label>
+              <p class="muted" data-i18n="saves_a_short_note_about_where"></p>
               <div class="field-row">
-                <input id="recovery-destination" type="text" placeholder="Folder location" />
-                <button class="btn ghost" id="recovery-browse" type="button">Browse…</button>
+                <input id="recovery-destination" type="text" data-i18n-placeholder="folder_location" />
+                <button class="btn ghost" id="recovery-browse" type="button" data-i18n="browse"></button>
               </div>
-              <button class="btn secondary" id="export-recovery">Save drive details</button>
+              <button class="btn secondary" id="export-recovery" data-i18n="save_drive_details"></button>
             </div>
           </div>
         </section>
@@ -404,76 +406,76 @@
 
       <div id="modal-overlay" class="modal hidden">
         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-body">
-          <h2 id="modal-title">Secure prompt</h2>
+          <h2 id="modal-title" data-i18n="secure_prompt"></h2>
           <p id="modal-body" class="muted"></p>
           <div class="field" id="modal-field">
-            <label for="modal-passphrase">Passphrase</label>
+            <label for="modal-passphrase" data-i18n="passphrase"></label>
             <div class="password-field">
-              <input id="modal-passphrase" type="password" placeholder="Enter passphrase" autocomplete="current-password" />
-              <button type="button" class="password-toggle" data-toggle-for="modal-passphrase" aria-label="Show passphrase">Show</button>
+              <input id="modal-passphrase" type="password" data-i18n-placeholder="enter_passphrase" autocomplete="current-password" />
+              <button type="button" class="password-toggle" data-toggle-for="modal-passphrase" data-i18n-aria="show_passphrase" data-i18n="show"></button>
             </div>
           </div>
           <div class="field hidden" id="modal-discontinue-field">
-            <label id="modal-discontinue-label" for="modal-discontinue-input">Type its name to confirm</label>
+            <label id="modal-discontinue-label" for="modal-discontinue-input" data-i18n="type_its_name_to_confirm"></label>
             <input id="modal-discontinue-input" type="text" placeholder="" />
             <label class="checkbox-label wipe-option">
               <input type="checkbox" id="modal-discontinue-wipe" />
-              Also erase everything on the drive so nobody can recover it. The drive must be plugged in and must not hold other backups.
+              <span data-i18n="also_erase_everything_on_the_d"></span>
             </label>
           </div>
           <div class="field hidden" id="modal-rename-field">
-            <label for="modal-rename-input">Name</label>
-            <input id="modal-rename-input" type="text" placeholder="e.g. My backup" />
+            <label for="modal-rename-input" data-i18n="name"></label>
+            <input id="modal-rename-input" type="text" data-i18n-placeholder="e_g_my_backup" />
           </div>
           <div id="modal-error" role="alert"></div>
           <div class="actions">
-            <button class="btn secondary" id="modal-cancel">Cancel</button>
-            <button class="btn primary" id="modal-confirm">Continue</button>
+            <button class="btn secondary" id="modal-cancel" data-i18n="cancel"></button>
+            <button class="btn primary" id="modal-confirm" data-i18n="continue"></button>
           </div>
         </div>
       </div>
     </div>
 
     <div id="sheet-overlay" class="modal hidden">
-      <div class="modal-card sheet-card" role="dialog" aria-modal="true" aria-label="Passphrase sheet">
-        <iframe id="sheet-frame" title="Passphrase sheet"></iframe>
+      <div class="modal-card sheet-card" role="dialog" aria-modal="true" data-i18n-aria="passphrase_sheet">
+        <iframe id="sheet-frame" data-i18n-title="passphrase_sheet"></iframe>
         <div class="actions" style="margin-top: 16px;">
-          <button type="button" class="btn secondary" id="sheet-close">Close</button>
-          <button type="button" class="btn primary" id="sheet-print">Print…</button>
+          <button type="button" class="btn secondary" id="sheet-close" data-i18n="close"></button>
+          <button type="button" class="btn primary" id="sheet-print" data-i18n="print"></button>
         </div>
       </div>
     </div>
 
     <div id="edit-folders-overlay" class="modal hidden">
       <div class="modal-card" style="max-width: 44rem;" role="dialog" aria-modal="true" aria-labelledby="edit-folders-title">
-        <h2 id="edit-folders-title">Edit folders</h2>
-        <p class="muted">Choose which folders to back up to this drive.</p>
+        <h2 id="edit-folders-title" data-i18n="edit_folders"></h2>
+        <p class="muted" data-i18n="choose_folders_for_this_drive"></p>
         <div class="checkbox" style="margin-top: 12px;">
           <input type="checkbox" id="edit-folders-docs" />
-          <label for="edit-folders-docs">Documents</label>
+          <label for="edit-folders-docs" data-i18n="documents"></label>
         </div>
         <div class="checkbox">
           <input type="checkbox" id="edit-folders-pics" />
-          <label for="edit-folders-pics">Pictures</label>
+          <label for="edit-folders-pics" data-i18n="pictures"></label>
         </div>
         <div class="checkbox">
           <input type="checkbox" id="edit-folders-desktop" />
-          <label for="edit-folders-desktop">Desktop</label>
+          <label for="edit-folders-desktop" data-i18n="desktop"></label>
         </div>
         <div class="field" style="margin-top: 12px;">
-          <p class="field-title">Other folders</p>
+          <p class="field-title" data-i18n="other_folders"></p>
           <div class="field-row">
-            <input id="edit-folders-custom-label" type="text" placeholder="Name (optional)" aria-label="Folder name" />
-            <input id="edit-folders-custom-path" type="text" placeholder="Folder location" aria-label="Folder location" />
-            <button class="btn ghost" id="edit-folders-browse" type="button">Browse…</button>
-            <button class="btn secondary" id="edit-folders-add-custom" type="button">Add</button>
+            <input id="edit-folders-custom-label" type="text" data-i18n-placeholder="name_optional" data-i18n-aria="folder_name" />
+            <input id="edit-folders-custom-path" type="text" data-i18n-placeholder="folder_location" data-i18n-aria="folder_location" />
+            <button class="btn ghost" id="edit-folders-browse" type="button" data-i18n="browse"></button>
+            <button class="btn secondary" id="edit-folders-add-custom" type="button" data-i18n="add"></button>
           </div>
           <ul id="edit-folders-custom-list" class="chip-list"></ul>
         </div>
         <div id="edit-folders-error" role="alert" style="margin-top: 8px;"></div>
         <div class="actions" style="margin-top: 16px;">
-          <button type="button" class="btn secondary" id="edit-folders-cancel">Cancel</button>
-          <button type="button" class="btn primary" id="edit-folders-save">Save</button>
+          <button type="button" class="btn secondary" id="edit-folders-cancel" data-i18n="cancel"></button>
+          <button type="button" class="btn primary" id="edit-folders-save" data-i18n="save"></button>
         </div>
       </div>
     </div>
@@ -481,13 +483,13 @@
     <div id="loading-overlay" class="loading-overlay hidden" role="status" aria-live="polite">
       <div class="loading-card">
         <div class="loading-spinner" aria-hidden="true"></div>
-        <p id="loading-message" class="loading-message">Working…</p>
-        <button class="btn secondary hidden" id="loading-cancel" type="button">Stop restore</button>
+        <p id="loading-message" class="loading-message" data-i18n="working"></p>
+        <button class="btn secondary hidden" id="loading-cancel" type="button" data-i18n="stop_restore"></button>
       </div>
     </div>
 
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-    <button class="devtools-toggle hidden" id="devtools-toggle" type="button">Devtools</button>
+    <button class="devtools-toggle hidden" id="devtools-toggle" type="button" data-i18n="devtools"></button>
     <script src="app.js"></script>
     <script src="extras.js"></script>
   </body>

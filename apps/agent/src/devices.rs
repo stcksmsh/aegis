@@ -625,7 +625,7 @@ pub fn list_removable_devices() -> anyhow::Result<Vec<DeviceInfo>> {
             DeviceInfo {
                 path: mount,
                 name: if name.is_empty() {
-                    "Removable drive".to_string()
+                    crate::i18n::t("removable_drive")
                 } else {
                     name
                 },
@@ -645,9 +645,9 @@ pub fn mount_partition(mount_path: &str) -> anyhow::Result<String> {
     if std::path::Path::new(mount_path).is_dir() {
         Ok(mount_path.to_string())
     } else {
-        Err(anyhow::anyhow!(
-            "Drive is not connected. Reconnect it and try again."
-        ))
+        Err(anyhow::anyhow!(crate::i18n::t(
+            "drive_is_not_connected_reconne"
+        )))
     }
 }
 
@@ -665,9 +665,9 @@ pub fn format_partition_exfat(mount_path: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         error!("format: diskutil eraseVolume failed: {}", stderr.trim());
-        return Err(anyhow::anyhow!(
-            "Format the drive as exFAT using Disk Utility, then try again."
-        ));
+        return Err(anyhow::anyhow!(crate::i18n::t(
+            "format_the_drive_as_exfat_usin"
+        )));
     }
     Ok(())
 }
@@ -675,7 +675,7 @@ pub fn format_partition_exfat(mount_path: &str) -> anyhow::Result<()> {
 #[cfg(target_os = "windows")]
 pub fn format_partition_exfat(mount_path: &str) -> anyhow::Result<()> {
     let drive = windows_drive_root(mount_path)
-        .ok_or_else(|| anyhow::anyhow!("Select a drive letter to format."))?;
+        .ok_or_else(|| anyhow::anyhow!(crate::i18n::t("select_a_drive_letter_to_forma")))?;
     let disk_label = generate_aegis_disk_name();
     info!("format: format {} /FS:exFAT /V:{}", drive, disk_label);
     let output = crate::std_command("format.com")
@@ -686,9 +686,9 @@ pub fn format_partition_exfat(mount_path: &str) -> anyhow::Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         error!("format: windows format failed: {}", stderr.trim());
-        return Err(anyhow::anyhow!(
-            "Format the drive as exFAT in Disk Management, then try again."
-        ));
+        return Err(anyhow::anyhow!(crate::i18n::t(
+            "format_the_drive_as_exfat_in_d"
+        )));
     }
     Ok(())
 }

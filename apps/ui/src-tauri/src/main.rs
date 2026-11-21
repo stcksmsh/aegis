@@ -2,6 +2,7 @@
 
 mod updater;
 
+use aegis_agent::i18n::{t, tr};
 use std::path::PathBuf;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
@@ -116,26 +117,30 @@ fn tray_menu(
     for b in backups {
         menu.append(&item(
             format!("backup:{}", b.id),
-            format!("Back up \"{}\"", b.label),
+            tr("tray_back_up_name", &[("name", &b.label)]),
             !b.running,
         )?)?;
     }
     if backups.len() > 1 {
         menu.append(&item(
             "backup-all".into(),
-            "Back up all".into(),
+            t("back_up_all"),
             backups.iter().any(|b| !b.running),
         )?)?;
     }
     if let Some(name) = drive {
         let busy = backups.iter().any(|b| b.running);
-        menu.append(&item("eject".into(), format!("Eject {name}"), !busy)?)?;
+        menu.append(&item(
+            "eject".into(),
+            tr("tray_eject_name", &[("name", name)]),
+            !busy,
+        )?)?;
     }
     if drive.is_some() || !backups.is_empty() {
         menu.append(&PredefinedMenuItem::separator(app)?)?;
     }
-    menu.append(&item("open".into(), "Open Aegis".into(), true)?)?;
-    menu.append(&item("quit".into(), "Quit Aegis".into(), true)?)?;
+    menu.append(&item("open".into(), t("tray_open"), true)?)?;
+    menu.append(&item("quit".into(), t("tray_quit"), true)?)?;
     Ok((menu, status))
 }
 
@@ -251,13 +256,13 @@ fn show_main(app: &AppHandle) {
 
 /// Tray icon keeps Aegis running (and watching for drives) after the window closes.
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
-    let (menu, status) = tray_menu(app, "Aegis is running", &[], None)?;
+    let (menu, status) = tray_menu(app, &t("tray_running"), &[], None)?;
     app.manage(TrayState(std::sync::Mutex::new((
         Some(status),
         String::new(),
     ))));
     let mut tray = TrayIconBuilder::with_id("main")
-        .tooltip("Aegis backup")
+        .tooltip("Aegis")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {

@@ -15,6 +15,7 @@ apps/agent/          Rust lib + bin. Backup engine: USB watcher, restic wrapper,
   src/restic.rs      restic CLI wrapper. Passphrase only via env RESTIC_PASSWORD.
 apps/ui/src-tauri/   Tauri v2 shell. Embeds agent, tray icon, folder picker.
 apps/ui/frontend/    Vanilla HTML/JS/CSS. No build step. Talks to agent over HTTP.
+locales/             Every user-facing text, one JSON per language (en = source). docs/TRANSLATING.md.
 scripts/             fetch-restic.sh — downloads + SHA256-verifies pinned restic for bundling.
 docs/                USER_GUIDE.md (end users), ipc.md (API), AGENT_SERVICE.md, usb-testing.md.
 .github/workflows/   ci.yml (fmt, clippy, test, build), release.yml (tag v* → installers).

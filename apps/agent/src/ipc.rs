@@ -109,6 +109,8 @@ struct ConfigSummary {
     reminder_days: u32,
     backup_interval_hours: u32,
     update_policy: crate::config::UpdatePolicy,
+    /// Saved choice (None = the computer's language).
+    language: Option<String>,
 }
 
 /// Partial update: each settings page sends only its own fields; missing ones are kept.
@@ -126,10 +128,18 @@ struct ConfigUpdateRequest {
     paranoid_mode: Option<bool>,
     reminder_days: Option<u32>,
     backup_interval_hours: Option<u32>,
+    /// "system" or one of `i18n::LANGUAGES`.
+    language: Option<String>,
 }
 
 impl ConfigUpdateRequest {
     fn apply(self, config: &mut crate::config::AgentConfig) {
+        if let Some(lang) = self.language {
+            config.language = crate::i18n::LANGUAGES
+                .contains(&lang.as_str())
+                .then_some(lang);
+            crate::i18n::set_language(config.language.as_deref());
+        }
         if let Some(sources) = self.backup_sources {
             config.backup_sources = sources
                 .into_iter()
@@ -318,7 +328,7 @@ impl Drop for BusyGuard {
 fn updating() -> (StatusCode, String) {
     (
         StatusCode::SERVICE_UNAVAILABLE,
-        "Aegis is installing an update. Try again in a minute.".to_string(),
+        crate::i18n::t("aegis_is_installing_an_update"),
     )
 }
 
@@ -337,7 +347,7 @@ async fn maintenance(
     if req.hold && guard.is_busy() {
         return Err((
             StatusCode::CONFLICT,
-            "A backup or restore is running.".to_string(),
+            crate::i18n::t("a_backup_or_restore_is_running"),
         ));
     }
     guard.update_hold = req.hold;
@@ -366,7 +376,7 @@ async fn passphrase_sheet(
             .config
             .trusted_drives
             .get(&req.drive_id)
-            .ok_or((StatusCode::NOT_FOUND, "Drive not found.".to_string()))?;
+            .ok_or((StatusCode::NOT_FOUND, crate::i18n::t("drive_not_found")))?;
         let marker_label = guard
             .drive_status
             .has_instance(&req.drive_id)
@@ -471,6 +481,7 @@ pub async fn serve(listener: tokio::net::TcpListener, state: SharedState) -> any
         .allow_headers(Any);
     let app = Router::new()
         .route("/v1/status", get(get_status))
+        .route("/v1/i18n", get(get_i18n))
         .route("/v1/devices", get(list_devices))
         .route("/v1/preflight", get(preflight))
         .route("/v1/config", post(update_config))
@@ -556,16 +567,28 @@ async fn preflight(State(state): State<SharedState>) -> Json<PreflightResponse> 
     })
 }
 
+/// Default folders keep their English name in the config; show them in the current language.
+fn display_label(s: &BackupSource) -> String {
+    match (s.label.as_str(), s.path.as_str()) {
+        ("Documents", "~/Documents") => crate::i18n::t("documents"),
+        ("Pictures", "~/Pictures") => crate::i18n::t("pictures"),
+        ("Desktop", "~/Desktop") => crate::i18n::t("desktop"),
+        (label, _) => label.to_string(),
+    }
+}
+
+/// Every text in the current language (English where a translation is missing).
+async fn get_i18n() -> Json<serde_json::Value> {
+    let lang = crate::i18n::language();
+    Json(serde_json::json!({ "lang": lang, "strings": crate::i18n::catalog(lang) }))
+}
+
 async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
     let guard = state.read().await;
     let config = &guard.config;
     let restic_available = Restic::resolve(config.restic_path.as_deref()).is_ok();
     let summary = ConfigSummary {
-        backup_sources: config
-            .backup_sources
-            .iter()
-            .map(|s| s.label.clone())
-            .collect(),
+        backup_sources: config.backup_sources.iter().map(display_label).collect(),
         include_patterns: config.include_patterns.clone(),
         exclude_patterns: config.exclude_patterns.clone(),
         retention: config.retention.clone(),
@@ -577,6 +600,7 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
         reminder_days: config.reminder_days,
         backup_interval_hours: config.backup_interval_hours,
         update_policy: config.update_policy,
+        language: config.language.clone(),
     };
     let trusted_drives: Vec<TrustedDriveSummary> = config
         .trusted_drives
@@ -587,7 +611,7 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
             });
             let is_connected = guard.drive_status.has_instance(id);
             let sources = config.backup_sources_for_drive(id);
-            let backup_source_labels = sources.iter().map(|s| s.label.clone()).collect();
+            let backup_source_labels = sources.iter().map(display_label).collect();
             let backup_sources = sources;
             TrustedDriveSummary {
                 drive_id: id.clone(),
@@ -638,7 +662,7 @@ async fn update_config(
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't save settings. Check free disk space and try again.".to_string(),
+            crate::i18n::t("couldn_t_save_settings_check_f"),
         )
     })?;
     drop(guard);
@@ -672,7 +696,7 @@ async fn setup_drive(
         );
         return Err((
             StatusCode::BAD_REQUEST,
-            "Drive not found. Unplug it and plug it back in.".to_string(),
+            crate::i18n::t("drive_not_found_unplug_it_and"),
         ));
     }
     if resolve_device_for_mount(&mount_path).is_none() && !devices::is_setup_candidate(&mount_path)
@@ -683,14 +707,14 @@ async fn setup_drive(
         );
         return Err((
             StatusCode::BAD_REQUEST,
-            "That location isn't a USB drive.".to_string(),
+            crate::i18n::t("that_location_isn_t_a_usb_driv"),
         ));
     }
     if req.passphrase.trim().is_empty() {
         tracing::warn!("setup drive: empty passphrase");
         return Err((
             StatusCode::BAD_REQUEST,
-            "Enter your passphrase.".to_string(),
+            crate::i18n::t("enter_your_passphrase"),
         ));
     }
 
@@ -732,7 +756,7 @@ async fn setup_drive(
         Restic::resolve(guard.config.restic_path.as_deref()).map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Backup engine missing. Please reinstall Aegis.".to_string(),
+                crate::i18n::t("backup_engine_missing_please_r"),
             )
         })?
     };
@@ -741,7 +765,7 @@ async fn setup_drive(
         tracing::error!("setup drive: {} failed error={}", what, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Couldn't prepare the drive ({what}). Check that it isn't full or read-only."),
+            crate::i18n::tr("couldnt_prepare_drive", &[("what", what)]),
         )
     };
 
@@ -771,7 +795,7 @@ async fn setup_drive(
         if clash {
             return Err((
                 StatusCode::BAD_REQUEST,
-                "Another backup already uses this name. Choose a different name.".to_string(),
+                crate::i18n::t("another_backup_already_uses_th"),
             ));
         }
     }
@@ -852,7 +876,7 @@ async fn setup_drive(
     {
         return Err((
             StatusCode::BAD_REQUEST,
-            "Another backup already uses this name. Choose a different name.".to_string(),
+            crate::i18n::t("another_backup_already_uses_th"),
         ));
     }
 
@@ -903,7 +927,7 @@ async fn setup_drive(
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't save settings. Check free disk space and try again.".to_string(),
+            crate::i18n::t("couldn_t_save_settings_check_f"),
         )
     })?;
 
@@ -955,23 +979,19 @@ async fn delete_backup(
             .config
             .trusted_drives
             .get(&req.drive_id)
-            .ok_or((StatusCode::NOT_FOUND, "Backup not found.".to_string()))?;
+            .ok_or((StatusCode::NOT_FOUND, crate::i18n::t("backup_not_found")))?;
         let expected = drive.label.as_deref().unwrap_or("");
         if expected.is_empty() || req.confirm_label.trim() != expected {
-            return Err(bad(
-                "That name doesn't match. Type the name exactly as shown.",
-            ));
+            return Err(bad(&crate::i18n::t("that_name_doesn_t_match_type_t")));
         }
         if guard.running_drive_ids.contains(&req.drive_id)
             || guard.restore_drive_id.as_deref() == Some(req.drive_id.as_str())
         {
-            return Err(bad(
-                "Wait until this backup's backup or restore has finished, then try again.",
-            ));
+            return Err(bad(&crate::i18n::t("wait_until_this_backup_s_backu")));
         }
         let mount = match &guard.drive_status.mount_path {
             Some(m) if guard.drive_status.has_instance(&req.drive_id) => m.clone(),
-            _ => return Err(bad("Plug in the drive with this backup, then try again.")),
+            _ => return Err(bad(&crate::i18n::t("plug_in_the_drive_with_this_ba"))),
         };
         // Blocks backups of this backup while its files are deleted.
         guard.running_drive_ids.insert(req.drive_id.clone());
@@ -988,8 +1008,7 @@ async fn delete_backup(
         tracing::error!("delete backup failed drive_id={}", req.drive_id);
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't delete the backup from the drive. Unplug the drive, plug it back in, and try again."
-                .to_string(),
+            crate::i18n::t("couldn_t_delete_the_backup_fro"),
         ));
     }
     guard.config.trusted_drives.remove(&req.drive_id);
@@ -1026,20 +1045,20 @@ async fn discontinue_drive(
                 "discontinue drive: drive not found drive_id={}",
                 req.drive_id
             );
-            (StatusCode::NOT_FOUND, "Drive not found.".to_string())
+            (StatusCode::NOT_FOUND, crate::i18n::t("drive_not_found"))
         })?;
     let expected = drive.label.as_deref().unwrap_or("");
     if expected.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            "This backup has no name, so it can't be forgotten here.".to_string(),
+            crate::i18n::t("this_backup_has_no_name_so_it"),
         ));
     }
     let confirmed = req.confirm_label.trim();
     if confirmed != expected {
         return Err((
             StatusCode::BAD_REQUEST,
-            "That name doesn't match. Type the name exactly as shown.".to_string(),
+            crate::i18n::t("that_name_doesn_t_match_type_t"),
         ));
     }
     let drive_id = req.drive_id.clone();
@@ -1047,7 +1066,7 @@ async fn discontinue_drive(
         if !guard.drive_status.has_instance(&drive_id) || guard.drive_status.devnode.is_none() {
             return Err((
                 StatusCode::BAD_REQUEST,
-                "Plug in the drive to erase it, then try again.".to_string(),
+                crate::i18n::t("plug_in_the_drive_to_erase_it"),
             ));
         }
         let others = guard
@@ -1098,7 +1117,7 @@ async fn discontinue_drive(
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't save settings. Check free disk space and try again.".to_string(),
+            crate::i18n::t("couldn_t_save_settings_check_f"),
         )
     })?;
     drop(guard);
@@ -1119,7 +1138,7 @@ async fn update_drive(
     let mut guard = state.write().await;
     if !guard.config.trusted_drives.contains_key(&req.drive_id) {
         drop(guard);
-        return Err((StatusCode::NOT_FOUND, "Drive not found.".to_string()));
+        return Err((StatusCode::NOT_FOUND, crate::i18n::t("drive_not_found")));
     }
 
     if let Some(raw_label) = &req.label {
@@ -1129,13 +1148,13 @@ async fn update_drive(
             .ok_or_else(|| {
                 (
                     StatusCode::BAD_REQUEST,
-                    "Please enter a name using letters and numbers.".to_string(),
+                    crate::i18n::t("please_enter_a_name_using_lett"),
                 )
             })?;
         if guard.config.label_exists(&new_label, Some(&req.drive_id)) {
             return Err((
                 StatusCode::BAD_REQUEST,
-                "Another backup already uses this name. Choose a different name.".to_string(),
+                crate::i18n::t("another_backup_already_uses_th"),
             ));
         }
         if let Some(drive) = guard.config.trusted_drives.get_mut(&req.drive_id) {
@@ -1176,7 +1195,7 @@ async fn update_drive(
     guard.config.save().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't save settings. Check free disk space and try again.".to_string(),
+            crate::i18n::t("couldn_t_save_settings_check_f"),
         )
     })?;
     drop(guard);
@@ -1198,7 +1217,7 @@ async fn mount_drive(
         }
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't open the drive. Unplug it, plug it back in, and try again.".to_string(),
+            crate::i18n::t("couldn_t_open_the_drive_unplug"),
         )
     })?;
     tracing::info!(
@@ -1262,14 +1281,14 @@ async fn start_backup(
         if guard.running_drive_ids.contains(&req.drive_id) {
             return Err((
                 StatusCode::CONFLICT,
-                "A backup to this drive is already running.".to_string(),
+                crate::i18n::t("a_backup_to_this_drive_is_alre"),
             ));
         }
     }
     if !config.trusted_drives.contains_key(&req.drive_id) {
         return Err((
             StatusCode::BAD_REQUEST,
-            "This drive isn't set up in Aegis on this computer.".to_string(),
+            crate::i18n::t("this_drive_isn_t_set_up_in_aeg"),
         ));
     }
     let passphrase = resolve_passphrase(&config, &req.drive_id, req.passphrase)?;
@@ -1314,7 +1333,7 @@ async fn list_snapshots(
         .ok_or_else(|| {
             (
                 StatusCode::BAD_REQUEST,
-                "This drive isn't set up in Aegis on this computer.".to_string(),
+                crate::i18n::t("this_drive_isn_t_set_up_in_aeg"),
             )
         })?
         .clone();
@@ -1325,14 +1344,14 @@ async fn list_snapshots(
     let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Backup engine missing. Please reinstall Aegis.".to_string(),
+            crate::i18n::t("backup_engine_missing_please_r"),
         )
     })?;
     let repo_path = PathBuf::from(mount_path).join(&drive.repository_path);
     let snapshots = restic
         .snapshots(&repo_path, &passphrase)
         .await
-        .map_err(|e| restic_err(e, "Could not read backups from this drive."))?;
+        .map_err(|e| restic_err(e, &crate::i18n::t("could_not_read_backups_from_th")))?;
 
     Ok(Json(SnapshotsResponse { snapshots }))
 }
@@ -1348,7 +1367,7 @@ async fn snapshot_stats(
         .ok_or_else(|| {
             (
                 StatusCode::BAD_REQUEST,
-                "This drive isn't set up in Aegis on this computer.".to_string(),
+                crate::i18n::t("this_drive_isn_t_set_up_in_aeg"),
             )
         })?
         .clone();
@@ -1359,14 +1378,14 @@ async fn snapshot_stats(
     let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Backup engine missing. Please reinstall Aegis.".to_string(),
+            crate::i18n::t("backup_engine_missing_please_r"),
         )
     })?;
     let repo_path = PathBuf::from(mount_path).join(&drive.repository_path);
     let stats = restic
         .snapshot_stats(&repo_path, &passphrase, &req.snapshot_id)
         .await
-        .map_err(|e| restic_err(e, "Could not read backup details."))?;
+        .map_err(|e| restic_err(e, &crate::i18n::t("could_not_read_backup_details")))?;
 
     Ok(Json(SnapshotStatsResponse {
         total_size: stats.total_size,
@@ -1385,7 +1404,7 @@ async fn browse_snapshot(
         .ok_or_else(|| {
             (
                 StatusCode::BAD_REQUEST,
-                "This drive isn't set up in Aegis on this computer.".to_string(),
+                crate::i18n::t("this_drive_isn_t_set_up_in_aeg"),
             )
         })?
         .clone();
@@ -1396,7 +1415,7 @@ async fn browse_snapshot(
     let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Backup engine missing. Please reinstall Aegis.".to_string(),
+            crate::i18n::t("backup_engine_missing_please_r"),
         )
     })?;
     let repo_path = PathBuf::from(mount_path).join(&drive.repository_path);
@@ -1407,7 +1426,7 @@ async fn browse_snapshot(
             let snapshots = restic
                 .snapshots(&repo_path, &passphrase)
                 .await
-                .map_err(|e| restic_err(e, "Could not read backups from this drive."))?;
+                .map_err(|e| restic_err(e, &crate::i18n::t("could_not_read_backups_from_th")))?;
             let snapshot_paths = snapshots
                 .into_iter()
                 .find(|s| s.id == req.snapshot_id || s.id.starts_with(&req.snapshot_id))
@@ -1420,7 +1439,7 @@ async fn browse_snapshot(
     let entries = restic
         .ls_dir(&repo_path, &passphrase, &req.snapshot_id, &dir)
         .await
-        .map_err(|e| restic_err(e, "Could not read the contents of this backup."))?;
+        .map_err(|e| restic_err(e, &crate::i18n::t("could_not_read_the_contents_of")))?;
 
     Ok(Json(BrowseResponse { entries }))
 }
@@ -1432,7 +1451,7 @@ async fn restore_snapshot(
     if !crate::backup::expand_home(&req.target_path).is_absolute() {
         return Err((
             StatusCode::BAD_REQUEST,
-            "Choose a folder to restore into (use Browse…).".to_string(),
+            crate::i18n::t("choose_a_folder_to_restore_int"),
         ));
     }
 
@@ -1443,7 +1462,7 @@ async fn restore_snapshot(
         .ok_or_else(|| {
             (
                 StatusCode::BAD_REQUEST,
-                "This drive isn't set up in Aegis on this computer.".to_string(),
+                crate::i18n::t("this_drive_isn_t_set_up_in_aeg"),
             )
         })?
         .clone();
@@ -1454,7 +1473,7 @@ async fn restore_snapshot(
     let restic = Restic::resolve(config.restic_path.as_deref()).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Backup engine missing. Please reinstall Aegis.".to_string(),
+            crate::i18n::t("backup_engine_missing_please_r"),
         )
     })?;
 
@@ -1482,13 +1501,10 @@ async fn restore_snapshot(
             if cancel.is_cancelled() {
                 return (
                     StatusCode::CONFLICT,
-                    "Restore stopped. Files restored so far are in the folder.".to_string(),
+                    crate::i18n::t("restore_stopped_files_restored"),
                 );
             }
-            restic_err(
-                e,
-                "Restore failed. Check that the drive is still connected.",
-            )
+            restic_err(e, &crate::i18n::t("restore_failed_check_that_the"))
         });
     {
         let mut guard = state.write().await;
@@ -1517,7 +1533,7 @@ async fn export_recovery(
     let drive = config.trusted_drives.get(&req.drive_id).ok_or_else(|| {
         (
             StatusCode::BAD_REQUEST,
-            "This drive isn't set up in Aegis on this computer.".to_string(),
+            crate::i18n::t("this_drive_isn_t_set_up_in_aeg"),
         )
     })?;
 
@@ -1525,7 +1541,7 @@ async fn export_recovery(
         |_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Couldn't save the recovery kit to that folder.".to_string(),
+                crate::i18n::t("couldn_t_save_the_recovery_kit"),
             )
         },
     )?;
@@ -1549,13 +1565,13 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
+                crate::i18n::t("couldn_t_eject_the_drive_close"),
             )
         })?;
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
+            crate::i18n::t("couldn_t_eject_the_drive_close"),
         ));
     }
 
@@ -1571,13 +1587,13 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
+                crate::i18n::t("couldn_t_eject_the_drive_close"),
             )
         })?;
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
+            crate::i18n::t("couldn_t_eject_the_drive_close"),
         ));
     }
     Ok(())
@@ -1596,13 +1612,13 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
+                crate::i18n::t("couldn_t_eject_the_drive_close"),
             )
         })?;
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
+            crate::i18n::t("couldn_t_eject_the_drive_close"),
         ));
     }
     Ok(())
@@ -1614,7 +1630,7 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
     let drive = windows_drive_root_letter(device).ok_or_else(|| {
         (
             StatusCode::BAD_REQUEST,
-            "Couldn't identify the drive. Unplug it and plug it back in.".to_string(),
+            crate::i18n::t("couldn_t_identify_the_drive_un"),
         )
     })?;
     let script = format!(
@@ -1631,13 +1647,13 @@ async fn do_eject(device: &FsPath) -> Result<(), (StatusCode, String)> {
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
+                crate::i18n::t("couldn_t_eject_the_drive_close"),
             )
         })?;
     if !status.success() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't eject the drive. Close any files open on it and try again.".to_string(),
+            crate::i18n::t("couldn_t_eject_the_drive_close"),
         ));
     }
     Ok(())
@@ -1665,16 +1681,19 @@ async fn eject_drive(
         Some(device) => do_eject(&device).await,
         None => Err((
             StatusCode::BAD_REQUEST,
-            "Drive not found. Unplug it and plug it back in.".to_string(),
+            crate::i18n::t("drive_not_found_unplug_it_and"),
         )),
     };
     // Ejected from the tray: the window isn't shown, so the result comes as a notification.
     if req.notify {
         match &result {
-            Ok(()) => {
-                crate::notifications::notify("Drive ejected", "It's now safe to unplug the drive.")
+            Ok(()) => crate::notifications::notify(
+                &crate::i18n::t("drive_ejected"),
+                &crate::i18n::t("it_s_now_safe_to_unplug_the_dr"),
+            ),
+            Err((_, msg)) => {
+                crate::notifications::notify(&crate::i18n::t("couldnt_eject_title"), msg)
             }
-            Err((_, msg)) => crate::notifications::notify("Couldn't eject the drive", msg),
         }
     }
     result?;
@@ -1692,19 +1711,19 @@ async fn ensure_mounted_drive(
     if !guard.drive_status.connected || !guard.drive_status.trusted {
         return Err((
             StatusCode::BAD_REQUEST,
-            "Plug in your Aegis drive first.".to_string(),
+            crate::i18n::t("plug_in_your_aegis_drive_first"),
         ));
     }
     if !guard.drive_status.has_instance(drive_id) {
         return Err((
             StatusCode::BAD_REQUEST,
-            "A different drive is plugged in. Plug in the right Aegis drive.".to_string(),
+            crate::i18n::t("a_different_drive_is_plugged_i"),
         ));
     }
     guard.drive_status.mount_path.clone().ok_or_else(|| {
         (
             StatusCode::BAD_REQUEST,
-            "The drive isn't ready yet. Wait a moment and try again.".to_string(),
+            crate::i18n::t("the_drive_isn_t_ready_yet_wait"),
         )
     })
 }
@@ -1714,7 +1733,7 @@ fn restic_err(err: anyhow::Error, fallback: &str) -> (StatusCode, String) {
     error!("restic call failed: {:#}", err);
     let msg = err.to_string();
     if msg == crate::restic::WRONG_PASSPHRASE {
-        (StatusCode::BAD_REQUEST, msg)
+        (StatusCode::BAD_REQUEST, crate::i18n::t("wrong_passphrase"))
     } else {
         (StatusCode::INTERNAL_SERVER_ERROR, fallback.to_string())
     }
@@ -1729,7 +1748,7 @@ fn resolve_passphrase(
         if pass.trim().is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
-                "Enter your passphrase.".to_string(),
+                crate::i18n::t("enter_your_passphrase"),
             ));
         }
         return Ok(pass);
@@ -1739,19 +1758,19 @@ fn resolve_passphrase(
             .map_err(|_| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Couldn't read the saved passphrase. Enter it instead.".to_string(),
+                    crate::i18n::t("couldn_t_read_the_saved_passph"),
                 )
             })?
             .ok_or_else(|| {
                 (
                     StatusCode::BAD_REQUEST,
-                    "Enter your passphrase.".to_string(),
+                    crate::i18n::t("enter_your_passphrase"),
                 )
             });
     }
     Err((
         StatusCode::BAD_REQUEST,
-        "Enter your passphrase.".to_string(),
+        crate::i18n::t("enter_your_passphrase"),
     ))
 }
 

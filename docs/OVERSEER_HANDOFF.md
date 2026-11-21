@@ -48,18 +48,23 @@ Built but **not yet confirmed by the user**:
 VirtualBox 7.2 VM `WIN10`; xHCI USB enabled, user added to `vboxusers`; stick passed via Devices → USB.
 Confirmed: install (no SmartScreen prompt), setup + backup, theme, tray menu, close-to-tray, plug-in
 detection, Eject, restore into a folder with files, `restore-windows.bat`.
-Found: notifications sometimes show as "Windows PowerShell" → fixed (notify-rust `app_id` = bundle
-identifier), needs a re-test with a new CI installer. Start at login: user was restarting to test.
+Found: notifications sometimes show as "Windows PowerShell" → fixed in afad99f (notify-rust `app_id`
+= bundle identifier), needs a re-test with a new CI installer. Start at login: user was restarting to test.
 
 ## Open questions / decisions
 
-- User (2026-11-21): app must support **multiple languages**; the passphrase sheet/PDF and other
-  output in the currently selected language only (not English + Serbian side by side). Proposed:
-  `locales/<lang>.json` shared by UI and agent, language setting (default = OS language, English
-  fallback), test that every locale has every key. Awaiting: which languages, Serbian Latin or
-  Cyrillic, restore kit on drive in setup language only?
-- User: passphrase sheet works but shouldn't sit under "Your backups"; offer it at setup only.
-  Not yet built.
+- **Languages built (2026-11-21, not yet hand-tested in the real app):** `locales/en.json`
+  (source) + `locales/sr.json` (Cyrillic); `sr-Latn` is transliterated in `apps/agent/src/i18n.rs`.
+  Agent serves `GET /v1/i18n`; UI `t()` in app.js; config `language` (None = OS language, Linux
+  `@latin` → sr-Latn). Settings → Language reloads the page. Notifications, tray, errors, sheet,
+  drive-details note all translated. Checked headless (Chrome in `unshare -rn` netns with a scratch
+  agent): Cyrillic and Latin screens render. Serbian is Claude's draft: user should proofread.
+  Weblate setup steps in docs/TRANSLATING.md (user must create the account).
+- Passphrase sheet: button removed from Your backups; offered once after a **new** backup is set
+  up; single language.
+- Open: restore kit on the drive still carries README.txt **and** PROCITAJ.txt (both languages).
+  Plan said "setup language only"; kept both for now (someone without Aegis may read either).
+  Ask the user.
 - Restore confirmed working on Linux and macOS (user has a Mac).
 
 - The morning erase of the stick: the user isn't sure they unticked "Erase this drive"; treated as user error. If an erase ever happens without the red "Erase … This can't be undone" confirm, it is a release blocker.

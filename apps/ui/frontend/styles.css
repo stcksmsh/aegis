@@ -357,6 +357,7 @@ h1 {
   margin-top: 0;
 }
 
+.field select,
 .field input:not([type="checkbox"]):not([type="radio"]) {
   background: var(--panel-strong);
   border: 1px solid var(--border);

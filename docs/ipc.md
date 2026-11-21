@@ -37,8 +37,8 @@ Response fields:
   space after this run
 - `running`: boolean
 - `restic_available`: boolean
-- `config`: summary flags, including `reminder_days`, `backup_interval_hours` and
-  `update_policy` (`"security" | "all" | "off"`)
+- `config`: summary flags, including `reminder_days`, `backup_interval_hours`,
+  `update_policy` (`"security" | "all" | "off"`) and `language` (`null` = the computer's language)
 
 Note: every `drive_id` in requests is a backup id ("instance", see COMPATIBILITY.md). For drives
 set up before 1.0 it equals the drive's own id.
@@ -59,7 +59,8 @@ Request:
   "remember_passphrase": false,
   "paranoid_mode": false,
   "reminder_days": 7,
-  "backup_interval_hours": 0
+  "backup_interval_hours": 0,
+  "language": "sr"
 }
 ```
 
@@ -69,6 +70,16 @@ Every field is optional: only the fields sent are changed. The status `config` i
 `reminder_days` (0 = off): notify once per day if a trusted drive hasn't backed up in this many
 days and isn't connected. `backup_interval_hours` (0 = off): while a trusted drive stays plugged
 in, back it up again automatically once this many hours have passed since its last backup.
+`language`: `"en"`, `"sr"` (Cyrillic), `"sr-Latn"`, or `"system"` (anything else also means the
+computer's language). Applies right away to notifications, tray, messages and `GET /v1/i18n`.
+
+## Texts
+`GET /v1/i18n`
+
+Every user-facing text in the current language, English where a translation is missing:
+`{"lang": "sr", "strings": {"back_up_now": "Направи копију сада", "days_ago_few": "…", …}}`.
+Keys come from `locales/*.json` (see docs/TRANSLATING.md); plural forms end in `_one`, `_few`,
+`_other`; `{{name}}` marks a value filled in by the app.
 
 ## Setup Drive
 `POST /v1/drives/setup`
@@ -250,8 +261,9 @@ Request: `{"drive_id": "...", "confirm_label": "<the backup's name>"}` → Respo
 ## Passphrase Sheet
 `POST /v1/drives/passphrase-sheet`
 
-Returns a printable page (backup name, blank for the passphrase, restore steps) as HTML; the
-app shows and prints it. Contains no secrets.
+Returns a printable page (backup name, blank for the passphrase, restore steps) as HTML in the
+current language; the app offers it once, right after a new backup is set up, and prints it.
+Contains no secrets.
 
 Request: `{"drive_id": "..."}` → Response: `{"html": "<!doctype html>…"}`
 

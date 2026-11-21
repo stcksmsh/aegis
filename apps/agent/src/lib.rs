@@ -5,6 +5,7 @@ mod backup;
 mod config;
 mod devices;
 mod drive;
+pub mod i18n;
 mod ipc;
 mod keychain;
 mod kit;
@@ -39,6 +40,7 @@ use tracing::{error, info, warn};
 pub async fn run(kit_dir: Option<std::path::PathBuf>) -> anyhow::Result<()> {
     info!("Aegis agent starting");
     let config = AgentConfig::load().context("load config")?;
+    i18n::set_language(config.language.as_deref());
     if Restic::resolve(config.restic_path.as_deref()).is_err() {
         warn!("Restic not available; backups will fail until restic is installed or bundled.");
     }

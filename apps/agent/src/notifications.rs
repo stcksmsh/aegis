@@ -1,6 +1,7 @@
 //! Desktop notifications for backup events and trusted device detection.
 //! Linux: freedesktop D-Bus; macOS/Windows: `notify-rust`. Fire-and-forget on a thread.
 
+use crate::i18n::{t, tn, tr};
 use crate::state::RunStatus;
 
 /// Send a desktop notification (fire-and-forget). Does not block.
@@ -64,68 +65,41 @@ fn show(title: &str, body: &str) -> notify_rust::error::Result<()> {
 
 pub fn notify_backup_started(drive_label: &str) {
     notify(
-        "Backup started",
-        &format!("Backing up to \"{}\"…", drive_label),
+        &t("notify_started_title"),
+        &tr("notify_started_body", &[("name", drive_label)]),
     );
 }
 
 pub fn notify_backup_finished(drive_label: &str, status: &RunStatus, interrupted: bool) {
     let (title, body) = if interrupted {
-        (
-            "Backup interrupted",
-            format!(
-                "The drive \"{}\" was unplugged during the backup. Plug it in and back up again.",
-                drive_label
-            ),
-        )
+        ("notify_interrupted_title", "notify_interrupted_body")
     } else {
         match status {
-            RunStatus::Success => (
-                "Backup completed",
-                format!("Backup to \"{}\" completed successfully.", drive_label),
-            ),
-            RunStatus::Partial => (
-                "Backup finished with warnings",
-                format!(
-                    "Backup to \"{}\" finished, but not everything went as planned. Open Aegis for details.",
-                    drive_label
-                ),
-            ),
-            RunStatus::Failed => (
-                "Backup failed",
-                format!(
-                    "Backup to \"{}\" didn't finish. Open Aegis to see why.",
-                    drive_label
-                ),
-            ),
+            RunStatus::Success => ("notify_done_title", "notify_done_body"),
+            RunStatus::Partial => ("notify_partial_title", "notify_partial_body"),
+            RunStatus::Failed => ("notify_failed_title", "notify_failed_body"),
         }
     };
-    notify(title, &body);
+    notify(&t(title), &tr(body, &[("name", drive_label)]));
 }
 
 pub fn notify_trusted_device(drive_label: &str) {
     notify(
-        "Aegis drive connected",
-        &format!("\"{}\" is connected and ready to back up.", drive_label),
+        &t("notify_connected_title"),
+        &tr("notify_connected_body", &[("name", drive_label)]),
     );
 }
 
 pub fn notify_backup_reminder(drive_label: &str, days_since: u64) {
     notify(
-        "Time to back up",
-        &format!(
-            "Time to back up: plug in \"{}\". Last backup was {} days ago.",
-            drive_label, days_since
-        ),
+        &t("notify_reminder_title"),
+        &tn("notify_reminder_body", days_since, &[("name", drive_label)]),
     );
 }
 
 pub fn notify_drive_almost_full(drive_label: &str) {
     notify(
-        "Backup drive almost full",
-        &format!(
-            "Your backup drive \"{}\" is almost full. Keep fewer old backups in Aegis → Advanced.",
-            drive_label
-        ),
+        &t("notify_full_title"),
+        &tr("notify_full_body", &[("name", drive_label)]),
     );
 }

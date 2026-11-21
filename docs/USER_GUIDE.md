@@ -54,7 +54,7 @@ Nothing else to install. Aegis includes everything it needs.
 - The dashboard shows how the last backup went, for example "Last backup finished today at 14:02. Everything was saved." If it didn't finish, the same line says why and what to do.
 - Closing the window keeps Aegis running in the tray / menu bar so it can notice your drive. To stop it fully: tray icon → **Quit Aegis**.
 - Wait until the backup is done, then click **Eject drive** before unplugging.
-- Click a card's name to see more: **Rename** changes the name Aegis shows for that backup (the drive itself isn't renamed), **Edit folders** changes what is backed up (adding a folder starts a backup right away), **Delete from drive** is explained in [section 4](#several-backups-on-one-drive), **Print passphrase sheet** and **Forget on this computer** in [section 6](#6-moving-backups-to-another-computer).
+- Click a card's name to see more: **Rename** changes the name Aegis shows for that backup (the drive itself isn't renamed), **Edit folders** changes what is backed up (adding a folder starts a backup right away), **Delete from drive** is explained in [section 4](#several-backups-on-one-drive), **Forget on this computer** in [section 6](#6-moving-backups-to-another-computer).
 - When an update is ready, a bar at the top offers **Install and restart**. Aegis never updates in the middle of a backup or restore.
 - Unplugged mid-backup? No harm. Older backups stay intact; the next backup picks up again.
 
@@ -117,7 +117,7 @@ A backup belongs to the data, not to a computer. To let another computer take ov
 
 ### Passphrase sheet
 
-Under **Your backups**, **Print passphrase sheet** shows a page inside Aegis; click **Print…** to print it (or save it as a PDF): the backup's name, a blank to write the passphrase on by hand, and restore steps in English and Serbian. Keep it in a safe place, never together with the drive.
+When a new backup is set up, Aegis offers to **Print passphrase sheet**. It shows a page inside Aegis; click **Print…** to print it (or save it as a PDF): the backup's name, a blank to write the passphrase on by hand, and how to get your files back, in the language Aegis is set to. Keep it in a safe place, never together with the drive.
 
 ## 7. Settings explained
 
@@ -127,6 +127,7 @@ Each page has its own Save button and saves only what is on that page.
 
 | Setting | Meaning |
 |---|---|
+| Language | English, Serbian Cyrillic (Српски) or Serbian Latin (Srpski). "Same as this computer" follows your computer's language. Changes right away. If you picked a language you can't read, it's the first box under **Settings**, labelled "(Language)". |
 | Skip these files or folders | Files to skip, e.g. `*.tmp` or `node_modules`. Aegis already skips temporary files and Windows/Mac system clutter. |
 | Quickly check each backup after it's made | After each backup, quickly checks that it can be read. Recommended. |
 | Back up automatically when your Aegis drive is plugged in | Automatic backups on plug-in. Needs "Remember my passphrase on this computer". |

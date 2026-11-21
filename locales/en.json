@@ -422,5 +422,7 @@
   "tray_open": "Open Aegis",
   "tray_quit": "Quit Aegis",
   "tray_running": "Aegis is running",
-  "recovery_note": "Aegis drive details\n\nThis note says where your backup is on your Aegis USB drive. It contains no passphrase.\n\nTo get your files back on any computer:\n1) Plug in the Aegis drive.\n2) Open the AEGIS-RESTORE folder on the drive and follow {{readme}} (or install Aegis and use Restore).\n3) Type your passphrase when asked.\n\nIf you chose \"Ask for my passphrase every time\", the passphrase is stored nowhere: keep your written copy safe.\n\nFor technical help: recovery.json next to this file lists the backup's location on the drive.\n"
+  "recovery_note": "Aegis drive details\n\nThis note says where your backup is on your Aegis USB drive. It contains no passphrase.\n\nTo get your files back on any computer:\n1) Plug in the Aegis drive.\n2) Open the AEGIS-RESTORE folder on the drive and follow {{readme}} (or install Aegis and use Restore).\n3) Type your passphrase when asked.\n\nIf you chose \"Ask for my passphrase every time\", the passphrase is stored nowhere: keep your written copy safe.\n\nFor technical help: recovery.json next to this file lists the backup's location on the drive.\n",
+  "type_name_to_confirm": "Type \"{{name}}\" to confirm",
+  "confirm_passphrase": "Confirm passphrase"
 }

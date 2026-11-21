@@ -328,7 +328,7 @@ function openModal({ title, body, mode, drive_id, drive_label, confirmText, dang
     if (discontinueInput) {
       discontinueInput.value = "";
       discontinueInput.placeholder = drive_label || "";
-      document.getElementById("modal-discontinue-label").textContent = `Type "${drive_label}" to confirm`;
+      document.getElementById("modal-discontinue-label").textContent = t("type_name_to_confirm", { name: drive_label });
     }
     if (discontinueWipe) discontinueWipe.checked = false;
     const renameField = document.getElementById("modal-rename-field");
@@ -398,9 +398,10 @@ function trapModalTab(event) {
 }
 
 // "Type ERASE to confirm": the English word always works, as does the translated one.
+// Accents don't count, so OBRISI works for OBRIŠI.
 function isEraseWord(value) {
-  const v = (value || "").trim().toUpperCase();
-  return v === "ERASE" || v === t("erase_word").toUpperCase();
+  const fold = (s) => (s || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return fold(value) === "ERASE" || fold(value) === fold(t("erase_word"));
 }
 
 function uiAlert(message, title = t("notice")) {

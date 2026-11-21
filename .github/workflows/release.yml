@@ -105,12 +105,12 @@ jobs:
 
             Pick the file for your operating system:
 
-            - **Windows**: `.msi` or the `-setup.exe` installer
-            - **macOS (Apple Silicon, M1/M2/M3/M4)**: `aarch64.dmg`
-            - **macOS (Intel)**: `x64.dmg`
-            - **Linux**: `.AppImage` (run anywhere) or `.deb` (Debian/Ubuntu)
+            - **Windows 10 / 11**: `x64-setup.exe`
+            - **Mac with Apple chip (M1 and newer)**: `aarch64.dmg`
+            - **Mac with Intel chip**: `x64.dmg`
+            - **Ubuntu / Debian / Mint**: `amd64.deb` · **Fedora / openSUSE**: `x86_64.rpm` · **other Linux**: `amd64.AppImage`
 
-            restic is bundled — no separate install needed.
+            Everything Aegis needs is inside the installer. What's new: [CHANGELOG](https://github.com/stcksmsh/aegis/blob/master/CHANGELOG.md).
 
             ## First launch
 

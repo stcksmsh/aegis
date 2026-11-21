@@ -23,6 +23,7 @@ Get the installer for your computer from the **[latest release](https://github.c
 | Mac with Apple chip (M1 and newer) | `Aegis_…_aarch64.dmg` |
 | Mac with Intel chip | `Aegis_…_x64.dmg` |
 | Ubuntu / Debian / Mint | `Aegis_…_amd64.deb` |
+| Fedora / openSUSE | `Aegis-…x86_64.rpm` |
 | Other Linux | `Aegis_…_amd64.AppImage` |
 
 Everything Aegis needs is inside the installer. Nothing else to set up.
@@ -47,14 +48,18 @@ Full walkthrough: **[User Guide](docs/USER_GUIDE.md)** · all docs: **[docs/](do
 |---|---|
 | Strong encryption | Every backup is encrypted (AES-256) before it touches the drive. |
 | Automatic | Backs up when you plug in your drive. Runs quietly in the tray / menu bar. |
-| History | Keeps every past version until you choose to clean up. Get back last week's file. |
+| History | Get back last week's file. Old backups are thinned out automatically (one per day for a week, per week for a month, per month for a year), so the drive doesn't fill up. |
 | Get back one file | Browse any past backup and restore just the files you need. Never overwrites what's already there. |
 | Reminders | Nudges you when it's been a week since your last backup. Optional hourly backups while the drive stays plugged in. |
 | Drive space | Shows free space and warns before your drive fills up. |
+| Restore without Aegis | Every drive carries an AEGIS-RESTORE folder with step-by-step instructions, so anyone can get the files back on any computer, even without Aegis installed. |
+| Several backups, one drive | Share one drive between computers or people, each backup with its own passphrase. Moving to a new computer? Type the passphrase there and carry on. |
 | Safe to unplug | Unplugging mid-backup never damages earlier backups. |
 | Checks itself | Verifies each backup after it finishes. |
 | No lock-in | Backups use the open [restic](https://restic.net) format. Readable without Aegis. |
-| Private | No accounts, no cloud, no internet. Your passphrase is never saved to disk (optionally kept in your system keychain). |
+| Private | No accounts, no cloud. Your files never leave your computer and your drive. The only internet use is checking for Aegis updates. Your passphrase is never saved to disk (optionally kept in your system keychain). |
+| Updates itself | Fixes install by themselves, never during a backup. Updates are signed, so only genuine Aegis updates are accepted. |
+| Your language | English and Serbian (Cyrillic and Latin). [Help translate](docs/TRANSLATING.md). |
 | Windows, macOS, Linux | Same app everywhere. A drive made on one works on the others (use exFAT). |
 
 ## For developers

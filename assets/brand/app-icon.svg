@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><defs><linearGradient id="aegis-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#3BE0B6"/><stop offset="100%" stop-color="#2F69FF"/>
+</linearGradient></defs>
+<defs><clipPath id="tile"><rect width="1024" height="1024" rx="218"/></clipPath></defs>
+<g clip-path="url(#tile)"><rect width="1024" height="1024" fill="#0B1116"/>
+<g transform="translate(12,12) scale(1)"><path d="M 500,92 C 438,92 397,163 363,238 L 112,786 C 98,817 113,842 148,842 L 278,842 C 296,842 307,832 316,813 L 500,423 L 684,813 C 693,832 704,842 722,842 L 852,842 C 887,842 902,817 888,786 L 637,238 C 603,163 562,92 500,92 Z M 500,264 L 376,526 Q 500,438 624,526 Z" fill="url(#aegis-gradient)" fill-rule="evenodd"/>
+<path d="M 330,590 C 389,520 445,487 500,487 C 555,487 611,520 670,590 C 609,557 555,541 500,541 C 445,541 391,557 330,590 Z" fill="url(#aegis-gradient)"/></g></g></svg>

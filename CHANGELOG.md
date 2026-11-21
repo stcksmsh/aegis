@@ -2,6 +2,8 @@
 
 ## 1.0.0 (2026-11-21)
 
+- New logo and app icon; a monochrome menu-bar icon on macOS.
+
 - One drive can hold several separate backups (e.g. one per company), each with its own passphrase. Typing a passphrase finds its backup; a passphrase that opens none asks before creating a new one.
 - Every backup drive now carries an AEGIS-RESTORE folder: restore your files on any Windows, Mac or Linux computer without Aegis (instructions in English, plus Serbian when Aegis is set to Serbian).
 - Cleaning up old backups only touches this computer's backups, so several computers can share one drive safely.

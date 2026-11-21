@@ -4,7 +4,7 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-tauri = { version = "2", features = ["devtools", "tray-icon"] }
+tauri = { version = "2", features = ["devtools", "tray-icon", "image-png"] }
 aegis-agent = { path = "../../agent" }
 tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["sync", "time"] }

@@ -1,3 +1,5 @@
+<img src="assets/brand/logo.svg" alt="" width="88" align="right" />
+
 # Aegis
 
 [![CI](https://github.com/stcksmsh/aegis/actions/workflows/ci.yml/badge.svg)](https://github.com/stcksmsh/aegis/actions/workflows/ci.yml)

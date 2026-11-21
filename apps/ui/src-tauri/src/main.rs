@@ -4,6 +4,7 @@ mod updater;
 
 use aegis_agent::i18n::{t, tr};
 use std::path::PathBuf;
+use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
@@ -261,7 +262,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         Some(status),
         String::new(),
     ))));
-    let mut tray = TrayIconBuilder::with_id("main")
+    let tray = TrayIconBuilder::with_id("main")
         .tooltip("Aegis")
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -295,9 +296,18 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 show_main(tray.app_handle());
             }
         });
-    if let Some(icon) = app.default_window_icon() {
-        tray = tray.icon(icon.clone());
-    }
+    // macOS menu bar: a black glyph the system recolours for light/dark. Elsewhere the colour
+    // mark, which reads on both light and dark panels.
+    #[cfg(target_os = "macos")]
+    let tray = tray
+        .icon(Image::from_bytes(include_bytes!(
+            "../icons/tray/template.png"
+        ))?)
+        .icon_as_template(true);
+    #[cfg(not(target_os = "macos"))]
+    let tray = tray.icon(Image::from_bytes(include_bytes!(
+        "../icons/tray/color.png"
+    ))?);
     tray.build(app)?;
     Ok(())
 }

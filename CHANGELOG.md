@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (1.0.0)
+## 1.0.0 (2026-11-21)
 
 - One drive can hold several separate backups (e.g. one per company), each with its own passphrase. Typing a passphrase finds its backup; a passphrase that opens none asks before creating a new one.
 - Every backup drive now carries an AEGIS-RESTORE folder: restore your files on any Windows, Mac or Linux computer without Aegis (instructions in English, plus Serbian when Aegis is set to Serbian).

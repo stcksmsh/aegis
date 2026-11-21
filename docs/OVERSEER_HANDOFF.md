@@ -11,7 +11,7 @@ Last updated: 2026-11-21, Windows VM pass in progress.
 |---|---|
 | Work branch | `claude/linux-test-pass` (pushed). All work since 05a1407 is here. |
 | `master` | local `master` = 2e87425 (13 commits ahead of `origin/master` 05a1407, never pushed). Those 13 are also on the work branch. Merge the branch into `master` when the user says so. |
-| Version | still `0.2.0` in `apps/ui/src-tauri/tauri.conf.json` and both `Cargo.toml`; CHANGELOG heading is "Unreleased (1.0.0)". |
+| Version | `1.0.0` in `tauri.conf.json` + both `Cargo.toml`, CHANGELOG heading "1.0.0 (2026-11-21)" (bump committed on the work branch; not tagged). |
 | Linux installer (local) | `target/release/bundle/deb/Aegis_0.2.0_amd64.deb`, build: `cd apps/ui/src-tauri && npm_config_cache=/secondary/aegis-pb-test/npm-cache npx --yes @tauri-apps/cli@2 build --bundles deb`. The user installs it: `sudo apt install --reinstall <deb>` (needs their password, in their own terminal, not `!`). |
 | Windows installer | Run 44906730130 (9b3a56b) downloaded to `/secondary/aegis-win-installer/{nsis,msi}/`. Rebuild after fixes:  Every push to `claude/**` or `master` builds installers as CI artifacts; take the newest run on the work branch: `gh run list --branch claude/linux-test-pass -L 1`, then `gh run download <run> -n aegis-x86_64-pc-windows-msvc -D /secondary/aegis-win-installer` (131 MB; slow). |
 | Scratch test data | `/secondary/aegis-pb-test/` (test disk image, test files, npm cache). Safe to delete. |
@@ -71,6 +71,13 @@ Found: notifications sometimes show as "Windows PowerShell" → fixed in afad99f
 - Joining on Add backup also adds the pre-ticked Documents/Pictures/Desktop unless unticked; asked the user whether the "added" message should list the folders or only custom folders should join. No answer yet.
 - Not built (offered): delete oldest backups automatically when the drive is full (Time Machine does); today Aegis warns at 90 %.
 - Windows/macOS: no hands-on test yet. Tray submenus, theme detection (uses the web view's own media query there), print dialog, notifications all need a look.
+
+## Decisions 2026-11-21 (user)
+
+- Remaining hand tests (Linux/Windows/Mac leftovers) are "ok for now": not blocking 1.0.
+- Join message lists the added folders (done, ed76edb).
+- Unsigned installers (SmartScreen / Gatekeeper) are fine for 1.0.
+- AEGIS-RESTORE: English README always + PROCITAJ.txt when Aegis runs in Serbian (done).
 
 ## Next steps toward 1.0
 

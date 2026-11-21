@@ -14,11 +14,12 @@ pub struct RetentionPolicy {
 impl Default for RetentionPolicy {
     fn default() -> Self {
         Self {
-            enabled: false,
+            // Like Time Machine: deleted files stay restorable for up to a year, then go.
+            enabled: true,
             keep_last: 0,
-            keep_daily: 0,
-            keep_weekly: 0,
-            keep_monthly: 0,
+            keep_daily: 7,
+            keep_weekly: 4,
+            keep_monthly: 12,
             keep_yearly: 0,
             min_snapshots: 3,
         }

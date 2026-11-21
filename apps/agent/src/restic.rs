@@ -383,13 +383,13 @@ impl Restic {
         if retention_args.is_empty() {
             return Ok(());
         }
-        // Only this computer's snapshots, kept per (host, folders) group: after a handover
-        // the other computer's history is never pruned from here.
+        // Only this computer's snapshots (a handover never prunes the other computer's history),
+        // grouped by host alone: grouping by folders would keep a removed folder's backups forever.
         let mut args = vec![
             "forget".to_string(),
             "--prune".to_string(),
             format!("--host={}", self.host),
-            "--group-by=host,paths".to_string(),
+            "--group-by=host".to_string(),
         ];
         args.extend(retention_args.iter().cloned());
         self.run_capture(repo, passphrase, &args).await?;
@@ -799,14 +799,24 @@ mod tests {
         };
 
         as_host("laptop").init_repo(&repo, pass).await.unwrap();
-        for host in ["laptop", "laptop", "laptop", "office", "office"] {
+        let other = work.join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        // The laptop's last backup has a different folder set (a folder was removed/added).
+        let runs = [
+            ("laptop", &other),
+            ("office", &src),
+            ("office", &src),
+            ("laptop", &src),
+            ("laptop", &src),
+        ];
+        for (host, folder) in runs {
             let (tx, rx) = mpsc::channel(1);
             drop(rx);
             as_host(host)
                 .backup_with_progress(
                     &repo,
                     pass,
-                    std::slice::from_ref(&src),
+                    std::slice::from_ref(folder),
                     &[],
                     &[],
                     tx,

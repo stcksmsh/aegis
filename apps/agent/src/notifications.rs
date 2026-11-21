@@ -113,3 +113,10 @@ pub fn notify_drive_almost_full(drive_label: &str) {
         &tr("notify_full_body", &[("name", drive_label)]),
     );
 }
+
+pub fn notify_folder_shrank(folder_label: &str) {
+    notify(
+        &t("notify_shrank_title"),
+        &tr("folder_has_far_fewer_files", &[("name", folder_label)]),
+    );
+}

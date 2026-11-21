@@ -51,6 +51,9 @@ pub struct TrustedDrive {
     /// If set, backup only these sources to this drive; otherwise use global backup_sources.
     #[serde(default)]
     pub backup_sources: Option<Vec<BackupSource>>,
+    /// Files per folder (keyed by source path) at the last backup, to notice folders that shrank.
+    #[serde(default)]
+    pub file_counts: HashMap<String, u64>,
     /// Fields written by a newer Aegis; kept as-is on save.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -360,6 +363,7 @@ mod tests {
                 last_backup_epoch: None,
                 last_backup_snapshot_id: None,
                 backup_sources: None,
+                file_counts: HashMap::new(),
                 extra: Map::new(),
             },
         );

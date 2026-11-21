@@ -4,6 +4,7 @@
 
 - The passphrase sheet offer after setup says "Not now" instead of "Cancel".
 - When the backup drive is almost full, Aegis deletes the oldest backups before backing up (never the 3 newest) and tells you. Turn it off in Settings: "Delete the oldest backups when the drive is full".
+- After a backup, Aegis warns you when a folder has far fewer files than at the last backup, so files deleted by mistake can be restored from an earlier backup in time.
 
 ## 1.0.0 (2026-11-21)
 

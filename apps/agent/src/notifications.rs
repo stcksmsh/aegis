@@ -1,5 +1,5 @@
 //! Desktop notifications for backup events and trusted device detection.
-//! Uses `notify-rust` (Linux/macOS/Windows), fire-and-forget on a thread.
+//! Linux: freedesktop D-Bus; macOS/Windows: `notify-rust`. Fire-and-forget on a thread.
 
 use crate::state::RunStatus;
 
@@ -8,12 +8,54 @@ pub fn notify(title: &str, body: &str) {
     let title = title.to_string();
     let body = body.to_string();
     std::thread::spawn(move || {
-        let _ = notify_rust::Notification::new()
-            .appname("Aegis")
-            .summary(&title)
-            .body(&body)
-            .show();
+        if let Err(e) = show(&title, &body) {
+            tracing::warn!("notification not shown: {}", e);
+        }
     });
+}
+
+/// GNOME deletes an installed app's notifications as soon as the D-Bus connection that sent
+/// them closes, so keep one session connection open for as long as Aegis runs.
+#[cfg(target_os = "linux")]
+fn show(title: &str, body: &str) -> zbus::Result<()> {
+    use std::collections::HashMap;
+    use std::sync::OnceLock;
+    static CONN: OnceLock<zbus::blocking::Connection> = OnceLock::new();
+    let conn = match CONN.get() {
+        Some(c) => c,
+        None => {
+            let c = zbus::blocking::Connection::session()?;
+            CONN.get_or_init(|| c)
+        }
+    };
+    let hints: HashMap<&str, zbus::zvariant::Value> = HashMap::new();
+    conn.call_method(
+        Some("org.freedesktop.Notifications"),
+        "/org/freedesktop/Notifications",
+        Some("org.freedesktop.Notifications"),
+        "Notify",
+        &(
+            "Aegis",
+            0u32,
+            "aegis-ui",
+            title,
+            body,
+            Vec::<&str>::new(),
+            hints,
+            -1i32,
+        ),
+    )?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn show(title: &str, body: &str) -> notify_rust::error::Result<()> {
+    notify_rust::Notification::new()
+        .appname("Aegis")
+        .summary(title)
+        .body(body)
+        .show()
+        .map(|_| ())
 }
 
 pub fn notify_backup_started(drive_label: &str) {
@@ -78,7 +120,7 @@ pub fn notify_drive_almost_full(drive_label: &str) {
     notify(
         "Backup drive almost full",
         &format!(
-            "Your backup drive \"{}\" is almost full. Turn on automatic cleanup of old backups in Aegis → Advanced.",
+            "Your backup drive \"{}\" is almost full. Keep fewer old backups in Aegis → Advanced.",
             drive_label
         ),
     );

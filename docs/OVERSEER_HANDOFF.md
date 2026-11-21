@@ -82,7 +82,9 @@ Found: notifications sometimes show as "Windows PowerShell" → fixed in afad99f
 ## After 1.0 (open)
 
 - Logo redesign: brief given to the user (needs app icon 1024 + monochrome tray glyph; tray uses the colour app icon today, wrong for macOS menu bar). When files arrive: `tauri icon`, template tray icon on macOS, replace the CSS "A" badge.
-- Release notes body says "restic is bundled" (jargon): fix in release.yml notes for 1.0.1.
+- v1.0.0 was re-released 2026-11-21 on 5a0c6c0 with the new logo (first build had 18 downloads, some ours). README, release notes, repo description/topics and guide screenshots updated (22dd7f6+).
+- README demo GIF (docs/images/demo.gif) is from 2026-09: old logo and wording ("Add drive"). Needs a fresh screen recording from the real app.
+- GitHub social preview image: upload in repo Settings (no API); use assets/brand/wordmark.svg exported as PNG 1280x640.
 - Remaining hand tests were waived for 1.0; run them before 1.0.1.
 - Weblate setup (docs/TRANSLATING.md), auto-delete oldest when drive full.
 

@@ -6,6 +6,10 @@ Aegis protects people's personal files, so security reports are taken seriously.
 
 Please report vulnerabilities **privately** via [GitHub security advisories](https://github.com/stcksmsh/aegis/security/advisories/new), not public issues. Expect a first reply within a few days.
 
+## Supported versions
+
+The newest 1.x release gets security fixes. Installed copies update themselves: security fixes install automatically within 1.x (see the update policy in docs/ipc.md).
+
 ## Design summary
 
 - **Encryption:** backups are [restic](https://restic.net) repositories (AES-256-CTR + Poly1305, scrypt key derivation). Aegis adds no crypto of its own.

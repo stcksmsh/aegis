@@ -692,6 +692,21 @@ mod tests {
     }
 
     #[test]
+    fn counts_nested_files_without_following_symlinks() {
+        let root = std::env::temp_dir().join(format!("aegis-count-files-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("a/b")).unwrap();
+        for f in ["one", "a/two", "a/b/three"] {
+            std::fs::write(root.join(f), "x").unwrap();
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&root, root.join("a/b/loop")).unwrap();
+        let count = count_files(&root);
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(count.unwrap(), 3);
+    }
+
+    #[test]
     fn missing_folder_keeps_its_count_removed_folder_drops_it() {
         let src = |path: &str| BackupSource {
             label: path.into(),

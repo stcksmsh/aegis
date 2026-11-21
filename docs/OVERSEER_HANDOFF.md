@@ -3,7 +3,7 @@
 State for the next session that drives Aegis to its 1.0 release. Read this in full before acting;
 `/aegis-overseer` (`.claude/skills/aegis-overseer/SKILL.md`) says how to boot and keep it current.
 
-Last updated: 2026-11-21, end of the Linux hands-on test pass.
+Last updated: 2026-11-21, Windows VM pass in progress.
 
 ## Where things are
 
@@ -13,7 +13,7 @@ Last updated: 2026-11-21, end of the Linux hands-on test pass.
 | `master` | local `master` = 2e87425 (13 commits ahead of `origin/master` 05a1407, never pushed). Those 13 are also on the work branch. Merge the branch into `master` when the user says so. |
 | Version | still `0.2.0` in `apps/ui/src-tauri/tauri.conf.json` and both `Cargo.toml`; CHANGELOG heading is "Unreleased (1.0.0)". |
 | Linux installer (local) | `target/release/bundle/deb/Aegis_0.2.0_amd64.deb`, build: `cd apps/ui/src-tauri && npm_config_cache=/secondary/aegis-pb-test/npm-cache npx --yes @tauri-apps/cli@2 build --bundles deb`. The user installs it: `sudo apt install --reinstall <deb>` (needs their password, in their own terminal, not `!`). |
-| Windows installer | Not downloaded yet. Every push to `claude/**` or `master` builds installers as CI artifacts; take the newest run on the work branch: `gh run list --branch claude/linux-test-pass -L 1`, then `gh run download <run> -n aegis-x86_64-pc-windows-msvc -D /secondary/aegis-win-installer` (131 MB; slow). |
+| Windows installer | Run 44906730130 (9b3a56b) downloaded to `/secondary/aegis-win-installer/{nsis,msi}/`. Rebuild after fixes:  Every push to `claude/**` or `master` builds installers as CI artifacts; take the newest run on the work branch: `gh run list --branch claude/linux-test-pass -L 1`, then `gh run download <run> -n aegis-x86_64-pc-windows-msvc -D /secondary/aegis-win-installer` (131 MB; slow). |
 | Scratch test data | `/secondary/aegis-pb-test/` (test disk image, test files, npm cache). Safe to delete. |
 
 ## The user's machine (rules)
@@ -43,7 +43,24 @@ Built but **not yet confirmed by the user**:
 - Tray Eject notification, Open Aegis raise when the window is merely behind others.
 - E2E fix for Windows (8e791cf: `AEGIS_CONFIG_DIR`, test-only). Check the CI run for this push: E2E (windows-latest) must pass.
 
+## Windows VM pass (2026-11-21)
+
+VirtualBox 7.2 VM `WIN10`; xHCI USB enabled, user added to `vboxusers`; stick passed via Devices → USB.
+Confirmed: install (no SmartScreen prompt), setup + backup, theme, tray menu, close-to-tray, plug-in
+detection, Eject, restore into a folder with files, `restore-windows.bat`.
+Found: notifications sometimes show as "Windows PowerShell" → fixed (notify-rust `app_id` = bundle
+identifier), needs a re-test with a new CI installer. Start at login: user was restarting to test.
+
 ## Open questions / decisions
+
+- User (2026-11-21): app must support **multiple languages**; the passphrase sheet/PDF and other
+  output in the currently selected language only (not English + Serbian side by side). Proposed:
+  `locales/<lang>.json` shared by UI and agent, language setting (default = OS language, English
+  fallback), test that every locale has every key. Awaiting: which languages, Serbian Latin or
+  Cyrillic, restore kit on drive in setup language only?
+- User: passphrase sheet works but shouldn't sit under "Your backups"; offer it at setup only.
+  Not yet built.
+- Restore confirmed working on Linux and macOS (user has a Mac).
 
 - The morning erase of the stick: the user isn't sure they unticked "Erase this drive"; treated as user error. If an erase ever happens without the red "Erase … This can't be undone" confirm, it is a release blocker.
 - Joining on Add backup also adds the pre-ticked Documents/Pictures/Desktop unless unticked; asked the user whether the "added" message should list the folders or only custom folders should join. No answer yet.

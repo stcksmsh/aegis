@@ -22,6 +22,7 @@
 - A backup folder that was moved or deleted no longer looks like "files were open": the backup saves the rest and names the missing folders.
 - Only the signed updater offers updates; the separate "Download" bar is gone.
 - Old backups are cleaned up by default (one per day for 7 days, per week for 4 weeks, per month for 12 months, always the 3 newest), so the drive stops filling up; deleted files stay restorable for up to a year. A folder removed from the backup list is now cleaned up too (before, its backups were kept forever).
+- Windows: notifications show as Aegis instead of Windows PowerShell.
 - Each backup has its own card on the dashboard (Back up now, Restore…, its own progress) instead of a "Backup on this drive" list. Backups on the same drive run one after another; **Back up all** starts them all. Restoring one backup works while another backs up.
 - Setting up with the passphrase of a backup this computer already uses adds the chosen folders to that backup and says so (before, it silently renamed it and replaced its folders).
 - After folders are added to a backup (Edit folders, or that passphrase), it is backed up right away so they're included.

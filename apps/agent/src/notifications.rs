@@ -50,8 +50,12 @@ fn show(title: &str, body: &str) -> zbus::Result<()> {
 
 #[cfg(not(target_os = "linux"))]
 fn show(title: &str, body: &str) -> notify_rust::error::Result<()> {
-    notify_rust::Notification::new()
-        .appname("Aegis")
+    let mut n = notify_rust::Notification::new();
+    // Without this Windows shows the toast as coming from PowerShell. The installer tags the
+    // Start menu shortcut with the bundle identifier (tauri.conf.json), so toasts show as Aegis.
+    #[cfg(target_os = "windows")]
+    n.app_id("io.github.stcksmsh.aegis");
+    n.appname("Aegis")
         .summary(title)
         .body(body)
         .show()

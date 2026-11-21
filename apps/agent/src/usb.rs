@@ -91,7 +91,12 @@ fn monitor_usb(sender: mpsc::Sender<UsbEvent>) -> anyhow::Result<()> {
     use udev::{EventType, MonitorBuilder};
     debug!("Starting udev monitor for block devices");
     let monitor = MonitorBuilder::new()?.match_subsystem("block")?.listen()?;
-    for event in monitor.iter() {
+    // The socket is nonblocking: iter() ends as soon as no event is queued, so keep polling.
+    loop {
+        let Some(event) = monitor.iter().next() else {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            continue;
+        };
         let event_type = event.event_type();
         let device = event.device();
         let devtype = device
@@ -142,7 +147,6 @@ fn monitor_usb(sender: mpsc::Sender<UsbEvent>) -> anyhow::Result<()> {
             }
         }
     }
-    Ok(())
 }
 
 #[cfg(not(target_os = "linux"))]

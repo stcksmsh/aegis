@@ -13,7 +13,7 @@ Last updated: 2026-11-21, end of the Linux hands-on test pass.
 | `master` | local `master` = 2e87425 (13 commits ahead of `origin/master` 05a1407, never pushed). Those 13 are also on the work branch. Merge the branch into `master` when the user says so. |
 | Version | still `0.2.0` in `apps/ui/src-tauri/tauri.conf.json` and both `Cargo.toml`; CHANGELOG heading is "Unreleased (1.0.0)". |
 | Linux installer (local) | `target/release/bundle/deb/Aegis_0.2.0_amd64.deb`, build: `cd apps/ui/src-tauri && npm_config_cache=/secondary/aegis-pb-test/npm-cache npx --yes @tauri-apps/cli@2 build --bundles deb`. The user installs it: `sudo apt install --reinstall <deb>` (needs their password, in their own terminal, not `!`). |
-| Windows installer | `/secondary/aegis-win-installer/` (CI run 44905448407, artifact `aegis-x86_64-pc-windows-msvc`), built from cc5119f: it lacks the in-app passphrase sheet (d5f7e32). Every push to `claude/**` or `master` builds fresh installers as CI artifacts: `gh run download <run> -n aegis-x86_64-pc-windows-msvc -D /secondary/aegis-win-installer`. |
+| Windows installer | Not downloaded yet. Every push to `claude/**` or `master` builds installers as CI artifacts; take the newest run on the work branch: `gh run list --branch claude/linux-test-pass -L 1`, then `gh run download <run> -n aegis-x86_64-pc-windows-msvc -D /secondary/aegis-win-installer` (131 MB; slow). |
 | Scratch test data | `/secondary/aegis-pb-test/` (test disk image, test files, npm cache). Safe to delete. |
 
 ## The user's machine (rules)

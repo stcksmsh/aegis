@@ -409,7 +409,7 @@
   "notify_full_title": "Backup drive almost full",
   "notify_full_body": "Your backup drive \"{{name}}\" is almost full. Keep fewer old backups in Aegis → Advanced.",
   "notify_made_room_title": "Made room on the backup drive",
-  "notify_made_room_body": "Made room on \"{{name}}\": removed backups older than {{date}}.",
+  "notify_made_room_body": "Made room on \"{{name}}\": deleted the oldest backups. The oldest one left is from {{date}}.",
   "sheet_title": "Aegis backup – passphrase sheet",
   "sheet_backup_id": "Backup ID",
   "sheet_printed": "Printed",

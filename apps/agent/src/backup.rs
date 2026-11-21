@@ -435,24 +435,17 @@ fn drive_almost_full(mount: &Path) -> bool {
 /// The newest backups that "make room" never deletes.
 const KEEP_NEWEST: usize = 3;
 
-/// This computer's backups that may go to make room, oldest first; the newest `keep` always stay.
-fn oldest_to_remove<'a>(
-    snapshots: &'a [SnapshotInfo],
-    host: &str,
-    keep: usize,
-) -> Vec<&'a SnapshotInfo> {
-    let mut own: Vec<_> = snapshots
+/// This computer's backups (the ones retention may delete), in restic's order: oldest first.
+fn own_snapshots<'a>(snapshots: &'a [SnapshotInfo], host: &str) -> Vec<&'a SnapshotInfo> {
+    snapshots
         .iter()
         .filter(|s| s.hostname.as_deref() == Some(host))
-        .collect();
-    own.sort_by(|a, b| a.time.cmp(&b.time));
-    let removable = own.len().saturating_sub(keep);
-    own.truncate(removable);
-    own
+        .collect()
 }
 
-/// Deletes the oldest backups one by one until the drive has 10% free again.
-/// Returns the date (YYYY-MM-DD) of the newest backup removed, if any were.
+/// Deletes the oldest backups one at a time (keep-last n-1, n-2, ...) until the drive has
+/// 10% free again or only the newest `KEEP_NEWEST` are left. Restic decides what is oldest,
+/// by real time. Returns the date (YYYY-MM-DD) of the oldest backup left, if any were deleted.
 async fn make_room(
     restic: &Restic,
     repo_path: &Path,
@@ -466,21 +459,32 @@ async fn make_room(
             return None;
         }
     };
-    let mut removed = None;
-    for snapshot in oldest_to_remove(&snapshots, &restic.host, KEEP_NEWEST) {
-        if let Err(err) = restic
-            .forget_snapshot(repo_path, passphrase, &snapshot.id)
-            .await
-        {
+    let count = own_snapshots(&snapshots, &restic.host).len();
+    let mut removed = false;
+    for keep in (KEEP_NEWEST..count).rev() {
+        let args = [format!("--keep-last={keep}")];
+        if let Err(err) = restic.forget_prune(repo_path, passphrase, &args).await {
             warn!("make room: delete failed: {}", Redact::new(err));
             break;
         }
-        removed = Some(snapshot.time.chars().take(10).collect());
+        removed = true;
         if !drive_almost_full(mount) {
             break;
         }
     }
-    removed
+    if !removed {
+        return None;
+    }
+    let left = match restic.snapshots(repo_path, passphrase).await {
+        Ok(s) => s,
+        Err(err) => {
+            warn!("make room: listing backups failed: {}", Redact::new(err));
+            return None;
+        }
+    };
+    own_snapshots(&left, &restic.host)
+        .first()
+        .map(|s| s.time.chars().take(10).collect())
 }
 
 async fn update_repo_id(state: &SharedState, drive_id: &str, repo_id: &str) -> anyhow::Result<()> {
@@ -553,30 +557,5 @@ mod tests {
         ]);
         assert_eq!(found, vec![dir]);
         assert_eq!(missing, vec!["Pictures".to_string()]);
-    }
-
-    #[test]
-    fn make_room_keeps_newest_three_and_other_computers() {
-        let snap = |id: &str, time: &str, host: &str| SnapshotInfo {
-            id: id.into(),
-            time: time.into(),
-            hostname: Some(host.into()),
-            tags: None,
-            paths: Vec::new(),
-        };
-        let snaps = [
-            snap("e", "2026-05-01T10:00:00+02:00", "me"),
-            snap("a", "2026-01-01T10:00:00+01:00", "me"),
-            snap("x", "2025-01-01T10:00:00+01:00", "other"),
-            snap("c", "2026-03-01T10:00:00+01:00", "me"),
-            snap("b", "2026-02-01T10:00:00+01:00", "me"),
-            snap("d", "2026-04-01T10:00:00+02:00", "me"),
-        ];
-        let ids: Vec<_> = oldest_to_remove(&snaps, "me", 3)
-            .iter()
-            .map(|s| s.id.as_str())
-            .collect();
-        assert_eq!(ids, ["a", "b"]);
-        assert!(oldest_to_remove(&snaps[..3], "me", 3).is_empty());
     }
 }

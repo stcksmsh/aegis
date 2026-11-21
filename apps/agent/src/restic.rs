@@ -396,22 +396,6 @@ impl Restic {
         Ok(())
     }
 
-    pub async fn forget_snapshot(
-        &self,
-        repo: &Path,
-        passphrase: &str,
-        snapshot_id: &str,
-    ) -> anyhow::Result<()> {
-        check_snapshot_id(snapshot_id)?;
-        let args = [
-            "forget".to_string(),
-            "--prune".to_string(),
-            snapshot_id.to_string(),
-        ];
-        self.run_capture(repo, passphrase, &args).await?;
-        Ok(())
-    }
-
     pub async fn restore_cancellable(
         &self,
         repo: &Path,

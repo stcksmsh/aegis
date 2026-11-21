@@ -130,6 +130,7 @@ Each page has its own Save button and saves only what is on that page.
 | Language | English, Serbian Cyrillic (Српски) or Serbian Latin (Srpski). "Same as this computer" follows your computer's language. Changes right away. If you picked a language you can't read, it's the first box under **Settings**, labelled "(Language)". |
 | Skip these files or folders | Files to skip, e.g. `*.tmp` or `node_modules`. Aegis already skips temporary files and Windows/Mac system clutter. |
 | Quickly check each backup after it's made | After each backup, quickly checks that it can be read. Recommended. |
+| Delete the oldest backups when the drive is full | On by default. Before each backup, if less than 10% of the drive is free, Aegis deletes this computer's oldest backups one at a time until there is room again. The 3 newest backups are always kept. A message tells you which backups were removed. |
 | Back up automatically when your Aegis drive is plugged in | Automatic backups on plug-in. Needs "Remember my passphrase on this computer". |
 | Start Aegis when I log in | Aegis starts in the tray / menu bar when you log in, so it notices your drive. Needed for automatic backups. Takes effect right away. |
 | Your passphrase: Remember my passphrase on this computer | Keeps the passphrase in your computer's secure storage so backups run without asking. |
@@ -156,5 +157,5 @@ Each page has its own Save button and saves only what is on that page.
 | "Saved, but some files were skipped" | Some files were open or couldn't be read. Everything else was saved. Close other apps and back up again. |
 | "Saved, but these folders weren't found" | A folder Aegis backs up was moved, renamed or deleted. Everything else was saved. Open the drive under **Your backups** and choose **Edit folders**. |
 | Can't erase drive | Unplug it, plug it back in, and try again. Still failing? Erase it as **exFAT** with Disk Management (Windows) or Disk Utility (Mac), then try again. |
-| "Your backup drive is almost full" | Less than 10% free space is left on the drive. Plug in a bigger drive, free up space on it, or keep fewer old backups in **Advanced → Clean up old backups** (make sure **Automatically delete old backups** is ticked). |
+| "Your backup drive is almost full" | Less than 10% free space is left on the drive (with **Delete the oldest backups when the drive is full** on, Aegis already deleted what it could). Plug in a bigger drive, free up space on it, or keep fewer old backups in **Advanced → Clean up old backups** (make sure **Automatically delete old backups** is ticked). |
 | Something else | Open an [issue](https://github.com/stcksmsh/aegis/issues) and attach the logs: **Advanced → Open log files**. They are in: Windows `%LOCALAPPDATA%\aegis\Aegis\data\logs`, Mac `~/Library/Application Support/com.aegis.Aegis/logs`, Linux `~/.local/share/aegis/logs`. Logs never contain your passphrase. |

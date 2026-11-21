@@ -12,7 +12,7 @@ use which::which;
 pub struct Restic {
     binary: PathBuf,
     /// Recorded on every snapshot; retention only ever prunes this computer's snapshots.
-    host: String,
+    pub(crate) host: String,
 }
 
 /// This computer's name, as restic would record it. `AEGIS_HOSTNAME` overrides it
@@ -392,6 +392,22 @@ impl Restic {
             "--group-by=host".to_string(),
         ];
         args.extend(retention_args.iter().cloned());
+        self.run_capture(repo, passphrase, &args).await?;
+        Ok(())
+    }
+
+    pub async fn forget_snapshot(
+        &self,
+        repo: &Path,
+        passphrase: &str,
+        snapshot_id: &str,
+    ) -> anyhow::Result<()> {
+        check_snapshot_id(snapshot_id)?;
+        let args = [
+            "forget".to_string(),
+            "--prune".to_string(),
+            snapshot_id.to_string(),
+        ];
         self.run_capture(repo, passphrase, &args).await?;
         Ok(())
     }

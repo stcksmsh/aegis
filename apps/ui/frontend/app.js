@@ -1523,6 +1523,8 @@ function syncConfigUI(status) {
   const reminderDays = document.getElementById("reminder-days");
   const backupIntervalHours = document.getElementById("backup-interval-hours");
   if (quickVerify) quickVerify.checked = !!config.quick_verify;
+  const deleteOldest = document.getElementById("delete-oldest-when-full");
+  if (deleteOldest) deleteOldest.checked = config.delete_oldest_when_full !== false;
   if (autoBackup) autoBackup.checked = !!config.auto_backup_on_insert;
   if (deepVerify) deepVerify.checked = !!config.deep_verify;
   if (remember) remember.checked = !!config.remember_passphrase;
@@ -1882,6 +1884,7 @@ function settingsPayload() {
   return {
     exclude_patterns: splitList("exclude-patterns"),
     quick_verify: document.getElementById("quick-verify").checked,
+    delete_oldest_when_full: document.getElementById("delete-oldest-when-full").checked,
     auto_backup_on_insert: document.getElementById("auto-backup").checked,
     remember_passphrase: remember,
     paranoid_mode: !remember,

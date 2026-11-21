@@ -2,7 +2,7 @@ use crate::config::BackupSource;
 use crate::i18n::{t, tr};
 use crate::logging::Redact;
 use crate::notifications;
-use crate::restic::Restic;
+use crate::restic::{Restic, SnapshotInfo};
 use crate::retention::RetentionPolicy;
 use crate::state::{BackupProgress, RunPhase, RunResult, RunStatus, SharedState};
 use crate::verify::{deep_verify, quick_verify};
@@ -109,6 +109,32 @@ pub async fn run_backup(
                 .map(|p| p.display().to_string())
                 .collect::<Vec<_>>()
         );
+
+        if config.delete_oldest_when_full && drive_almost_full(&mount_path) {
+            set_phase(
+                &state,
+                RunPhase::Pruning,
+                RunStatus::Partial,
+                &t("cleaning_up_old_backups"),
+                started_epoch,
+                None,
+                false,
+            )
+            .await;
+            if let Some(date) = make_room(&restic, &repo_path, &passphrase, &mount_path).await {
+                notifications::notify_made_room(&drive_label, &date);
+            }
+            set_phase(
+                &state,
+                RunPhase::BackingUp,
+                RunStatus::Partial,
+                &t("starting_backup"),
+                started_epoch,
+                None,
+                false,
+            )
+            .await;
+        }
 
         let (progress_tx, mut progress_rx) = mpsc::channel(64);
         let restic_clone = restic.clone();
@@ -293,11 +319,9 @@ pub async fn run_backup(
                     Ok(Err(err)) => warn!("restore kit update failed: {}", Redact::new(err)),
                     _ => {}
                 }
-                if let Some((free, total)) = crate::usb::disk_space_for_mount(&mount_path) {
-                    if total > 0 && free < total / 10 {
-                        result.drive_almost_full = true;
-                        notifications::notify_drive_almost_full(&drive_label);
-                    }
+                if drive_almost_full(&mount_path) {
+                    result.drive_almost_full = true;
+                    notifications::notify_drive_almost_full(&drive_label);
                 }
             }
             notifications::notify_backup_finished(&drive_label, &result.status, result.interrupted);
@@ -402,6 +426,63 @@ async fn apply_retention(
     restic.forget_prune(repo_path, passphrase, &args).await
 }
 
+/// Under 10% free space left.
+fn drive_almost_full(mount: &Path) -> bool {
+    crate::usb::disk_space_for_mount(mount)
+        .is_some_and(|(free, total)| total > 0 && free < total / 10)
+}
+
+/// The newest backups that "make room" never deletes.
+const KEEP_NEWEST: usize = 3;
+
+/// This computer's backups that may go to make room, oldest first; the newest `keep` always stay.
+fn oldest_to_remove<'a>(
+    snapshots: &'a [SnapshotInfo],
+    host: &str,
+    keep: usize,
+) -> Vec<&'a SnapshotInfo> {
+    let mut own: Vec<_> = snapshots
+        .iter()
+        .filter(|s| s.hostname.as_deref() == Some(host))
+        .collect();
+    own.sort_by(|a, b| a.time.cmp(&b.time));
+    let removable = own.len().saturating_sub(keep);
+    own.truncate(removable);
+    own
+}
+
+/// Deletes the oldest backups one by one until the drive has 10% free again.
+/// Returns the date (YYYY-MM-DD) of the newest backup removed, if any were.
+async fn make_room(
+    restic: &Restic,
+    repo_path: &Path,
+    passphrase: &str,
+    mount: &Path,
+) -> Option<String> {
+    let snapshots = match restic.snapshots(repo_path, passphrase).await {
+        Ok(s) => s,
+        Err(err) => {
+            warn!("make room: listing backups failed: {}", Redact::new(err));
+            return None;
+        }
+    };
+    let mut removed = None;
+    for snapshot in oldest_to_remove(&snapshots, &restic.host, KEEP_NEWEST) {
+        if let Err(err) = restic
+            .forget_snapshot(repo_path, passphrase, &snapshot.id)
+            .await
+        {
+            warn!("make room: delete failed: {}", Redact::new(err));
+            break;
+        }
+        removed = Some(snapshot.time.chars().take(10).collect());
+        if !drive_almost_full(mount) {
+            break;
+        }
+    }
+    removed
+}
+
 async fn update_repo_id(state: &SharedState, drive_id: &str, repo_id: &str) -> anyhow::Result<()> {
     let mut guard = state.write().await;
     if let Some(drive) = guard.config.trusted_drives.get_mut(drive_id) {
@@ -472,5 +553,30 @@ mod tests {
         ]);
         assert_eq!(found, vec![dir]);
         assert_eq!(missing, vec!["Pictures".to_string()]);
+    }
+
+    #[test]
+    fn make_room_keeps_newest_three_and_other_computers() {
+        let snap = |id: &str, time: &str, host: &str| SnapshotInfo {
+            id: id.into(),
+            time: time.into(),
+            hostname: Some(host.into()),
+            tags: None,
+            paths: Vec::new(),
+        };
+        let snaps = [
+            snap("e", "2026-05-01T10:00:00+02:00", "me"),
+            snap("a", "2026-01-01T10:00:00+01:00", "me"),
+            snap("x", "2025-01-01T10:00:00+01:00", "other"),
+            snap("c", "2026-03-01T10:00:00+01:00", "me"),
+            snap("b", "2026-02-01T10:00:00+01:00", "me"),
+            snap("d", "2026-04-01T10:00:00+02:00", "me"),
+        ];
+        let ids: Vec<_> = oldest_to_remove(&snaps, "me", 3)
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect();
+        assert_eq!(ids, ["a", "b"]);
+        assert!(oldest_to_remove(&snaps[..3], "me", 3).is_empty());
     }
 }

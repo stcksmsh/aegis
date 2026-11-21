@@ -26,7 +26,8 @@ clean = "cargo clean"
 
 [done]
 # Checked when an agent on a matching branch tries to finish.
-branch_prefix = "claude/"
+# Narrower than claude/: the aegis overseer works on claude/<name> branches that are not slices.
+branch_prefix = "claude/slice-"
 require = ["clean_tree", "pushed", "pr"]
 # Keys of [commands] to run as gates before a slice may end. Leave empty when CI already
 # runs them on every pull request; fill in for projects without CI.

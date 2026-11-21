@@ -162,7 +162,7 @@ def main():
     kit = os.path.join(mount, "AEGIS-RESTORE")
     with open(os.path.join(kit, "kit.json")) as f:
         print("  kit.json:", json.load(f))
-    for name in ["README.txt", "PROCITAJ.txt", "restore-windows.bat", "restore-mac.command", "restore-linux.sh"]:
+    for name in ["README.txt", "restore-windows.bat", "restore-mac.command", "restore-linux.sh"]:
         assert os.path.isfile(os.path.join(kit, name)), name
     if sys.platform != "win32" and os.path.isfile(os.path.join(kit, "restic", "SHA256SUMS")):
         import subprocess

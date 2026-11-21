@@ -1,0 +1,64 @@
+# nonslop per-project wiring. Copied to <project>/.nonslop.toml by `nonslop init`.
+# A project without this file gets no nonslop behaviour at all.
+# Agents are blocked from editing this file; only the owner changes it.
+
+[commands]
+# The exact commands agents must use. Add or rename keys freely; every non-empty one is shown to agents.
+# No shell syntax (pipes, &&, VAR=x): commands are run without a shell. Wrap anything complex in a script.
+# A fresh worktree has no bundled restic; run both fetch commands once before lint or test (CI does the same).
+fetch_restic = "bash scripts/fetch-restic.sh x86_64-unknown-linux-gnu"
+fetch_restore_kit = "bash scripts/fetch-restore-kit.sh"
+fmt = "cargo fmt --all"
+lint = "cargo clippy --workspace -- -D warnings"
+test = "cargo test --workspace"
+check_windows = "cargo check -p aegis-agent --target x86_64-pc-windows-gnu"
+check_macos = "cargo check -p aegis-agent --target x86_64-apple-darwin"
+clean = "cargo clean"
+
+[slop]
+# Static slop checks (tools/slopstop). All keys are optional; these are the common ones.
+# allow_suppress = ["clippy::too_many_arguments"]   # suppressions agents may still add
+# exclude = ["docs/**"]                             # extends the built-in excludes
+# warn = ["file-too-large"]                         # downgrade a rule to advisory
+# block = []                                        # upgrade a rule to blocking
+# disable = []                                      # drop a rule
+# stop_retries = 2
+
+[done]
+# Checked when an agent on a matching branch tries to finish.
+branch_prefix = "claude/"
+require = ["clean_tree", "pushed", "pr"]
+# Keys of [commands] to run as gates before a slice may end. Leave empty when CI already
+# runs them on every pull request; fill in for projects without CI.
+run = []
+gate_timeout_s = 1800
+# Run [commands].clean automatically once a slice passes.
+auto_clean = true
+# Refuse to finish below this much free disk. 0 disables.
+min_free_gb = 0
+# Identical failures in a row before the agent is allowed to stop anyway.
+stop_retries = 2
+
+[state]
+# The single handover file the coordinator keeps. Printed at every session start.
+file = "docs/STATE.md"
+
+[env]
+# Project-relative scratch root. Hook logs go to <scratch>/nonslop/. Must be git-ignored.
+scratch = ".claude/tmp"
+# Null sink for agents, when they must never use the default audio output.
+# audio_sink = ""
+
+[rules]
+# Extra one-line rules for this project, shown to every agent.
+notes = [
+  "Goal: a non-technical person downloads the installer from a GitHub Release and backs up folders to a USB drive on Windows, macOS and Linux, with no terminal and no extra installs. Every change serves that.",
+  "User-facing text is product: UI messages, README top and docs/USER_GUIDE.md use plain words, no jargon (no 'udev', 'restic repo', 'IPC'). A feature added or removed updates docs/USER_GUIDE.md and CHANGELOG.md.",
+  "Every user-facing string lives in locales/*.json (en is the source); see docs/TRANSLATING.md.",
+  "Never simplify away: passphrase secrecy (never on disk, in logs or in CLI args; only via env RESTIC_PASSWORD), drive-marker sanitization (removable media is untrusted), API Origin/Host checks, restore never overwrites.",
+  "Any OS-specific call is gated by cfg(target_os); run check_windows and check_macos after touching it.",
+  "Frontend (apps/ui/frontend) is vanilla HTML/JS/CSS with no build step; run node --check on changed JS.",
+  "Versions stay in sync: apps/ui/src-tauri/tauri.conf.json version = release tag without v, bumped together with both Cargo.toml files; release CI fails otherwise.",
+  "Non-trivial logic ships one small unit test; trivial code needs none.",
+  "Scratch data and big downloads go under /secondary, never /home (nearly full).",
+]

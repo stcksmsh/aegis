@@ -26,3 +26,4 @@ apps/ui/src-tauri/binaries/
 
 # Restic programs copied onto backup drives (see scripts/fetch-restore-kit.sh)
 apps/ui/src-tauri/restore-kit/
+.claude/tmp/

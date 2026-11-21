@@ -21,6 +21,19 @@
 - A backup's name is just **Name** everywhere; **Rename** sits with each drive.
 - A backup folder that was moved or deleted no longer looks like "files were open": the backup saves the rest and names the missing folders.
 - Only the signed updater offers updates; the separate "Download" bar is gone.
+- Old backups are cleaned up by default (one per day for 7 days, per week for 4 weeks, per month for 12 months, always the 3 newest), so the drive stops filling up; deleted files stay restorable for up to a year. A folder removed from the backup list is now cleaned up too (before, its backups were kept forever).
+- Each backup has its own card on the dashboard (Back up now, Restore…, its own progress) instead of a "Backup on this drive" list. Backups on the same drive run one after another; **Back up all** starts them all. Restoring one backup works while another backs up.
+- Setting up with the passphrase of a backup this computer already uses adds the chosen folders to that backup and says so (before, it silently renamed it and replaced its folders).
+- After folders are added to a backup (Edit folders, or that passphrase), it is backed up right away so they're included.
+- "Add drive" is now **Add backup**, and "Your drives" **Your backups**: what you add is a backup, on a new drive or one that already has backups.
+- **Delete from drive** removes one backup and its files from a drive that holds several; the others stay.
+- The tray menu shows the plugged-in drive by name with its backups (back up one or all) and can eject it; ejecting from the tray needs no extra confirm and reports the result as a notification.
+- Folders: **Browse…** fills in the location (and a name), **Add** adds it (a folder still in the box is added on Next, Set up or Save); a folder or name can't be added twice; added folders can be renamed.
+- A theme button (match system / light / dark). On Linux, dark desktop themes are now detected.
+- Erasing a drive removes the backups that were on it from Aegis (before, they stayed listed and failed to open).
+- Linux: **Open Aegis** in the tray brings the window to the front, also when it was minimized or behind other windows.
+- Linux: plugging in a drive while Aegis runs is noticed again (before, only drives already plugged in when Aegis started were seen, so backup-on-insert and "drive connected" never fired).
+- Linux: notifications (backup started/finished, drive connected, reminders) now show on GNOME; before, the desktop removed them right away.
 - Keyboard and screen readers: drive cards open with the keyboard, focus isn't lost while lists refresh, and dialogs block the page behind them. Better contrast in the light theme.
 
 ## 0.2.0 — internal, never released

@@ -35,23 +35,26 @@ Nothing else to install. Aegis includes everything it needs.
 ![Welcome wizard](images/welcome.png)
 
 1. Open Aegis. The welcome wizard starts.
-2. **Pick folders** to protect (Documents, Pictures, Desktop, or your own).
+2. **Pick folders** to protect (Documents, Pictures, Desktop, or your own). For your own: click **Browse…** to choose the folder (or type its location), give it a name if you like, then click **Add**. Click ✎ on an added folder to rename it, × to remove it.
 3. **Choose a passphrase.** Write it down on paper and keep it somewhere safe.
    > ⚠️ Without the passphrase, nobody can open your backups — not even you. There is no reset.
 
    Then choose **Remember my passphrase on this computer** (needed for automatic backups) or **Ask for my passphrase every time**. You can change this later in **Settings**.
 4. **Plug in a USB drive** and pick it. You can give the backup a **Name** (optional). You can use a drive that already has files; Aegis stores backups in a hidden `.aegis` folder and does not touch your other files. Erasing the drive is optional: only if you want it wiped first, tick **Erase this drive** and type ERASE. If the drive shows up but can't be used yet, click **Open drive**.
-5. Click **Run first backup now** (or **Skip for now**). The first backup takes longest; later ones only copy what changed.
+5. Click **Run first backup now** (or **Skip for now**). The first backup takes longest; later ones only copy what changed. How fast it goes depends mostly on the drive: a cheap USB stick writes about 10 MB per second (roughly 25 minutes for 15 GB), a USB SSD ten times faster.
 
 ## 3. Everyday use
 
 ![Dashboard](images/dashboard.png)
 
-- **Plug in your drive → backup starts automatically** (if Aegis remembers your passphrase and **Start Aegis when I log in** is on). Otherwise open Aegis and click **Back up now**.
+- **Plug in your drive → backup starts automatically** (if Aegis remembers your passphrase and **Start Aegis when I log in** is on). Otherwise open Aegis and click **Back up now** (**Back up all** if the drive holds several backups).
+- Each backup has its own card under **Your backups**, with **Back up now**, **Restore…** and its own progress bar.
+- The tray / menu bar icon shows the plugged-in drive (for example "DataTraveler 3.0 (57.8 GB)") with its backups: **Back up "name"** for each, **Back up all** when there are several, and **Eject** (ejects right away; a notification says when it's safe to unplug). Plus **Open Aegis** and **Quit Aegis**.
+- The ◐ button in the top right switches the look: match your computer, light, or dark.
 - The dashboard shows how the last backup went, for example "Last backup finished today at 14:02. Everything was saved." If it didn't finish, the same line says why and what to do.
 - Closing the window keeps Aegis running in the tray / menu bar so it can notice your drive. To stop it fully: tray icon → **Quit Aegis**.
 - Wait until the backup is done, then click **Eject drive** before unplugging.
-- Under **Your drives**, click a drive to see more: **Rename** changes the name Aegis shows for that backup (the drive itself isn't renamed), **Edit folders** changes what is backed up, **Print passphrase sheet** and **Forget on this computer** are explained in [section 6](#6-moving-backups-to-another-computer).
+- Click a card's name to see more: **Rename** changes the name Aegis shows for that backup (the drive itself isn't renamed), **Edit folders** changes what is backed up (adding a folder starts a backup right away), **Delete from drive** is explained in [section 4](#several-backups-on-one-drive), **Print passphrase sheet** and **Forget on this computer** in [section 6](#6-moving-backups-to-another-computer).
 - When an update is ready, a bar at the top offers **Install and restart**. Aegis never updates in the middle of a backup or restore.
 - Unplugged mid-backup? No harm. Older backups stay intact; the next backup picks up again.
 
@@ -64,6 +67,8 @@ Nothing else to install. Aegis includes everything it needs.
 
 Aegis restores into the folder you choose; it never overwrites your current files. Changed your mind? Click **Stop restore**; the files restored so far stay in that folder.
 
+Deleted a file, or removed a folder from Aegis? Older backups still have it, so you can get it back for up to a year. After that, Aegis cleans it off the drive (see **Clean up old backups** in [section 7](#7-settings-explained)).
+
 ### Getting back just some files
 
 If you only lost a few files or one folder, you don't need to restore everything:
@@ -75,13 +80,17 @@ If you only lost a few files or one folder, you don't need to restore everything
 
 ### On a new or reinstalled computer
 
-Install Aegis, plug in the drive, choose **Add drive**, pick the drive and type your **original passphrase**. Aegis finds the backup that this passphrase opens. Then use **Restore**.
+Install Aegis, plug in the drive, choose **Add backup**, pick the drive and type your **original passphrase**. Aegis finds the backup that this passphrase opens. Then use **Restore**.
 
 ### Several backups on one drive
 
 One drive can hold separate backups, for example one per company. Each has its own passphrase, and each passphrase opens only its own backup.
 
-To add another one, choose **Add drive** on a drive that already has backups and type a **new** passphrase. Aegis asks before it creates a separate backup, so a mistyped passphrase never starts a new one by accident. If this computer backs up to more than one of them, pick the one you want under **Backup on this drive** on the dashboard and on the Restore page.
+To add another one, choose **Add backup** on a drive that already has backups and type a **new** passphrase. Aegis asks before it creates a separate backup, so a mistyped passphrase never starts a new one by accident. Each backup needs its own passphrase: typing the passphrase of a backup you already have adds the folders you chose to that backup (Aegis tells you), it doesn't make a new one. Each backup gets its own card on the dashboard; **Restore…** on a card opens the Restore page for that backup (or pick it under **Backup on this drive** there).
+
+Backups on the same drive run one after another (a card says **Waiting** until its turn): a USB drive isn't faster with two at once. You can restore from one backup while another one is backing up.
+
+No longer need one of them? Plug in the drive, click the card's name, and choose **Delete from drive**, then type its name. That backup and all its saved versions are deleted from the drive; the other backups stay. Erasing the whole drive also removes all its backups from Aegis.
 
 ## 5. Restoring without Aegis
 
@@ -101,14 +110,14 @@ Aegis stores backups in the open [restic](https://restic.net) format, so a techn
 
 A backup belongs to the data, not to a computer. To let another computer take over (for example, you set it up on your laptop and the office PC should continue):
 
-1. On the new computer: install Aegis, plug in the drive, choose **Add drive**, pick the drive and type the backup's passphrase.
-2. Aegis finds the existing backup and shows which folders the other computer backed up. If the files live in different folders on this computer, open the drive under **Your drives** and choose **Edit folders**.
+1. On the new computer: install Aegis, plug in the drive, choose **Add backup**, pick the drive and type the backup's passphrase.
+2. Aegis finds the existing backup and shows which folders the other computer backed up. If the files live in different folders on this computer, open the drive under **Your backups** and choose **Edit folders**.
 3. Earlier backups stay on the drive and can still be restored. On the Restore page, each backup shows which computer made it. Cleaning up old backups on one computer never deletes the other computer's backups.
-4. On the old computer: open the drive under **Your drives** and choose **Forget on this computer**. Aegis stops backing up there and forgets the saved passphrase; the backups on the drive are kept. Delete any copies of the files that should not stay on the old computer.
+4. On the old computer: open the drive under **Your backups** and choose **Forget on this computer**. Aegis stops backing up there and forgets the saved passphrase; the backups on the drive are kept. Delete any copies of the files that should not stay on the old computer. **Forget** also works for a drive that is lost or broken: the drive doesn't need to be plugged in.
 
 ### Passphrase sheet
 
-Under **Your drives**, **Print passphrase sheet** opens a page to print: the backup's name, a blank to write the passphrase on by hand, and restore steps in English and Serbian. Keep it in a safe place, never together with the drive.
+Under **Your backups**, **Print passphrase sheet** opens a page to print: the backup's name, a blank to write the passphrase on by hand, and restore steps in English and Serbian. Keep it in a safe place, never together with the drive.
 
 ## 7. Settings explained
 
@@ -133,7 +142,7 @@ Each page has its own Save button and saves only what is on that page.
 |---|---|
 | Check backups thoroughly | Reads back all backup data after each backup. Much slower; catches failing drives. |
 | Only back up files like these | Leave empty to back up everything in your folders. Example: `*.docx, *.pdf`. |
-| Clean up old backups | How many old backups to keep (newest, daily, weekly, monthly, yearly). Nothing is deleted unless **Automatically delete old backups based on these settings** is ticked. |
+| Clean up old backups | How many old backups to keep (newest, daily, weekly, monthly, yearly). On from the start: Aegis keeps a backup from each of the last 7 days, 4 weeks and 12 months, plus the 3 newest, and deletes older ones so the drive doesn't fill up. Untick **Automatically delete old backups based on these settings** to keep everything (the drive then fills up over time). |
 | Save drive details | Saves a short note about where your backup is on the drive. No passphrase in it. |
 | Open log files | Opens the folder with Aegis's logs, for when you ask for help. |
 
@@ -144,7 +153,7 @@ Each page has its own Save button and saves only what is on that page.
 | Drive not detected | Unplug and re-plug. Make sure the drive shows up in your file manager. |
 | "Wrong passphrase" | Passphrases are case-sensitive. Check Caps Lock. |
 | "Saved, but some files were skipped" | Some files were open or couldn't be read. Everything else was saved. Close other apps and back up again. |
-| "Saved, but these folders weren't found" | A folder Aegis backs up was moved, renamed or deleted. Everything else was saved. Open the drive under **Your drives** and choose **Edit folders**. |
+| "Saved, but these folders weren't found" | A folder Aegis backs up was moved, renamed or deleted. Everything else was saved. Open the drive under **Your backups** and choose **Edit folders**. |
 | Can't erase drive | Unplug it, plug it back in, and try again. Still failing? Erase it as **exFAT** with Disk Management (Windows) or Disk Utility (Mac), then try again. |
-| "Your backup drive is almost full" | Less than 10% free space is left on the drive. Plug in a bigger drive, free up space on it, or turn on automatic cleanup of old backups in **Advanced → Clean up old backups**. |
+| "Your backup drive is almost full" | Less than 10% free space is left on the drive. Plug in a bigger drive, free up space on it, or keep fewer old backups in **Advanced → Clean up old backups** (make sure **Automatically delete old backups** is ticked). |
 | Something else | Open an [issue](https://github.com/stcksmsh/aegis/issues) and attach the logs: **Advanced → Open log files**. They are in: Windows `%LOCALAPPDATA%\aegis\Aegis\data\logs`, Mac `~/Library/Application Support/com.aegis.Aegis/logs`, Linux `~/.local/share/aegis/logs`. Logs never contain your passphrase. |

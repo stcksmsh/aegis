@@ -2,7 +2,7 @@
 """End-to-end handover test: computer A backs up, computer B takes over the same backup,
 both histories stay restorable, and cleanup on one computer never touches the other's.
 
-Two computers are simulated on one machine with separate config folders and AEGIS_HOSTNAME.
+Two computers are simulated on one machine with separate config folders (AEGIS_CONFIG_DIR) and AEGIS_HOSTNAME.
 Starts and stops the agent itself (stdlib only).
 
 Usage: e2e_handover.py <aegis-agent binary> <drive mount path>
@@ -60,6 +60,7 @@ class Computer:
         env = {**os.environ, "AEGIS_HOSTNAME": self.name,
                "XDG_CONFIG_HOME": os.path.join(self.home, "config"),
                "APPDATA": os.path.join(self.home, "config"),
+               "AEGIS_CONFIG_DIR": os.path.join(self.home, "config"),
                "HOME": self.home}
         self.log = open(os.path.join(self.home, "agent.log"), "w")
         self.proc = subprocess.Popen([self.agent], env=env, stdout=self.log, stderr=self.log)

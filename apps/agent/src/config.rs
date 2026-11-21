@@ -194,6 +194,10 @@ impl AgentConfig {
     }
 
     pub fn config_path() -> anyhow::Result<PathBuf> {
+        // E2E tests simulate two computers on one machine; Windows ignores APPDATA for this.
+        if let Some(dir) = std::env::var_os("AEGIS_CONFIG_DIR") {
+            return Ok(PathBuf::from(dir).join("config.json"));
+        }
         let proj = ProjectDirs::from("com", "aegis", "Aegis").context("resolve config dir")?;
         Ok(proj.config_dir().join("config.json"))
     }

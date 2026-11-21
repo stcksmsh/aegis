@@ -3,18 +3,22 @@
 State for the next session that drives Aegis to its 1.0 release. Read this in full before acting;
 `/aegis-overseer` (`.claude/skills/aegis-overseer/SKILL.md`) says how to boot and keep it current.
 
-Last updated: 2026-11-21, **v1.0.0 released**.
+Last updated: 2026-11-21 evening, **v1.0.0 released**; README/repo/demo polished. Next: 1.0.1.
 
 ## Where things are
 
 | What | Where |
 |---|---|
-| Work branch | `master` (v1.0.0 = 30f7df3, released 2026-11-21: https://github.com/stcksmsh/aegis/releases/tag/v1.0.0). `claude/linux-test-pass` is merged. Update feeds `track-1.0` and `track-1` exist with all 11 platforms. |
-| `master` | local `master` = 2e87425 (13 commits ahead of `origin/master` 05a1407, never pushed). Those 13 are also on the work branch. Merge the branch into `master` when the user says so. |
-| Version | `1.0.0` in `tauri.conf.json` + both `Cargo.toml`, CHANGELOG heading "1.0.0 (2026-11-21)" (bump committed on the work branch; not tagged). |
-| Linux installer (local) | `target/release/bundle/deb/Aegis_0.2.0_amd64.deb`, build: `cd apps/ui/src-tauri && npm_config_cache=/secondary/aegis-pb-test/npm-cache npx --yes @tauri-apps/cli@2 build --bundles deb`. The user installs it: `sudo apt install --reinstall <deb>` (needs their password, in their own terminal, not `!`). |
-| Windows installer | Run 44906730130 (9b3a56b) downloaded to `/secondary/aegis-win-installer/{nsis,msi}/`. Rebuild after fixes:  Every push to `claude/**` or `master` builds installers as CI artifacts; take the newest run on the work branch: `gh run list --branch claude/linux-test-pass -L 1`, then `gh run download <run> -n aegis-x86_64-pc-windows-msvc -D /secondary/aegis-win-installer` (131 MB; slow). |
-| Scratch test data | `/secondary/aegis-pb-test/` (test disk image, test files, npm cache). Safe to delete. |
+| Branch | `master` only (`claude/linux-test-pass` merged). origin/master includes PR #1 "Wire nonslop" (045fa02, the user's). |
+| Release | **v1.0.0** = 5a0c6c0 (re-released 2026-11-21 with the new logo; first build was deleted after 18 downloads). https://github.com/stcksmsh/aegis/releases/tag/v1.0.0. Feeds `track-1.0`, `track-1` have all 11 platforms. |
+| Unreleased (→ 1.0.1) | "Not now" on the passphrase-sheet offer (CHANGELOG "Unreleased"). |
+| Version | `1.0.0` in `tauri.conf.json` + both `Cargo.toml`. Next: bump to 1.0.1, move "Unreleased" under "1.0.1", tag `v1.0.1`. |
+| Linux installer (local) | build: `cd apps/ui/src-tauri && npm_config_cache=/secondary/aegis-pb-test/npm-cache npx --yes @tauri-apps/cli@2 build --bundles deb` → `target/release/bundle/deb/`. The user installs it: `sudo apt install --reinstall <deb>` in their own terminal. |
+| Installers from CI | every push to `master`/`claude/**` builds them as artifacts: `gh run download <run> -n aegis-x86_64-pc-windows-msvc -D /secondary/aegis-win-installer`. |
+| README demo | `sh scripts/demo/make-demo.sh` (sandboxed scripted Chrome + debug agent) → docs/images/demo.gif/.mp4. Needs `npm_config_cache` on /secondary. |
+| Brand | `assets/brand/` (SVG sources, preview); app icons via `tauri icon`; tray glyphs `apps/ui/src-tauri/icons/tray/`. `aegis-brand-assets.zip` loose in repo root, untracked (user to delete). |
+| Scratch | `/secondary/aegis-pb-test/`, `/secondary/aegis-demo/`, `/secondary/aegis-brand/`, `/secondary/aegis-win-installer/`: all safe to delete. |
+| Headless UI checks | scratch agent in `unshare -rn` netns (user's Aegis owns 127.0.0.1:7878) + `google-chrome --headless --disable-web-security` on `apps/ui/frontend/index.html`; see scripts/demo/make-demo.sh for the full sandbox. |
 
 ## The user's machine (rules)
 
@@ -24,7 +28,7 @@ Last updated: 2026-11-21, **v1.0.0 released**.
 - The user's Aegis runs from the installed .deb; the stick is a Kingston DataTraveler 3.0 (57.8 GB, ~10 MB/s writes), mounted at `/media/stcksmsh/aegis*`. Their backup "AegisElena" (Elena + Music/Tools) is on it.
 - Don't drive the user's desktop with xdotool clicks while they work; ask them to click and report.
 
-## Done in this pass (all on the work branch)
+## Done in the Linux pass (merged)
 
 Confirmed working by the user on Linux:
 - Notifications show on GNOME (one D-Bus connection kept open; GNOME deletes an installed app's notifications when the sender's connection closes).
@@ -62,15 +66,11 @@ Found: notifications sometimes show as "Windows PowerShell" → fixed in afad99f
   Weblate setup steps in docs/TRANSLATING.md (user must create the account).
 - Passphrase sheet: button removed from Your backups; offered once after a **new** backup is set
   up; single language.
-- Open: restore kit on the drive still carries README.txt **and** PROCITAJ.txt (both languages).
-  Plan said "setup language only"; kept both for now (someone without Aegis may read either).
-  Ask the user.
 - Restore confirmed working on Linux and macOS (user has a Mac).
 
 - The morning erase of the stick: the user isn't sure they unticked "Erase this drive"; treated as user error. If an erase ever happens without the red "Erase … This can't be undone" confirm, it is a release blocker.
-- Joining on Add backup also adds the pre-ticked Documents/Pictures/Desktop unless unticked; asked the user whether the "added" message should list the folders or only custom folders should join. No answer yet.
 - Not built (offered): delete oldest backups automatically when the drive is full (Time Machine does); today Aegis warns at 90 %.
-- Windows/macOS: no hands-on test yet. Tray submenus, theme detection (uses the web view's own media query there), print dialog, notifications all need a look.
+- Windows: VM pass mostly done (see above); notification "PowerShell" fix (afad99f) and Start at login not re-confirmed. macOS: restore confirmed; tray template glyph, theme, print, notifications not hand-tested.
 
 ## Decisions 2026-11-21 (user)
 
@@ -81,7 +81,7 @@ Found: notifications sometimes show as "Windows PowerShell" → fixed in afad99f
 
 ## After 1.0 (open)
 
-- Logo redesign: brief given to the user (needs app icon 1024 + monochrome tray glyph; tray uses the colour app icon today, wrong for macOS menu bar). When files arrive: `tauri icon`, template tray icon on macOS, replace the CSS "A" badge.
+- Logo: done (5a0c6c0). macOS tray = black template glyph, Windows/Linux = colour mark; check both in real trays.
 - v1.0.0 was re-released 2026-11-21 on 5a0c6c0 with the new logo (first build had 18 downloads, some ours). README, release notes, repo description/topics and guide screenshots updated (22dd7f6+).
 - README demo GIF re-recorded 2026-11-21 by `scripts/demo/make-demo.sh` (sandboxed scripted Chrome + debug agent); re-run after UI changes.
 - Unreleased for 1.0.1: "Not now" on the sheet offer (CHANGELOG "Unreleased").

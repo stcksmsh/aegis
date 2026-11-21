@@ -87,7 +87,8 @@ Request:
 
 The passphrase is tried against every backup on the drive. If one opens, this computer uses it.
 If the drive has backups but none opens, the response is `409` unless `new_instance` is true
-(then a separate backup is created).
+(then a separate backup is created). If the passphrase opens a backup this computer already
+uses, the two join: it keeps its name and the given folders are added to its own (`joined: true`).
 
 Response:
 ```
@@ -101,7 +102,8 @@ Response:
 }
 ```
 `existing` is true when an existing backup was opened (e.g. handover to a new computer);
-`previous_computers` lists the newest backup of each computer that used it.
+`previous_computers` lists the newest backup of each computer that used it; `joined` is true when it
+was already used by this computer.
 
 ## Start Backup
 `POST /v1/backup/run`
@@ -226,13 +228,24 @@ Response:
 
 Request:
 ```
-{"mount_path": "/media/user/USB"}
+{"mount_path": "/media/user/USB", "notify": false}
 ```
+`notify` (optional): also report the result as a desktop notification (used by the tray menu).
 
 Response:
 ```
 {"status": "ejected"}
 ```
+
+## Delete Backup
+`POST /v1/drives/delete-backup`
+
+Deletes one backup (its folder and repository) from the plugged-in drive and forgets it on this
+computer, including the saved passphrase. Other backups on the drive are kept. Fails with `400`
+if the name doesn't match, the drive isn't plugged in, or this backup is backing up or restoring.
+
+Request: `{"drive_id": "...", "confirm_label": "<the backup's name>"}` → Response: status, as
+`GET /v1/status`.
 
 ## Passphrase Sheet
 `POST /v1/drives/passphrase-sheet`

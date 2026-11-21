@@ -7,7 +7,9 @@ use crate::state::{BackupProgress, RunPhase, RunResult, RunStatus, SharedState};
 use crate::verify::{deep_verify, quick_verify};
 use anyhow::Context;
 use directories::BaseDirs;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -24,6 +26,21 @@ pub async fn run_backup(
         drive_id,
         mount_path.display()
     );
+    // Backups to the same drive run one after another: a USB stick isn't faster with two at once.
+    let turn = drive_turn(&mount_path);
+    let _turn = match turn.clone().try_lock_owned() {
+        Ok(guard) => guard,
+        Err(_) => {
+            state.write().await.backup_progress.insert(
+                drive_id.clone(),
+                BackupProgress {
+                    message: "Waiting for the other backup on this drive to finish".to_string(),
+                    ..Default::default()
+                },
+            );
+            turn.lock_owned().await
+        }
+    };
     let started_epoch = now_epoch();
     set_phase(
         &state,
@@ -337,6 +354,19 @@ pub async fn run_backup(
 const NO_FOLDERS: &str = "None of the folders to back up were found on this computer. \
      Choose them under Your drives, Edit folders.";
 
+/// One lock per drive (mount path); held for the whole backup.
+fn drive_turn(mount: &Path) -> Arc<tokio::sync::Mutex<()>> {
+    type Turns = std::sync::Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>;
+    static TURNS: OnceLock<Turns> = OnceLock::new();
+    TURNS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(mount.to_path_buf())
+        .or_default()
+        .clone()
+}
+
 /// Folders that exist (for restic) and the labels of those that don't (for the user).
 /// Paths are only used for restic; never surface them in logs or UI.
 fn split_sources(sources: &[BackupSource]) -> (Vec<PathBuf>, Vec<String>) {
@@ -415,6 +445,18 @@ fn now_epoch() -> u64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn one_backup_at_a_time_per_drive() {
+        let a = drive_turn(Path::new("/media/test-turn-a"));
+        let _held = a.clone().try_lock_owned().unwrap();
+        assert!(drive_turn(Path::new("/media/test-turn-a"))
+            .try_lock_owned()
+            .is_err());
+        assert!(drive_turn(Path::new("/media/test-turn-b"))
+            .try_lock_owned()
+            .is_ok());
+    }
+
     use super::*;
 
     #[test]

@@ -180,6 +180,8 @@ struct SetupDriveResponse {
     existing: bool,
     /// For an existing backup: the computers that backed up to it and their folders (newest backup each).
     previous_computers: Vec<PreviousComputer>,
+    /// The passphrase opened a backup this computer already uses: the chosen folders were added to it.
+    joined: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -288,6 +290,9 @@ struct RecoveryKitResponse {
 #[derive(Debug, Deserialize)]
 struct EjectRequest {
     mount_path: String,
+    /// Also report the result as a desktop notification (eject from the tray menu).
+    #[serde(default)]
+    notify: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -490,6 +495,7 @@ pub async fn serve(listener: tokio::net::TcpListener, state: SharedState) -> any
         .route("/v1/recovery-kit", post(export_recovery))
         .route("/v1/drives/eject", post(eject_drive))
         .route("/v1/drives/discontinue", post(discontinue_drive))
+        .route("/v1/drives/delete-backup", post(delete_backup))
         .route("/v1/drives/update", post(update_drive))
         .route("/v1/drives/passphrase-sheet", post(passphrase_sheet))
         .route("/v1/maintenance", post(maintenance))
@@ -725,7 +731,7 @@ async fn setup_drive(
                         label: sanitize_label(&s.label).unwrap_or_else(|| "Source".to_string()),
                         path: s.path,
                     })
-                    .collect()
+                    .collect::<Vec<_>>()
             });
         (final_label, sources)
     };
@@ -834,14 +840,17 @@ async fn setup_drive(
             .get(&instance_id)
             .cloned()
     };
+    // Same passphrase as a backup this computer already uses: the two join. It keeps its name,
+    // and the chosen folders are added to its own (renaming is what Rename is for).
+    let joined = known.is_some();
     let typed_label = req
         .label
         .as_deref()
         .and_then(sanitize_label)
         .filter(|l| !l.trim().is_empty());
     let final_label = match (&known, typed_label) {
-        (_, Some(typed)) => typed,
-        (Some(k), None) => k.label.clone().unwrap_or(final_label),
+        (Some(k), _) => k.label.clone().unwrap_or(final_label),
+        (None, Some(typed)) => typed,
         (None, None) => final_label,
     };
     if state
@@ -882,8 +891,18 @@ async fn setup_drive(
         last_backup_snapshot_id: known
             .as_ref()
             .and_then(|k| k.last_backup_snapshot_id.clone()),
-        backup_sources: backup_sources
-            .or_else(|| known.as_ref().and_then(|k| k.backup_sources.clone())),
+        backup_sources: match (&known, backup_sources) {
+            (Some(_), Some(new)) => {
+                let mut all = guard.config.backup_sources_for_drive(&instance_id);
+                for s in new {
+                    if !all.iter().any(|a| a.path == s.path) {
+                        all.push(s);
+                    }
+                }
+                Some(all)
+            }
+            (_, new) => new.or_else(|| known.as_ref().and_then(|k| k.backup_sources.clone())),
+        },
         extra: known.map(|k| k.extra).unwrap_or_default(),
     };
     guard
@@ -929,7 +948,73 @@ async fn setup_drive(
         repository_id: repo_id,
         existing,
         previous_computers: previous,
+        joined,
     }))
+}
+
+/// Deletes one backup from the plugged-in drive (its files too); other backups on the drive stay.
+async fn delete_backup(
+    State(state): State<SharedState>,
+    Json(req): Json<DiscontinueDriveRequest>,
+) -> Result<Json<StatusResponse>, (StatusCode, String)> {
+    let bad = |msg: &str| (StatusCode::BAD_REQUEST, msg.to_string());
+    let mount = {
+        let mut guard = state.write().await;
+        let drive = guard
+            .config
+            .trusted_drives
+            .get(&req.drive_id)
+            .ok_or((StatusCode::NOT_FOUND, "Backup not found.".to_string()))?;
+        let expected = drive.label.as_deref().unwrap_or("");
+        if expected.is_empty() || req.confirm_label.trim() != expected {
+            return Err(bad(
+                "That name doesn't match. Type the name exactly as shown.",
+            ));
+        }
+        if guard.running_drive_ids.contains(&req.drive_id)
+            || guard.restore_drive_id.as_deref() == Some(req.drive_id.as_str())
+        {
+            return Err(bad(
+                "Wait until this backup's backup or restore has finished, then try again.",
+            ));
+        }
+        let mount = match &guard.drive_status.mount_path {
+            Some(m) if guard.drive_status.has_instance(&req.drive_id) => m.clone(),
+            _ => return Err(bad("Plug in the drive with this backup, then try again.")),
+        };
+        // Blocks backups of this backup while its files are deleted.
+        guard.running_drive_ids.insert(req.drive_id.clone());
+        mount
+    };
+    let id = req.drive_id.clone();
+    let deleted = tokio::task::spawn_blocking(move || {
+        crate::drive::delete_instance(FsPath::new(&mount), &id)
+    })
+    .await;
+    let mut guard = state.write().await;
+    guard.running_drive_ids.remove(&req.drive_id);
+    if !matches!(deleted, Ok(Ok(()))) {
+        tracing::error!("delete backup failed drive_id={}", req.drive_id);
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't delete the backup from the drive. Unplug the drive, plug it back in, and try again."
+                .to_string(),
+        ));
+    }
+    guard.config.trusted_drives.remove(&req.drive_id);
+    guard
+        .drive_status
+        .instance_ids
+        .retain(|i| i != &req.drive_id);
+    guard.drive_status.trusted = !guard.drive_status.instance_ids.is_empty();
+    if guard.drive_status.drive_id.as_deref() == Some(req.drive_id.as_str()) {
+        guard.drive_status.drive_id = guard.drive_status.instance_ids.first().cloned();
+    }
+    let _ = guard.config.save();
+    drop(guard);
+    let _ = keychain::delete_passphrase(&req.drive_id);
+    tracing::info!("delete backup: done drive_id={}", req.drive_id);
+    Ok(get_status(State(state)).await)
 }
 
 async fn discontinue_drive(
@@ -1134,10 +1219,18 @@ async fn mount_drive(
 }
 
 async fn format_drive(
-    State(_state): State<SharedState>,
+    State(state): State<SharedState>,
     Json(req): Json<FormatRequest>,
 ) -> Result<Json<FormatResponse>, (StatusCode, String)> {
     debug!("format drive: request devnode={}", req.devnode);
+    // Backups on the drive before erasing: forgotten afterwards, or they'd stay listed with no files.
+    let dev = FsPath::new(&req.devnode);
+    let root = crate::usb::find_mount_for_device(dev).unwrap_or_else(|| dev.to_path_buf());
+    let erased = read_marker(&root)
+        .ok()
+        .flatten()
+        .map(|m| m.instances)
+        .unwrap_or_default();
     devices::format_partition_exfat(&req.devnode).map_err(|err| {
         let msg = err.to_string();
         tracing::error!("format drive failed devnode={} error={}", req.devnode, msg);
@@ -1154,6 +1247,15 @@ async fn format_drive(
         )
     })?;
     tracing::info!("format drive: success devnode={}", req.devnode);
+    if !erased.is_empty() {
+        let mut guard = state.write().await;
+        for id in &erased {
+            guard.config.trusted_drives.remove(id);
+            let _ = keychain::delete_passphrase(id);
+        }
+        guard.drive_status.clear_drive();
+        let _ = guard.config.save();
+    }
     Ok(Json(FormatResponse {
         status: "ok".to_string(),
     }))
@@ -1568,14 +1670,23 @@ async fn eject_drive(
     Json(req): Json<EjectRequest>,
 ) -> Result<Json<BackupStartResponse>, (StatusCode, String)> {
     let mount_path = PathBuf::from(req.mount_path);
-    let Some(device) = resolve_device_for_mount(&mount_path) else {
-        return Err((
+    let result = match resolve_device_for_mount(&mount_path) {
+        Some(device) => do_eject(&device).await,
+        None => Err((
             StatusCode::BAD_REQUEST,
             "Drive not found. Unplug it and plug it back in.".to_string(),
-        ));
+        )),
     };
-
-    do_eject(&device).await?;
+    // Ejected from the tray: the window isn't shown, so the result comes as a notification.
+    if req.notify {
+        match &result {
+            Ok(()) => {
+                crate::notifications::notify("Drive ejected", "It's now safe to unplug the drive.")
+            }
+            Err((_, msg)) => crate::notifications::notify("Couldn't eject the drive", msg),
+        }
+    }
+    result?;
 
     Ok(Json(BackupStartResponse {
         status: "ejected".to_string(),

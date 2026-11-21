@@ -172,6 +172,20 @@ pub fn register_instance(root: &Path, id: &str) -> anyhow::Result<DriveMarker> {
     Ok(marker)
 }
 
+/// Removes a backup from the drive: first from the marker (so a half-finished delete only leaves
+/// unused files behind), then its folder with the repository.
+pub fn delete_instance(root: &Path, id: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(valid_id(id), "invalid backup id");
+    let mut marker = read_marker(root)?.context("drive marker missing")?;
+    marker.instances.retain(|i| i != id);
+    write_marker(root, &marker)?;
+    let dir = instance_dir(root, id);
+    if dir.exists() {
+        fs::remove_dir_all(&dir).with_context(|| format!("remove {}", dir.display()))?;
+    }
+    Ok(())
+}
+
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {
     let content = serde_json::to_string_pretty(value).context("serialize")?;
     let tmp = path.with_extension("json.tmp");
@@ -225,6 +239,23 @@ mod tests {
             read_instance(&root, &meta.instance_id).unwrap().repo_path,
             meta.repo_path
         );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn delete_instance_keeps_the_other_backup() {
+        let root = tmp_root("delete");
+        write_marker(&root, &DriveMarker::new(None)).unwrap();
+        let (a, _) = create_instance(&root).unwrap();
+        let (b, _) = create_instance(&root).unwrap();
+        register_instance(&root, &a.instance_id).unwrap();
+        register_instance(&root, &b.instance_id).unwrap();
+        delete_instance(&root, &a.instance_id).unwrap();
+        let m = read_marker(&root).unwrap().unwrap();
+        assert_eq!(m.instances, vec![b.instance_id.clone()]);
+        assert!(!instance_dir(&root, &a.instance_id).exists());
+        assert!(read_instance(&root, &b.instance_id).is_ok());
+        assert!(delete_instance(&root, "../x").is_err());
         let _ = fs::remove_dir_all(&root);
     }
 

@@ -287,6 +287,16 @@ pub async fn run_backup(
                 .get(&drive_id)
                 .map(|d| d.file_counts.clone())
                 .unwrap_or_default();
+            set_phase(
+                &state,
+                RunPhase::VerifyingQuick,
+                RunStatus::Partial,
+                &t("checking_backup"),
+                started_epoch,
+                summary.snapshot_id.clone(),
+                false,
+            )
+            .await;
             match count_source_files(sources.clone()).await {
                 Ok(counts) => {
                     for key in shrunk_folders(&previous, &counts) {
@@ -301,7 +311,7 @@ pub async fn run_backup(
                     }
                     let mut guard = state.write().await;
                     if let Some(drive) = guard.config.trusted_drives.get_mut(&drive_id) {
-                        drive.file_counts = counts;
+                        drive.file_counts = next_counts(&previous, counts, &sources);
                     }
                 }
                 Err(err) => warn!("counting files failed: {}", Redact::new(err)),
@@ -498,6 +508,21 @@ fn shrunk_folders(previous: &HashMap<String, u64>, now: &HashMap<String, u64>) -
     shrunk
 }
 
+/// Counts to store: this run's, plus the old count of any folder still in the backup set but
+/// missing right now (e.g. a disk that isn't plugged in), so it is still compared when it returns.
+fn next_counts(
+    previous: &HashMap<String, u64>,
+    mut now: HashMap<String, u64>,
+    sources: &[BackupSource],
+) -> HashMap<String, u64> {
+    for source in sources {
+        if let Some(&n) = previous.get(&source.path) {
+            now.entry(source.path.clone()).or_insert(n);
+        }
+    }
+    now
+}
+
 async fn apply_retention(
     restic: &Restic,
     repo_path: &Path,
@@ -664,6 +689,26 @@ mod tests {
         assert_eq!(shrunk_folders(&previous, &now), ["big", "small"]);
         let few = map(&[("tiny", 40)]);
         assert!(shrunk_folders(&few, &map(&[("tiny", 0)])).is_empty());
+    }
+
+    #[test]
+    fn missing_folder_keeps_its_count_removed_folder_drops_it() {
+        let src = |path: &str| BackupSource {
+            label: path.into(),
+            path: path.into(),
+        };
+        let previous: HashMap<String, u64> = [
+            ("here".into(), 10),
+            ("unplugged".into(), 500),
+            ("removed".into(), 7),
+        ]
+        .into();
+        let now: HashMap<String, u64> = [("here".into(), 12)].into();
+        let next = next_counts(&previous, now, &[src("here"), src("unplugged")]);
+        assert_eq!(
+            next,
+            [("here".into(), 12), ("unplugged".into(), 500)].into()
+        );
     }
 
     #[test]

@@ -614,7 +614,13 @@ async fn get_status(State(state): State<SharedState>) -> Json<StatusResponse> {
             let is_connected = guard.drive_status.has_instance(id);
             let sources = config.backup_sources_for_drive(id);
             let backup_source_labels = sources.iter().map(display_label).collect();
-            let backup_sources = sources;
+            let backup_sources = sources
+                .into_iter()
+                .map(|s| BackupSource {
+                    label: display_label(&s),
+                    path: s.path,
+                })
+                .collect();
             TrustedDriveSummary {
                 drive_id: id.clone(),
                 label,

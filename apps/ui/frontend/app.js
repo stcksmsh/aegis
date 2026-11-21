@@ -1040,11 +1040,18 @@ function renderBackupTargets(trustedDrives, status) {
   });
 }
 
+// Stored in English; the agent shows them in the current language (display_label).
 const DEFAULT_SOURCES = [
-  { label: t("documents"), path: "~/Documents" },
-  { label: t("pictures"), path: "~/Pictures" },
-  { label: t("desktop"), path: "~/Desktop" },
+  { label: "Documents", path: "~/Documents" },
+  { label: "Pictures", path: "~/Pictures" },
+  { label: "Desktop", path: "~/Desktop" },
 ];
+
+// A default folder's name in the current language.
+function shownLabel(src) {
+  const i = DEFAULT_SOURCES.findIndex((d) => d.path === src.path && d.label === src.label);
+  return i < 0 ? src.label : t(["documents", "pictures", "desktop"][i]);
+}
 
 function pathMatches(pathA, pathB) {
   const n = (s) => (s || "").replace(/\/$/, "");
@@ -1719,7 +1726,7 @@ function updateWizardSummary(status) {
   const remember = !!document.getElementById("remember-passphrase")?.checked;
   const auto = !!status.config?.auto_backup_on_insert && remember;
   const summaryItems = [
-    t("aegis_backs_up", { folders: sources.map((s) => s.label).join(", ") || t("nothing_yet_add_folders") }),
+    t("aegis_backs_up", { folders: sources.map(shownLabel).join(", ") || t("nothing_yet_add_folders") }),
     auto
       ? t("backups_start_by_themselves_wh")
       : t("plug_in_the_drive_and_click_ba"),
@@ -1738,13 +1745,13 @@ function updateWizardSummary(status) {
 function buildBackupSources() {
   const sources = [];
   if (document.getElementById("src-docs")?.checked) {
-    sources.push({ label: t("documents"), path: "~/Documents" });
+    sources.push({ label: "Documents", path: "~/Documents" });
   }
   if (document.getElementById("src-pics")?.checked) {
-    sources.push({ label: t("pictures"), path: "~/Pictures" });
+    sources.push({ label: "Pictures", path: "~/Pictures" });
   }
   if (document.getElementById("src-desktop")?.checked) {
-    sources.push({ label: t("desktop"), path: "~/Desktop" });
+    sources.push({ label: "Desktop", path: "~/Desktop" });
   }
   customSources.forEach((item) => sources.push(item));
   return sources;
@@ -1753,13 +1760,13 @@ function buildBackupSources() {
 function buildSetupDriveBackupSources() {
   const sources = [];
   if (document.getElementById("setup-drive-src-docs")?.checked) {
-    sources.push({ label: t("documents"), path: "~/Documents" });
+    sources.push({ label: "Documents", path: "~/Documents" });
   }
   if (document.getElementById("setup-drive-src-pics")?.checked) {
-    sources.push({ label: t("pictures"), path: "~/Pictures" });
+    sources.push({ label: "Pictures", path: "~/Pictures" });
   }
   if (document.getElementById("setup-drive-src-desktop")?.checked) {
-    sources.push({ label: t("desktop"), path: "~/Desktop" });
+    sources.push({ label: "Desktop", path: "~/Desktop" });
   }
   setupDriveCustomSources.forEach((item) => sources.push(item));
   return sources;

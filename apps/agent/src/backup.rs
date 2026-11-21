@@ -443,6 +443,11 @@ fn own_snapshots<'a>(snapshots: &'a [SnapshotInfo], host: &str) -> Vec<&'a Snaps
         .collect()
 }
 
+/// Keep-last values that delete one backup per step: count-1, count-2, ... down to `KEEP_NEWEST`.
+fn keep_last_steps(count: usize) -> impl Iterator<Item = usize> {
+    (KEEP_NEWEST..count).rev()
+}
+
 /// Deletes the oldest backups one at a time (keep-last n-1, n-2, ...) until the drive has
 /// 10% free again or only the newest `KEEP_NEWEST` are left. Restic decides what is oldest,
 /// by real time. Returns the date (YYYY-MM-DD) of the oldest backup left, if any were deleted.
@@ -461,7 +466,7 @@ async fn make_room(
     };
     let count = own_snapshots(&snapshots, &restic.host).len();
     let mut removed = false;
-    for keep in (KEEP_NEWEST..count).rev() {
+    for keep in keep_last_steps(count) {
         let args = [format!("--keep-last={keep}")];
         if let Err(err) = restic.forget_prune(repo_path, passphrase, &args).await {
             warn!("make room: delete failed: {}", Redact::new(err));
@@ -557,5 +562,14 @@ mod tests {
         ]);
         assert_eq!(found, vec![dir]);
         assert_eq!(missing, vec!["Pictures".to_string()]);
+    }
+
+    #[test]
+    fn make_room_never_goes_below_three_newest() {
+        let steps = |n| keep_last_steps(n).collect::<Vec<_>>();
+        assert!(steps(2).is_empty());
+        assert!(steps(3).is_empty());
+        assert_eq!(steps(4), [3]);
+        assert_eq!(steps(6), [5, 4, 3]);
     }
 }

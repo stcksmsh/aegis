@@ -12,7 +12,7 @@ use which::which;
 pub struct Restic {
     binary: PathBuf,
     /// Recorded on every snapshot; retention only ever prunes this computer's snapshots.
-    host: String,
+    pub(crate) host: String,
 }
 
 /// This computer's name, as restic would record it. `AEGIS_HOSTNAME` overrides it

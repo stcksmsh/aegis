@@ -2,7 +2,7 @@ use crate::config::BackupSource;
 use crate::i18n::{t, tr};
 use crate::logging::Redact;
 use crate::notifications;
-use crate::restic::Restic;
+use crate::restic::{Restic, SnapshotInfo};
 use crate::retention::RetentionPolicy;
 use crate::state::{BackupProgress, RunPhase, RunResult, RunStatus, SharedState};
 use crate::verify::{deep_verify, quick_verify};
@@ -109,6 +109,32 @@ pub async fn run_backup(
                 .map(|p| p.display().to_string())
                 .collect::<Vec<_>>()
         );
+
+        if config.delete_oldest_when_full && drive_almost_full(&mount_path) {
+            set_phase(
+                &state,
+                RunPhase::Pruning,
+                RunStatus::Partial,
+                &t("cleaning_up_old_backups"),
+                started_epoch,
+                None,
+                false,
+            )
+            .await;
+            if let Some(date) = make_room(&restic, &repo_path, &passphrase, &mount_path).await {
+                notifications::notify_made_room(&drive_label, &date);
+            }
+            set_phase(
+                &state,
+                RunPhase::BackingUp,
+                RunStatus::Partial,
+                &t("starting_backup"),
+                started_epoch,
+                None,
+                false,
+            )
+            .await;
+        }
 
         let (progress_tx, mut progress_rx) = mpsc::channel(64);
         let restic_clone = restic.clone();
@@ -293,11 +319,9 @@ pub async fn run_backup(
                     Ok(Err(err)) => warn!("restore kit update failed: {}", Redact::new(err)),
                     _ => {}
                 }
-                if let Some((free, total)) = crate::usb::disk_space_for_mount(&mount_path) {
-                    if total > 0 && free < total / 10 {
-                        result.drive_almost_full = true;
-                        notifications::notify_drive_almost_full(&drive_label);
-                    }
+                if drive_almost_full(&mount_path) {
+                    result.drive_almost_full = true;
+                    notifications::notify_drive_almost_full(&drive_label);
                 }
             }
             notifications::notify_backup_finished(&drive_label, &result.status, result.interrupted);
@@ -402,6 +426,72 @@ async fn apply_retention(
     restic.forget_prune(repo_path, passphrase, &args).await
 }
 
+/// Under 10% free space left.
+fn drive_almost_full(mount: &Path) -> bool {
+    crate::usb::disk_space_for_mount(mount)
+        .is_some_and(|(free, total)| total > 0 && free < total / 10)
+}
+
+/// The newest backups that "make room" never deletes.
+const KEEP_NEWEST: usize = 3;
+
+/// This computer's backups (the ones retention may delete), in restic's order: oldest first.
+fn own_snapshots<'a>(snapshots: &'a [SnapshotInfo], host: &str) -> Vec<&'a SnapshotInfo> {
+    snapshots
+        .iter()
+        .filter(|s| s.hostname.as_deref() == Some(host))
+        .collect()
+}
+
+/// Keep-last values that delete one backup per step: count-1, count-2, ... down to `KEEP_NEWEST`.
+fn keep_last_steps(count: usize) -> impl Iterator<Item = usize> {
+    (KEEP_NEWEST..count).rev()
+}
+
+/// Deletes the oldest backups one at a time (keep-last n-1, n-2, ...) until the drive has
+/// 10% free again or only the newest `KEEP_NEWEST` are left. Restic decides what is oldest,
+/// by real time. Returns the date (YYYY-MM-DD) of the oldest backup left, if any were deleted.
+async fn make_room(
+    restic: &Restic,
+    repo_path: &Path,
+    passphrase: &str,
+    mount: &Path,
+) -> Option<String> {
+    let snapshots = match restic.snapshots(repo_path, passphrase).await {
+        Ok(s) => s,
+        Err(err) => {
+            warn!("make room: listing backups failed: {}", Redact::new(err));
+            return None;
+        }
+    };
+    let count = own_snapshots(&snapshots, &restic.host).len();
+    let mut removed = false;
+    for keep in keep_last_steps(count) {
+        let args = [format!("--keep-last={keep}")];
+        if let Err(err) = restic.forget_prune(repo_path, passphrase, &args).await {
+            warn!("make room: delete failed: {}", Redact::new(err));
+            break;
+        }
+        removed = true;
+        if !drive_almost_full(mount) {
+            break;
+        }
+    }
+    if !removed {
+        return None;
+    }
+    let left = match restic.snapshots(repo_path, passphrase).await {
+        Ok(s) => s,
+        Err(err) => {
+            warn!("make room: listing backups failed: {}", Redact::new(err));
+            return None;
+        }
+    };
+    own_snapshots(&left, &restic.host)
+        .first()
+        .map(|s| s.time.chars().take(10).collect())
+}
+
 async fn update_repo_id(state: &SharedState, drive_id: &str, repo_id: &str) -> anyhow::Result<()> {
     let mut guard = state.write().await;
     if let Some(drive) = guard.config.trusted_drives.get_mut(drive_id) {
@@ -472,5 +562,14 @@ mod tests {
         ]);
         assert_eq!(found, vec![dir]);
         assert_eq!(missing, vec!["Pictures".to_string()]);
+    }
+
+    #[test]
+    fn make_room_never_goes_below_three_newest() {
+        let steps = |n| keep_last_steps(n).collect::<Vec<_>>();
+        assert!(steps(2).is_empty());
+        assert!(steps(3).is_empty());
+        assert_eq!(steps(4), [3]);
+        assert_eq!(steps(6), [5, 4, 3]);
     }
 }

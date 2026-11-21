@@ -69,6 +69,9 @@ pub struct AgentConfig {
     pub retention: RetentionPolicy,
     pub quick_verify: bool,
     pub deep_verify: bool,
+    /// Before a backup, delete the oldest backups while the drive has under 10% free.
+    #[serde(default = "default_true")]
+    pub delete_oldest_when_full: bool,
     pub auto_backup_on_insert: bool,
     pub remember_passphrase: bool,
     pub paranoid_mode: bool,
@@ -105,6 +108,10 @@ pub enum UpdatePolicy {
 
 /// Newest config schema this build writes.
 pub const CONFIG_VERSION: u32 = 1;
+
+fn default_true() -> bool {
+    true
+}
 
 fn config_version_one() -> u32 {
     1
@@ -147,6 +154,7 @@ impl Default for AgentConfig {
             retention: RetentionPolicy::default(),
             quick_verify: true,
             deep_verify: false,
+            delete_oldest_when_full: true,
             auto_backup_on_insert: true,
             remember_passphrase: true,
             paranoid_mode: false,

@@ -55,6 +55,7 @@ Request:
   "retention": {"enabled": false, "keep_last": 0, "keep_daily": 0, "keep_weekly": 0, "keep_monthly": 0, "keep_yearly": 0, "min_snapshots": 3},
   "quick_verify": true,
   "deep_verify": false,
+  "delete_oldest_when_full": true,
   "auto_backup_on_insert": true,
   "remember_passphrase": false,
   "paranoid_mode": false,
@@ -70,6 +71,8 @@ Every field is optional: only the fields sent are changed. The status `config` i
 `reminder_days` (0 = off): notify once per day if a trusted drive hasn't backed up in this many
 days and isn't connected. `backup_interval_hours` (0 = off): while a trusted drive stays plugged
 in, back it up again automatically once this many hours have passed since its last backup.
+`delete_oldest_when_full` (default true): before each backup, while the drive has under 10% free,
+delete this computer's oldest backups one at a time (never the 3 newest) and notify.
 `language`: `"en"`, `"sr"` (Cyrillic), `"sr-Latn"`, or `"system"` (anything else also means the
 computer's language). Applies right away to notifications, tray, messages and `GET /v1/i18n`.
 

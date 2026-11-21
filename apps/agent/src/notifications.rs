@@ -97,6 +97,16 @@ pub fn notify_backup_reminder(drive_label: &str, days_since: u64) {
     );
 }
 
+pub fn notify_made_room(drive_label: &str, date: &str) {
+    notify(
+        &t("notify_made_room_title"),
+        &tr(
+            "notify_made_room_body",
+            &[("name", drive_label), ("date", date)],
+        ),
+    );
+}
+
 pub fn notify_drive_almost_full(drive_label: &str) {
     notify(
         &t("notify_full_title"),

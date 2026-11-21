@@ -58,7 +58,7 @@ Found: notifications sometimes show as "Windows PowerShell" → fixed in afad99f
   Agent serves `GET /v1/i18n`; UI `t()` in app.js; config `language` (None = OS language, Linux
   `@latin` → sr-Latn). Settings → Language reloads the page. Notifications, tray, errors, sheet,
   drive-details note all translated. Checked headless (Chrome in `unshare -rn` netns with a scratch
-  agent): Cyrillic and Latin screens render. Serbian is Claude's draft: user should proofread.
+  agent): Cyrillic and Latin screens render. Serbian: Claude draft + review pass (e048a2b); user to proofread in the app.
   Weblate setup steps in docs/TRANSLATING.md (user must create the account).
 - Passphrase sheet: button removed from Your backups; offered once after a **new** backup is set
   up; single language.

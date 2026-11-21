@@ -3,13 +3,13 @@
 State for the next session that drives Aegis to its 1.0 release. Read this in full before acting;
 `/aegis-overseer` (`.claude/skills/aegis-overseer/SKILL.md`) says how to boot and keep it current.
 
-Last updated: 2026-11-21, Windows VM pass in progress.
+Last updated: 2026-11-21, **v1.0.0 released**.
 
 ## Where things are
 
 | What | Where |
 |---|---|
-| Work branch | `claude/linux-test-pass` (pushed). All work since 05a1407 is here. |
+| Work branch | `master` (v1.0.0 = 30f7df3, released 2026-11-21: https://github.com/stcksmsh/aegis/releases/tag/v1.0.0). `claude/linux-test-pass` is merged. Update feeds `track-1.0` and `track-1` exist with all 11 platforms. |
 | `master` | local `master` = 2e87425 (13 commits ahead of `origin/master` 05a1407, never pushed). Those 13 are also on the work branch. Merge the branch into `master` when the user says so. |
 | Version | `1.0.0` in `tauri.conf.json` + both `Cargo.toml`, CHANGELOG heading "1.0.0 (2026-11-21)" (bump committed on the work branch; not tagged). |
 | Linux installer (local) | `target/release/bundle/deb/Aegis_0.2.0_amd64.deb`, build: `cd apps/ui/src-tauri && npm_config_cache=/secondary/aegis-pb-test/npm-cache npx --yes @tauri-apps/cli@2 build --bundles deb`. The user installs it: `sudo apt install --reinstall <deb>` (needs their password, in their own terminal, not `!`). |
@@ -79,7 +79,14 @@ Found: notifications sometimes show as "Windows PowerShell" → fixed in afad99f
 - Unsigned installers (SmartScreen / Gatekeeper) are fine for 1.0.
 - AEGIS-RESTORE: English README always + PROCITAJ.txt when Aegis runs in Serbian (done).
 
-## Next steps toward 1.0
+## After 1.0 (open)
+
+- Logo redesign: brief given to the user (needs app icon 1024 + monochrome tray glyph; tray uses the colour app icon today, wrong for macOS menu bar). When files arrive: `tauri icon`, template tray icon on macOS, replace the CSS "A" badge.
+- Release notes body says "restic is bundled" (jargon): fix in release.yml notes for 1.0.1.
+- Remaining hand tests were waived for 1.0; run them before 1.0.1.
+- Weblate setup (docs/TRANSLATING.md), auto-delete oldest when drive full.
+
+## Next steps toward 1.0 (historical)
 
 1. User finishes Linux leftovers (checklist below), confirms the "not yet confirmed" items above.
 2. Windows VM pass with the newest CI installer (download a fresh one after the last push).

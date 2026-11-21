@@ -250,10 +250,10 @@ Request: `{"drive_id": "...", "confirm_label": "<the backup's name>"}` → Respo
 ## Passphrase Sheet
 `POST /v1/drives/passphrase-sheet`
 
-Writes a printable page (backup name, blank for the passphrase, restore steps) to the temp
-folder. Contains no secrets.
+Returns a printable page (backup name, blank for the passphrase, restore steps) as HTML; the
+app shows and prints it. Contains no secrets.
 
-Request: `{"drive_id": "..."}` → Response: `{"path": "/tmp/aegis-passphrase-sheet-1a2b3c4d.html"}`
+Request: `{"drive_id": "..."}` → Response: `{"html": "<!doctype html>…"}`
 
 ## Cancel Restore
 `POST /v1/restore/cancel`

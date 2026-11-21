@@ -1934,14 +1934,32 @@ async function openPassphraseSheet(driveId) {
       body: JSON.stringify({ drive_id: driveId }),
     });
     if (!res.ok) throw new Error(await res.text());
-    const { path } = await res.json();
-    const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
-    await invoke("open_path", { path });
+    const { html } = await res.json();
+    // Shown and printed inside Aegis: opening an .html file depends on whatever app the
+    // desktop has picked for it.
+    document.getElementById("sheet-frame").srcdoc = html;
+    document.getElementById("sheet-overlay").classList.remove("hidden");
+    setBackgroundInert(true);
+    document.getElementById("sheet-print").focus();
   } catch (err) {
     console.error(err);
     uiAlert("Couldn't open the passphrase sheet.");
   }
 }
+
+function closePassphraseSheet() {
+  document.getElementById("sheet-overlay").classList.add("hidden");
+  document.getElementById("sheet-frame").srcdoc = "";
+  setBackgroundInert(false);
+}
+
+document.getElementById("sheet-close").addEventListener("click", closePassphraseSheet);
+document.getElementById("sheet-print").addEventListener("click", () =>
+  document.getElementById("sheet-frame").contentWindow?.print()
+);
+document.getElementById("sheet-overlay").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closePassphraseSheet();
+});
 
 // POST /drives/setup. If the drive already has backups that this passphrase doesn't open,
 // ask before creating a separate one, so a typo never silently starts a new backup.

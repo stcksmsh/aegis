@@ -352,10 +352,10 @@ struct SheetRequest {
 
 #[derive(Debug, Serialize)]
 struct SheetResponse {
-    path: String,
+    html: String,
 }
 
-/// Writes a printable passphrase sheet for one backup and returns where (UI opens it).
+/// A printable passphrase sheet for one backup, as an HTML page (the UI shows and prints it).
 async fn passphrase_sheet(
     State(state): State<SharedState>,
     Json(req): Json<SheetRequest>,
@@ -377,22 +377,13 @@ async fn passphrase_sheet(
         (drive.label.clone().unwrap_or_default(), marker_label)
     };
     let created = chrono_free_date();
-    let path = crate::sheet::write_sheet(&crate::sheet::SheetInfo {
+    let html = crate::sheet::render(&crate::sheet::SheetInfo {
         instance_id: &req.drive_id,
         label: &label,
         drive_label: drive_label.as_deref(),
         created: &created,
-    })
-    .map_err(|e| {
-        error!("passphrase sheet: {}", Redact::new(e));
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Couldn't create the passphrase sheet.".to_string(),
-        )
-    })?;
-    Ok(Json(SheetResponse {
-        path: path.to_string_lossy().to_string(),
-    }))
+    });
+    Ok(Json(SheetResponse { html }))
 }
 
 /// Today's date as YYYY-MM-DD (UTC), without a date library.

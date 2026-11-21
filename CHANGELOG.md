@@ -8,7 +8,7 @@
 - Settings saved by a newer Aegis version are kept when an older one runs.
 - Hand a backup over to another computer: type the passphrase there, Aegis shows which folders the old computer backed up, and both computers' history stays restorable. The Restore page shows which computer made each backup.
 - "Discontinue drive" is now "Forget on this computer", with a reminder to delete local copies when handing over.
-- Print a passphrase sheet per backup (name, a blank for the passphrase, restore steps in English and Serbian).
+- Print a passphrase sheet per backup (name, a blank for the passphrase, restore steps in English and Serbian). It opens inside Aegis with a Print button, so it doesn't depend on which app your computer uses for web pages.
 - Automatic updates (signed): fixes for your version install by themselves when Aegis is idle, never during a backup or restore. Newer versions are offered with one click; security releases install automatically; a new major version never installs by itself. Policy: `update_policy` in the config (`security` default, `all`, `off`).
 
 - The passphrase is asked for only when it's needed, and kept only after it worked. The choice between remembering it and typing it every time is in Settings.

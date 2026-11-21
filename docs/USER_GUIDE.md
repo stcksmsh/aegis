@@ -117,7 +117,7 @@ A backup belongs to the data, not to a computer. To let another computer take ov
 
 ### Passphrase sheet
 
-Under **Your backups**, **Print passphrase sheet** opens a page to print: the backup's name, a blank to write the passphrase on by hand, and restore steps in English and Serbian. Keep it in a safe place, never together with the drive.
+Under **Your backups**, **Print passphrase sheet** shows a page inside Aegis; click **Print…** to print it (or save it as a PDF): the backup's name, a blank to write the passphrase on by hand, and restore steps in English and Serbian. Keep it in a safe place, never together with the drive.
 
 ## 7. Settings explained
 

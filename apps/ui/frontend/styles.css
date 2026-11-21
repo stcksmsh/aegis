@@ -1109,6 +1109,18 @@ div.checkbox input[type="checkbox"] {
   box-shadow: var(--shadow);
 }
 
+.sheet-card {
+  width: min(820px, 100%);
+}
+
+#sheet-frame {
+  width: 100%;
+  height: 62vh;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+}
+
 .loading-overlay {
   position: fixed;
   inset: 0;

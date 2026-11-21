@@ -158,10 +158,8 @@ def main():
             assert f.read() == "from computer-a"
 
         step("passphrase sheet")
-        sheet = call("POST", "/drives/passphrase-sheet", {"drive_id": drive_id})["path"]
-        with open(sheet, encoding="utf-8") as f:
-            assert "Firma" in f.read()
-        os.remove(sheet)
+        sheet = call("POST", "/drives/passphrase-sheet", {"drive_id": drive_id})["html"]
+        assert "Firma" in sheet
 
     step("computer A forgets the drive")
     with Computer(agent, work, "computer-a"):

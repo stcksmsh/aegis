@@ -1,22 +1,13 @@
 //! Printable passphrase sheet for one backup: name, a blank to write the passphrase on, and
-//! restore steps (English + Serbian). Contains no secrets; written to the temp folder and opened
-//! in the browser for printing. Never written to the drive (the backup name may be private).
-
-use anyhow::Context;
-use std::path::PathBuf;
+//! restore steps (English + Serbian). Contains no secrets; the app shows it and prints it
+//! itself (opening an .html file depends on whatever app the desktop has for it). Never
+//! written to the drive (the backup name may be private).
 
 pub struct SheetInfo<'a> {
     pub instance_id: &'a str,
     pub label: &'a str,
     pub drive_label: Option<&'a str>,
     pub created: &'a str,
-}
-
-pub fn write_sheet(info: &SheetInfo) -> anyhow::Result<PathBuf> {
-    let short: String = info.instance_id.chars().take(8).collect();
-    let path = std::env::temp_dir().join(format!("aegis-passphrase-sheet-{short}.html"));
-    std::fs::write(&path, render(info)).context("write passphrase sheet")?;
-    Ok(path)
 }
 
 fn esc(s: &str) -> String {
@@ -26,7 +17,7 @@ fn esc(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn render(info: &SheetInfo) -> String {
+pub fn render(info: &SheetInfo) -> String {
     let label = esc(info.label);
     let drive = esc(info.drive_label.unwrap_or("—"));
     let id = esc(info.instance_id);
@@ -43,9 +34,7 @@ td {{ padding: 4px 16px 4px 0; vertical-align: top; }}
 .box {{ border: 2px solid #000; padding: 12px 16px; margin: 16px 0; }}
 ol {{ padding-left: 20px; }}
 .cols {{ display: flex; gap: 32px; }} .cols > div {{ flex: 1; }}
-@media print {{ button {{ display: none; }} }}
 </style></head><body>
-<button onclick="window.print()">Print</button>
 <h1>Aegis backup – passphrase sheet</h1>
 <table>
 <tr><td>Name / Naziv</td><td><b>{label}</b></td></tr>

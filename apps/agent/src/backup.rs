@@ -280,6 +280,34 @@ pub async fn run_backup(
             message = t("unplugged_during_backup");
         }
 
+        if !interrupted {
+            let sources = config.backup_sources_for_drive(&drive_id);
+            let previous = config
+                .trusted_drives
+                .get(&drive_id)
+                .map(|d| d.file_counts.clone())
+                .unwrap_or_default();
+            match count_source_files(sources.clone()).await {
+                Ok(counts) => {
+                    for key in shrunk_folders(&previous, &counts) {
+                        if let Some(source) = sources.iter().find(|s| s.path == key) {
+                            let name = crate::ipc::display_label(source);
+                            notifications::notify_folder_shrank(&name);
+                            message = format!(
+                                "{message} {}",
+                                tr("folder_has_far_fewer_files", &[("name", &name)])
+                            );
+                        }
+                    }
+                    let mut guard = state.write().await;
+                    if let Some(drive) = guard.config.trusted_drives.get_mut(&drive_id) {
+                        drive.file_counts = counts;
+                    }
+                }
+                Err(err) => warn!("counting files failed: {}", Redact::new(err)),
+            }
+        }
+
         let finished_epoch = now_epoch();
         let repository_id = {
             let guard = state.read().await;
@@ -414,6 +442,60 @@ pub(crate) fn expand_home(path: &str) -> PathBuf {
         (Some(rest), Some(dirs)) => dirs.home_dir().join(rest),
         _ => PathBuf::from(path),
     }
+}
+
+/// Regular files per existing source folder, keyed by source path. Symlinks are not followed;
+/// unreadable entries below the folder are skipped.
+async fn count_source_files(sources: Vec<BackupSource>) -> anyhow::Result<HashMap<String, u64>> {
+    tokio::task::spawn_blocking(move || {
+        let mut counts = HashMap::new();
+        for source in sources {
+            let root = expand_home(&source.path);
+            if root.exists() {
+                counts.insert(source.path, count_files(&root)?);
+            }
+        }
+        Ok(counts)
+    })
+    .await?
+}
+
+fn count_files(root: &Path) -> std::io::Result<u64> {
+    let mut count = 0;
+    let mut dirs = vec![root.to_path_buf()];
+    let mut first = true;
+    while let Some(dir) = dirs.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(err) if first => return Err(err),
+            Err(_) => continue,
+        };
+        first = false;
+        for entry in entries.flatten() {
+            match entry.file_type() {
+                Ok(ft) if ft.is_dir() => dirs.push(entry.path()),
+                Ok(ft) if ft.is_file() => count += 1,
+                _ => {}
+            }
+        }
+    }
+    Ok(count)
+}
+
+/// Folders (keys) that lost more than 30% of their files, and at least 50, since last time.
+/// Folders without a previous count are new and never warned about.
+fn shrunk_folders(previous: &HashMap<String, u64>, now: &HashMap<String, u64>) -> Vec<String> {
+    let mut shrunk: Vec<String> = now
+        .iter()
+        .filter(|(key, &n)| {
+            previous
+                .get(*key)
+                .is_some_and(|&p| p >= n + 50 && n * 10 < p * 7)
+        })
+        .map(|(key, _)| key.clone())
+        .collect();
+    shrunk.sort();
+    shrunk
 }
 
 async fn apply_retention(
@@ -562,6 +644,26 @@ mod tests {
         ]);
         assert_eq!(found, vec![dir]);
         assert_eq!(missing, vec!["Pictures".to_string()]);
+    }
+
+    #[test]
+    fn warns_only_when_a_folder_lost_many_files() {
+        let map = |v: &[(&str, u64)]| {
+            v.iter()
+                .map(|(k, n)| (k.to_string(), *n))
+                .collect::<HashMap<_, _>>()
+        };
+        let previous = map(&[("big", 1000), ("edge", 1000), ("small", 60), ("same", 500)]);
+        let now = map(&[
+            ("big", 100),  // lost 90%
+            ("edge", 700), // lost exactly 30%: not more than 30%
+            ("small", 0),  // lost all 60: at least 50
+            ("same", 500),
+            ("new", 0),
+        ]);
+        assert_eq!(shrunk_folders(&previous, &now), ["big", "small"]);
+        let few = map(&[("tiny", 40)]);
+        assert!(shrunk_folders(&few, &map(&[("tiny", 0)])).is_empty());
     }
 
     #[test]

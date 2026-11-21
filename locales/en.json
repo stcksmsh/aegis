@@ -410,6 +410,8 @@
   "notify_full_body": "Your backup drive \"{{name}}\" is almost full. Keep fewer old backups in Aegis → Advanced.",
   "notify_made_room_title": "Made room on the backup drive",
   "notify_made_room_body": "Made room on \"{{name}}\": deleted the oldest backups. The oldest one left is from {{date}}.",
+  "notify_shrank_title": "Files missing from a folder",
+  "folder_has_far_fewer_files": "\"{{name}}\" has far fewer files than at the last backup. If you didn't delete them, restore them from an earlier backup.",
   "sheet_title": "Aegis backup – passphrase sheet",
   "sheet_backup_id": "Backup ID",
   "sheet_printed": "Printed",

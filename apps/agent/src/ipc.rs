@@ -573,7 +573,7 @@ async fn preflight(State(state): State<SharedState>) -> Json<PreflightResponse> 
 }
 
 /// Default folders keep their English name in the config; show them in the current language.
-fn display_label(s: &BackupSource) -> String {
+pub(crate) fn display_label(s: &BackupSource) -> String {
     match (s.label.as_str(), s.path.as_str()) {
         ("Documents", "~/Documents") => crate::i18n::t("documents"),
         ("Pictures", "~/Pictures") => crate::i18n::t("pictures"),
@@ -932,6 +932,10 @@ async fn setup_drive(
             }
             (_, new) => new.or_else(|| known.as_ref().and_then(|k| k.backup_sources.clone())),
         },
+        file_counts: known
+            .as_ref()
+            .map(|k| k.file_counts.clone())
+            .unwrap_or_default(),
         extra: known.map(|k| k.extra).unwrap_or_default(),
     };
     guard

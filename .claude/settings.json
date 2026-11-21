@@ -1,15 +1,4 @@
 {
-  "extraKnownMarketplaces": {
-    "nonslop": {
-      "source": {
-        "source": "github",
-        "repo": "stcksmsh/nonslop"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "nonslop@nonslop": true
-  },
   "env": {
     "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2"
   },
@@ -28,16 +17,13 @@
       "Bash(gh pr comment:*)",
       "Bash(gh pr diff:*)",
       "Bash(gh pr ready:*)",
-      "Bash(gh api:*)",
       "Bash(gh run:*)",
-      "Bash(env:*)",
       "Bash(ls:*)",
       "Bash(cat:*)",
       "Bash(head:*)",
       "Bash(tail:*)",
       "Bash(grep:*)",
       "Bash(rg:*)",
-      "Bash(find:*)",
       "Bash(wc:*)",
       "Bash(sed -n:*)",
       "Bash(diff:*)",
@@ -46,13 +32,11 @@
       "Bash(mkdir:*)",
       "Bash(cp:*)",
       "Bash(mv:*)",
-      "Bash(python3:*)",
       "Bash(sort:*)",
       "Bash(uniq:*)",
       "Bash(jq:*)",
       "Bash(test:*)",
       "Bash(file:*)",
-      "Bash(timeout:*)",
       "Bash(date:*)",
       "Bash(stat:*)",
       "Bash(touch:*)",

@@ -303,12 +303,13 @@ function renderBanner(status) {
   clearBanner();
 }
 
-function openModal({ title, body, mode, drive_id, drive_label, confirmText, danger, focusCancel }) {
+function openModal({ title, body, mode, drive_id, drive_label, confirmText, cancelText, danger, focusCancel }) {
   return new Promise((resolve) => {
     modalResolve = resolve;
     modalMode = mode;
     modalTitle.textContent = title;
     modalBody.textContent = body;
+    modalCancel.textContent = cancelText || t("cancel");
     modalError.textContent = "";
     const typeName = mode === "discontinue" || mode === "delete-backup";
     discontinueDrivePending = typeName && drive_id && drive_label ? { drive_id, drive_label } : null;
@@ -1964,6 +1965,7 @@ function showHandoverInfo(data) {
     // A new backup: offer the sheet once, while the passphrase is fresh in mind.
     uiConfirm(t("sheet_offer_body"), t("print_passphrase_sheet"), {
       confirmText: t("print_passphrase_sheet"),
+      cancelText: t("not_now"),
     }).then((yes) => yes && openPassphraseSheet(data.drive_id));
     return;
   }

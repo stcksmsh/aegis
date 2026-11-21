@@ -336,6 +336,7 @@
   "erase_word": "ERASE",
   "agent_offline": "Can't connect to Aegis right now. Try restarting the app.",
   "sheet_offer_body": "Your backup is set up. Print a sheet to keep with your papers: it has the backup's name, a line to write your passphrase on by hand, and how to get your files back. Keep it away from the drive.",
+  "not_now": "Not now",
   "this_drive_isn_t_set_up_in_aeg": "This drive isn't set up in Aegis on this computer.",
   "a_backup_to_this_drive_is_alre": "A backup to this drive is already running.",
   "another_backup_already_uses_th": "Another backup already uses this name. Choose a different name.",

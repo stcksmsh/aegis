@@ -46,6 +46,11 @@ python3 tests/e2e.py <drive mount path> [--eject]
 
 Manual USB flow: [docs/usb-testing.md](docs/usb-testing.md). API: [docs/ipc.md](docs/ipc.md).
 
+## README demo
+
+After UI changes, re-record `docs/images/demo.gif` (Linux): `sh scripts/demo/make-demo.sh`. It drives the real screens
+in a sandbox (fake home, simulated USB stick, private keychain) and never touches your system.
+
 ## Release
 
 1. Bump `version` in `apps/ui/src-tauri/tauri.conf.json`, `apps/ui/src-tauri/Cargo.toml`, `apps/agent/Cargo.toml`.

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Demo stand-in for lsblk: one USB stick mounted at /media/ana/SANDISK.
+cat <<'J'
+{"blockdevices":[{"name":"sdb","path":"/dev/sdb","size":"28.7G","model":"SanDisk Ultra","rm":true,"tran":"usb","hotplug":true,"type":"disk","fstype":null,"mountpoints":[null],
+ "children":[{"name":"sdb1","path":"/dev/sdb1","size":"28.7G","model":null,"rm":true,"tran":null,"hotplug":true,"type":"part","fstype":"exfat","mountpoints":["/media/ana/SANDISK"]}]}]}
+J

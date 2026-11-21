@@ -1944,8 +1944,11 @@ function showHandoverInfo(data) {
     const name = (currentStatus?.trusted_drives || []).find((d) => d.drive_id === data.drive_id)?.label || t("your_backup");
     // Back up right away, so the added folders are in a backup.
     startBackup(data.drive_id);
+    const added = data.added_folders || [];
     uiAlert(
-      t("joined_body", { name }),
+      added.length
+        ? t("joined_body", { name, folders: added.map((f) => `• ${f}`).join("\n") })
+        : t("joined_nothing_added", { name }),
       t("added_to_an_existing_backup")
     );
     return;

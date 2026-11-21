@@ -192,6 +192,8 @@ struct SetupDriveResponse {
     previous_computers: Vec<PreviousComputer>,
     /// The passphrase opened a backup this computer already uses: the chosen folders were added to it.
     joined: bool,
+    /// When joined: names of the folders that were new to that backup (shown to the user).
+    added_folders: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -891,6 +893,7 @@ async fn setup_drive(
         Vec::new()
     };
 
+    let mut added_folders = Vec::new();
     let mut guard = state.write().await;
     guard.config.remember_passphrase = req.remember_passphrase;
     guard.config.paranoid_mode = req.paranoid_mode;
@@ -911,6 +914,7 @@ async fn setup_drive(
                 let mut all = guard.config.backup_sources_for_drive(&instance_id);
                 for s in new {
                     if !all.iter().any(|a| a.path == s.path) {
+                        added_folders.push(display_label(&s));
                         all.push(s);
                     }
                 }
@@ -964,6 +968,7 @@ async fn setup_drive(
         existing,
         previous_computers: previous,
         joined,
+        added_folders,
     }))
 }
 

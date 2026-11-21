@@ -96,7 +96,7 @@ No longer need one of them? Plug in the drive, click the card's name, and choose
 
 After each backup, Aegis keeps a folder called **AEGIS-RESTORE** on the drive up to date. It lets you get your files back on any Windows, Mac or Linux computer, even one without Aegis:
 
-1. Open **AEGIS-RESTORE** on the drive and read **README.txt** (in Serbian: **PROCITAJ.txt**).
+1. Open **AEGIS-RESTORE** on the drive and read **README.txt** (English). If Aegis is set to Serbian, the same steps are also in **PROCITAJ.txt**.
 2. Double-click **restore-windows.bat** (Windows) or **restore-mac.command** (Mac). On Linux, run `bash restore-linux.sh`.
 3. Type your passphrase and press Enter twice.
 

@@ -3,7 +3,7 @@
 ## Unreleased (1.0.0)
 
 - One drive can hold several separate backups (e.g. one per company), each with its own passphrase. Typing a passphrase finds its backup; a passphrase that opens none asks before creating a new one.
-- Every backup drive now carries an AEGIS-RESTORE folder: restore your files on any Windows, Mac or Linux computer without Aegis (instructions in English and Serbian).
+- Every backup drive now carries an AEGIS-RESTORE folder: restore your files on any Windows, Mac or Linux computer without Aegis (instructions in English, plus Serbian when Aegis is set to Serbian).
 - Cleaning up old backups only touches this computer's backups, so several computers can share one drive safely.
 - Settings saved by a newer Aegis version are kept when an older one runs.
 - Hand a backup over to another computer: type the passphrase there, Aegis shows which folders the old computer backed up, and both computers' history stays restorable. The Restore page shows which computer made each backup.
@@ -25,7 +25,7 @@
 - Aegis speaks Serbian: pick English, Српски (Cyrillic) or Srpski (Latin) under Settings → Language, or let Aegis follow your computer's language. Screens, notifications, the tray menu and the passphrase sheet all switch. Volunteers can add languages (docs/TRANSLATING.md).
 - Windows: notifications show as Aegis instead of Windows PowerShell.
 - Each backup has its own card on the dashboard (Back up now, Restore…, its own progress) instead of a "Backup on this drive" list. Backups on the same drive run one after another; **Back up all** starts them all. Restoring one backup works while another backs up.
-- Setting up with the passphrase of a backup this computer already uses adds the chosen folders to that backup and says so (before, it silently renamed it and replaced its folders).
+- Setting up with the passphrase of a backup this computer already uses adds the chosen folders to that backup and lists which ones were added (before, it silently renamed it and replaced its folders).
 - After folders are added to a backup (Edit folders, or that passphrase), it is backed up right away so they're included.
 - "Add drive" is now **Add backup**, and "Your drives" **Your backups**: what you add is a backup, on a new drive or one that already has backups.
 - **Delete from drive** removes one backup and its files from a drive that holds several; the others stay.

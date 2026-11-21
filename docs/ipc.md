@@ -114,7 +114,7 @@ Response:
 ```
 `existing` is true when an existing backup was opened (e.g. handover to a new computer);
 `previous_computers` lists the newest backup of each computer that used it; `joined` is true when it
-was already used by this computer.
+was already used by this computer, and then `added_folders` names the folders that were new to it.
 
 ## Start Backup
 `POST /v1/backup/run`

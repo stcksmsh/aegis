@@ -1,5 +1,5 @@
 //! Restore kit on the backup drive: `AEGIS-RESTORE/` with restore scripts for every OS,
-//! README (EN + SR), and the restic programs, so backups can be restored without Aegis.
+//! README in English plus one in the app's language (when there is one), and the restic programs, so backups can be restored without Aegis.
 //! Refreshed after each successful backup when outdated.
 
 use anyhow::Context;
@@ -15,7 +15,6 @@ pub const KIT_DIR: &str = "AEGIS-RESTORE";
 /// (file name, content, Windows line endings)
 const TEXT_FILES: &[(&str, &str, bool)] = &[
     ("README.txt", include_str!("../kit/README.txt"), true),
-    ("PROCITAJ.txt", include_str!("../kit/PROCITAJ.txt"), true),
     (
         "restore-windows.bat",
         include_str!("../kit/restore-windows.bat"),
@@ -33,6 +32,10 @@ const TEXT_FILES: &[(&str, &str, bool)] = &[
     ),
     ("restore-linux.sh", include_str!("../kit/restore.sh"), false),
 ];
+
+/// Restore instructions in other languages, by the file name `kit_readme` gives for that
+/// language. Written next to README.txt when Aegis runs in that language.
+const LOCAL_READMES: &[(&str, &str)] = &[("PROCITAJ.txt", include_str!("../kit/PROCITAJ.txt"))];
 
 #[derive(Debug, Serialize, Deserialize)]
 struct KitInfo {
@@ -60,17 +63,21 @@ pub fn refresh(root: &Path, assets: Option<&Path>) -> anyhow::Result<bool> {
     let sums_differ = assets.is_some_and(|a| {
         fs::read(a.join("SHA256SUMS")).ok() != fs::read(dir.join("restic").join("SHA256SUMS")).ok()
     });
+    let readme = crate::i18n::t("kit_readme");
+    let local = LOCAL_READMES.iter().find(|(name, _)| *name == readme);
     if installed
         .as_ref()
         .is_some_and(|i| i.kit_version == KIT_VERSION)
         && !sums_differ
+        && local.is_none_or(|(name, _)| dir.join(name).is_file())
     {
         return Ok(false);
     }
 
     fs::create_dir_all(&dir).context("create kit dir")?;
-    for (name, content, crlf) in TEXT_FILES {
-        let text = if *crlf {
+    let local = local.map(|(name, content)| (*name, *content, true));
+    for (name, content, crlf) in TEXT_FILES.iter().copied().chain(local) {
+        let text = if crlf {
             content.replace('\n', "\r\n")
         } else {
             content.to_string()
@@ -141,7 +148,10 @@ mod tests {
         assert!(refresh(&root, Some(&assets)).unwrap());
         let kit = root.join(KIT_DIR);
         assert!(kit.join("README.txt").is_file());
-        assert!(kit.join("PROCITAJ.txt").is_file());
+        assert!(
+            !kit.join("PROCITAJ.txt").exists(),
+            "Serbian file only when Aegis runs in Serbian"
+        );
         assert!(kit.join("restore-mac.command").is_file());
         assert!(kit.join("restic/restic_1_linux_amd64.bz2").is_file());
         assert!(

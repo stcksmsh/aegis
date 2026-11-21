@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The passphrase sheet offer after setup says "Not now" instead of "Cancel".
+
 ## 1.0.0 (2026-11-21)
 
 - New logo and app icon; a monochrome menu-bar icon on macOS.

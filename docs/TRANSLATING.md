@@ -1,5 +1,17 @@
 # Translating Aegis
 
+## Translate on Weblate
+
+Translators work on [Weblate](https://hosted.weblate.org/projects/aegis/app/), in a web browser. Nothing to install.
+
+1. Open the [Aegis translation page](https://hosted.weblate.org/engage/aegis/) and sign in with GitHub or an email address.
+2. Pick a language to improve, or add a new one.
+3. Translate. Weblate sends your changes to Aegis as a pull request.
+
+Please follow the rules below.
+
+## Rules for translations
+
 Every text Aegis shows lives in `locales/`: one JSON file per language, in the i18next format
 that Weblate and Crowdin read.
 
@@ -18,24 +30,20 @@ that Weblate and Crowdin read.
 
 `cargo test` checks that `sr.json` has every key of `en.json` and the same `{{…}}` values.
 
-## Adding a language
+Do not add `sr_Latn` in Weblate: Serbian Latin is generated from Cyrillic.
+
+## Adding a language to the app
+
+A language added on Weblate does not show up in Aegis until these code steps are done.
 
 1. Copy `locales/en.json` to `locales/<code>.json` and translate it (or add the language in
-   Weblate).
+   Weblate and take its file).
 2. In `apps/agent/src/i18n.rs`: add the code to `LANGUAGES`, an `include_str!` for the file, a
    branch in `catalog()` and, if needed, its plural rule in `plural_form()` and its OS locale
    names in `from_locale()`.
 3. Add an `<option>` with the language's own name to the Language box in
    `apps/ui/frontend/index.html`.
 
-## Weblate (volunteer translators)
+## Maintainers
 
-Aegis is open source, so hosted Weblate is free (https://hosted.weblate.org, "Libre" plan).
-
-1. Sign in with GitHub and create a project "Aegis".
-2. Add a component: source code repository `https://github.com/stcksmsh/aegis`, branch
-   `master`, file format "i18next JSON file v4", file mask `locales/*.json`, monolingual base
-   language file `locales/en.json`.
-3. Give Weblate push access the way it suggests (a pull request per batch is the safest), and
-   add its webhook to the GitHub repository so it sees new English texts.
-4. Do not add `sr_Latn` in Weblate: Serbian Latin is generated from Cyrillic.
+Weblate component settings (project `aegis`, component `app`): file format "i18next JSON file v4", file mask `locales/*.json`, monolingual base file `locales/en.json`. Weblate pushes changes as pull requests. The GitHub webhook `https://hosted.weblate.org/hooks/github/` is installed, so Weblate sees new English texts.

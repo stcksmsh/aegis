@@ -59,8 +59,14 @@ Full walkthrough: **[User Guide](docs/USER_GUIDE.md)** · all docs: **[docs/](do
 | No lock-in | Backups use the open [restic](https://restic.net) format. Readable without Aegis. |
 | Private | No accounts, no cloud. Your files never leave your computer and your drive. The only internet use is checking for Aegis updates. Your passphrase is never saved to disk (optionally kept in your system keychain). |
 | Updates itself | Fixes install by themselves, never during a backup. Updates are signed, so only genuine Aegis updates are accepted. |
-| Your language | English and Serbian (Cyrillic and Latin). [Help translate](docs/TRANSLATING.md). |
+| Your language | English and Serbian (Cyrillic and Latin). [Help translate](https://hosted.weblate.org/engage/aegis/). |
 | Windows, macOS, Linux | Same app everywhere. A drive made on one works on the others (use exFAT). |
+
+## Translations
+
+Aegis is translated by volunteers on [Weblate](https://hosted.weblate.org/engage/aegis/), in a web browser. Missing your language? Add it there. Details for translators: [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
+[![Translation status](https://hosted.weblate.org/widget/aegis/app/svg-badge.svg)](https://hosted.weblate.org/engage/aegis/)
 
 ## For developers
 

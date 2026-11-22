@@ -2,6 +2,8 @@
 
 Anything that changes what is written to drives or the config must follow [COMPATIBILITY.md](COMPATIBILITY.md).
 
+Translations are done on [Weblate](https://hosted.weblate.org/projects/aegis/), not by pull request: do not edit `locales/*.json` directly, except `locales/en.json` for English source texts. See [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
 ## Setup
 
 - Rust stable (`rustup`)

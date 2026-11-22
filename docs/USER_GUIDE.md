@@ -127,7 +127,7 @@ Each page has its own Save button and saves only what is on that page.
 
 | Setting | Meaning |
 |---|---|
-| Language | English, Serbian Cyrillic (Српски) or Serbian Latin (Srpski). "Same as this computer" follows your computer's language. Changes right away. If you picked a language you can't read, it's the first box under **Settings**, labelled "(Language)". |
+| Language | English, Serbian Cyrillic (Српски) or Serbian Latin (Srpski). "Same as this computer" follows your computer's language. Changes right away. Missing your language? Anyone can [help translate Aegis](https://hosted.weblate.org/engage/aegis/) in a web browser. If you picked a language you can't read, it's the first box under **Settings**, labelled "(Language)". |
 | Skip these files or folders | Files to skip, e.g. `*.tmp` or `node_modules`. Aegis already skips temporary files and Windows/Mac system clutter. |
 | Quickly check each backup after it's made | After each backup, quickly checks that it can be read. Recommended. |
 | Delete the oldest backups when the drive is full | On by default. Before each backup, if less than 10% of the drive is free, Aegis deletes this computer's oldest backups one at a time until there is room again. The 3 newest backups are always kept. A message tells you the date of the oldest backup that is left. |
